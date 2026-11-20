@@ -2954,6 +2954,13 @@ const VIEW = {
   // v2: жернова рвут, след пальца, FRENZY
   rollers: 11, rollerR: 19,    // валики жерновов во всю ширину: сколько и радиус (центр на grindY + 15)
   tearShake: [1.2, 7],  // тряска при попадании куска в жернова, ед.: от ягоды до половины арбуза (по √площади)
+  grindBuzzGap: 0.045,  // вибрация перемола: не чаще, с (мелкие куски подряд дают «мурчание»)
+  sawDrops: 6,          // пила под нагрузкой: капель сока за кадр на каждое тело в пропиле (было 3)
+  sawPulp: 0.5,         // …вероятность кусочка мякоти за кадр
+  sawLiq: 0.85,         // …вероятность кляксы жидкого сока в каждую сторону от пропила за кадр (было 0,6 в одну)
+  sawStampGap: 0.07,    // …пятно сока на стенке вдоль пропила не чаще, с
+  sawJitMul: 1.5,       // …множитель дрожи экрана
+  sawBuzzGap: 0.04,     // …вибрация-«мурчание» не чаще, с
   tearBits: [6, 46],    // выброс мякоти и сока при попадании: частиц от ягоды до арбуза
   trailT: 0.16,         // след пальца живёт столько реальных секунд
   trailW: 11,           // ширина светящегося шлейфа у кончика, ед.
@@ -3227,7 +3234,19 @@ const Music = {
     g.cancelScheduledValues(t); g.setValueAtTime(g.value, t); g.linearRampToValueAtTime(base * depth, t + 0.05); g.setTargetAtTime(base, t + dur, 0.3);
   },
 };
-function buzz(ms){ if (!Sound.ac) return; try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) {} }   // только после первого жеста (как звук)
+// Вибрация — только после первого жеста (как звук). Android: navigator.vibrate. iOS Safari Vibration API не знает —
+// запасной путь: щелчок по скрытому переключателю (input switch) даёт короткий тактильный тик (Safari 17.4+); длительность не задаётся.
+let HAP_SW = null, HAP_AT = 0;
+function hapTick(){
+  try {
+    if (!HAP_SW){ const l = document.createElement('label'); l.setAttribute('aria-hidden', 'true'); l.style.cssText = 'position:fixed;left:-99px;top:-99px;width:1px;height:1px;overflow:hidden';
+      const i = document.createElement('input'); i.type = 'checkbox'; i.setAttribute('switch', ''); l.appendChild(i); document.body.appendChild(l); HAP_SW = l; }
+    HAP_SW.click();
+  } catch (e) {}
+}
+function buzz(ms){ if (!Sound.ac) return; try { if (navigator.vibrate) navigator.vibrate(ms); else hapTick(); } catch (e) {} }
+// buzzRL — то же с ограничением частоты (сек): серия событий (перемол, пила под нагрузкой) превращается в «мурчание», а не в гул
+function buzzRL(ms, gap){ if (G.rt - HAP_AT < gap) return; HAP_AT = G.rt; buzz(ms); }
 
 // =====================================================================================================
 // Арт фруктов — таблица ART с именованными функциями (§11: «рисуете кодом — выносите в названные функции»).
@@ -4886,7 +4905,8 @@ function tearFX(e){
     FX.chain += 1; liqTear(e, k, w); const jc = juiceHex(e.kind);
     for (let i = 0; i < VIEW.rollers; i++){ const d = Math.abs((i + 0.5) * step - e.x); if (d < w / 2 + step * 1.2) FX.rwet[i] = { a: Math.min(1, ((FX.rwet[i] && FX.rwet[i].col === jc ? FX.rwet[i].a : 0)) + 0.6), col: jc }; }
   }
-  Sound.playRL('tear', 0.05, Math.round(e.area) + (isOrder() ? Math.min(8, Math.round(FX.chain)) * 10000 : 0)); if (k > 0.4) buzz(14);
+  Sound.playRL('tear', 0.05, Math.round(e.area) + (isOrder() ? Math.min(8, Math.round(FX.chain)) * 10000 : 0));
+  if (k > 0.55) buzz([16, 14, 22, 12, 30]); else buzzRL(Math.round(8 + 14 * k), VIEW.grindBuzzGap);   // сатисфайная вибрация перемола: мелочь мурчит, крупное — тройной удар
   log('event', 'grind', e.kind + ' area=' + e.area + ' dur=' + e.dur);
 }
 // Кусок исчез в жерновах: последний хлюп.
@@ -6309,9 +6329,13 @@ function fxUpdate(gdt, rdt){
   const F6 = s.flight;                                        // v6: пила под нагрузкой — мотор садится, веер сока вдоль пропила, дрожь
   if (F6 && F6.w === 'saw'){ Sound.sawSet(F6.load > 0);
     if (F6.load > 0 && gdt > 0){ for (const id of F6.inside.keys()){ const b = s.bodies.find(q => q.id === id); if (!b) continue; const cj = pcol(KINDS[b.kind].juice), hex = juiceHex(b.kind), ux = F6.ux || 1, uy = F6.uy || 0;
-        for (let k = 0; k < 3; k++){ const side = R() < 0.5 ? -1 : 1, sp = 120 + R() * 260; spawnP(P_DROP, F6.x, F6.y, -ux * sp * 0.5 - uy * side * sp, -uy * sp * 0.5 + ux * side * sp - 80, 0.25 + R() * 0.3, 1.4 + R() * 2, cj); }
-        if (LIQ.on && R() < 0.6){ const side = R() < 0.5 ? -1 : 1; liqSpawn(L_FREE, F6.x, F6.y, -uy * side * 160 - ux * 60, ux * side * 160 - uy * 60 - 60, 0.5, 2.4 + R() * 1.8, hex); } }
-      if (G.rt - FX.w6.sawShakeAt > 0.05){ FX.w6.sawShakeAt = G.rt; shake(R() - 0.5, R() - 0.5, W6.sawJit); } } }
+        for (let k = 0; k < VIEW.sawDrops; k++){ const side = R() < 0.5 ? -1 : 1, sp = 140 + R() * 340; spawnP(P_DROP, F6.x, F6.y, -ux * sp * 0.5 - uy * side * sp, -uy * sp * 0.5 + ux * side * sp - 90, 0.28 + R() * 0.34, 1.6 + R() * 2.6, cj); }
+        if (R() < VIEW.sawPulp){ const side = R() < 0.5 ? -1 : 1, sp = 110 + R() * 220; spawnP(P_PULP, F6.x, F6.y, -ux * sp * 0.6 - uy * side * sp, -uy * sp * 0.6 + ux * side * sp - 120, 0.45 + R() * 0.3, 2.6 + R() * 3, pcol(KINDS[b.kind].flesh || KINDS[b.kind].juice)); }
+        if (LIQ.on) for (const side of [-1, 1]){ if (R() < VIEW.sawLiq) liqSpawn(L_FREE, F6.x, F6.y, -uy * side * (150 + R() * 90) - ux * 70, ux * side * (150 + R() * 90) - uy * 70 - 70, 0.55, 2.6 + R() * 2.2, hex); }
+        if (G.rt - (FX.w6.sawStampAt || 0) > VIEW.sawStampGap){ FX.w6.sawStampAt = G.rt; const side = R() < 0.5 ? -1 : 1, d = 10 + R() * 26;   // пятна сока на стенке вдоль пропила
+          FX.stamps.push({ x: F6.x - uy * side * d, y: F6.y + ux * side * d, r: 2.2 + R() * 3.2, col: KINDS[b.kind].juice, vx: -uy * side * 200, vy: ux * side * 200, drip: R() < 0.4 }); } }
+      if (G.rt - FX.w6.sawShakeAt > 0.05){ FX.w6.sawShakeAt = G.rt; shake(R() - 0.5, R() - 0.5, W6.sawJit * VIEW.sawJitMul); }
+      buzzRL(14, VIEW.sawBuzzGap); } }
   FX.chargeShow += ((s.frenzy > 0 ? 1 : s.charge) - FX.chargeShow) * Math.min(1, rdt * 8);
   FX.frenzyGlow += ((s.frenzy > 0 ? 1 : 0) - FX.frenzyGlow) * Math.min(1, rdt * 6);
   for (let i = FX.trail.length - 1; i >= 0; i--) if (G.rt - FX.trail[i].t > VIEW.trailT){ FX.trail.splice(0, i + 1); break; }
