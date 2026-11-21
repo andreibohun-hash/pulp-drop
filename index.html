@@ -2960,10 +2960,10 @@ const VIEW = {
   rumbleOff: 10,        // …пауза между импульсами, мс
   grindRumble: [0.22, 0.6],   // перемол: на сколько секунд кусок продлевает мурчание — от ягоды до половины арбуза
   sawRumble: 0.55,      // пила под нагрузкой: сила мурчания
-  sawDrops: 6,          // пила под нагрузкой: капель сока за кадр на каждое тело в пропиле (было 3)
-  sawPulp: 0.5,         // …вероятность кусочка мякоти за кадр
-  sawLiq: 0.85,         // …вероятность кляксы жидкого сока в каждую сторону от пропила за кадр (было 0,6 в одну)
-  sawStampGap: 0.07,    // …пятно сока на стенке вдоль пропила не чаще, с
+  sawDrops: 6,          // пила под нагрузкой: капель сока за кадр на каждое тело в пропиле (было 3); v9 clear — × dropK, крупнее
+  sawPulp: 0.5,         // …вероятность кусочка мякоти за кадр (v9 clear — нет: мякоть только у жерновов)
+  sawLiq: 0.85,         // …вероятность кляксы жидкого сока в каждую сторону от пропила за кадр (было 0,6 в одну); v9 clear — 0,6, ближе
+  sawStampGap: 0.07,    // …пятно сока на стенке вдоль пропила не чаще, с (v9 clear — 0,16)
   sawJitMul: 1.5,       // …множитель дрожи экрана
   tearBits: [6, 46],    // выброс мякоти и сока при попадании: частиц от ягоды до арбуза
   trailT: 0.16,         // след пальца живёт столько реальных секунд
@@ -2974,6 +2974,28 @@ const VIEW = {
   introT: 0.42, introSpread: 0.55, // въезд кучи сверху: падение одного предмета и разброс стартов
   confetti: 150,        // конфетти на победу
   bumpMin: 110,         // удар кусков слышен от такой скорости сближения, ед./с
+  // v9: шум сока по экрану (режим clear, все наборы). Сок — у события и у жерновов, а не на весь кадр: потолки и радиусы.
+  fxR: 120,             // брызги реза и удара разлетаются не дальше стольких ед.: скорость при рождении ≤ fxR / жизнь
+  fountH: [80, 165],    // фонтан из жерновов (капли и жидкость) взлетает на столько ед.: один кусок → длинная цепочка (8)
+  fountLiq: [0.35, 1.5],// жидкий фонтан и клякса жерновов: доля капель и во сколько раз крупнее (сливаются в струи, а не россыпь)
+  fountBits: 2,         // 2D-брызг фонтана из щели жерновов за кадр (было 24) — по одной на приток сока
+  partLive: 220,        // потолок одновременно живущих частиц (массив — partMax); сверх него новые не рождаются
+  dropK: 0.45,          // брызг на рез, удар и укус — такая доля прежнего числа…
+  dropSize: 1.45,       // …во столько раз крупнее (слитные капли, а не конфетти)…
+  dropLife: 0.7,        // …и живут короче
+  pulpGrind: 0.2,       // мякоть-квадратики — только у жерновов и в такой доле прежнего числа (у реза и пилы их нет)
+  jetK: [0.5, 0.55, 0.6], // жидкая струйка реза: доля капель, скорости и жизни (была 260–420 ед./с × 0,5–1 с — через весь кадр)
+  liqStamp: 0.3,        // жидкая капля, упавшая на стенку, оставляет пятно с такой вероятностью (была 1)
+  splatA: [0.3, 0.14],  // пятно на стенке: непрозрачность кляксы и спутника (было 0,58 / 0,42)
+  splatMix: 0.4,        // цвет пятна смешан с цветом стенки на столько — ближе к фону, слива на нём не теряется
+  stampRate: 26,        // пятен на стенке в секунду не больше (ведро токенов) …
+  stampBurst: 12,       // …и не больше стольких разом
+  wallLife: 2.5,        // пятно сходит за столько с (до 10% яркости); подмыв стенки — шагами wallStep
+  wallStep: 0.2,
+  dripMax9: 6,          // потёков на стенке одновременно (в v5–v8 — dripMax = 28) …
+  dripLife9: [0.5, 1.1],// …живут столько с (было 1,4–3,6) …
+  dripA: 0.16,          // …непрозрачность следа (было 0,32)
+  glassDrops9: 5,       // капель-клякс на стекле витрины (было 14); только в нижней трети кадра, над жерновами
 };
 const FONT = 'Fredoka';
 // ?cpu — все холсты программные (willReadFrequently): худший случай для замера кадра, как телефон без GPU-холста.
@@ -3334,7 +3356,13 @@ const SPRITES_TOY = {
   melon:  { fit: [0.5, 0.579, 0.4874, 0.4107] },   berry: { fit: [0.5023, 0.5431, 0.4842, 0.4466] }, cherry: { fit: [0.5, 0.6382, 0.4803, 0.3473] },
   lemon:  { fit: [0.5, 0.5, 0.4891, 0.4856] },     lime:  { fit: [0.4978, 0.58, 0.4849, 0.409] },    orange: { fit: [0.5, 0.527, 0.4879, 0.4617] },
   apple:  { fit: [0.5, 0.568, 0.4879, 0.4216] },   plum:  { fit: [0.5, 0.59, 0.4872, 0.3986] },      grape:  { fit: [0.5, 0.5161, 0.4825, 0.4718] },
+  coco:   { fit: [0.5, 0.5111, 0.4621, 0.4519] },   // v9: кокос — спрайт GPT в стиле набора (был рисован кодом с чернильным контуром)
 };
+// v9 (читаемость toy, tools/v9-art.py, исходники ~/Claude/output/images/PRT-20-pulp-drop-v9/): лайм — жёлто-зелёный цитрус без
+// листка (был зелёным шаром с листком, как яблоко), яблоко и его срез — красные (третий зелёный в куче), фон — без мисок и бутылок,
+// навес тише. Имя картинки в коде прежнее, файл — новый (index-v8 и прежние наборы не задеты).
+SPRITES_TOY.lime.fit = [0.5, 0.5296, 0.4606, 0.4333];
+const ASSET_FILE = { 'toy-bg': 'toy-bg9.jpg', 'toy-fruit-lime': 'toy-fruit-lime9.png', 'toy-fruit-apple': 'toy-fruit-apple9.png', 'toy-slice-apple': 'toy-slice-apple9.png' };
 // v5: набор арта (переключатель #style=toy|sticker|real, пункт меню «Art», помнится в сейве style): 'toy' — мультяшный 3D (GPT),
 // 'sticker' — рисованный вид v3 с контуром (кожура кодом, свет по нормали + крупный блик), 'real' — спрайты v4.
 const STYLES = ['toy', 'sticker', 'real'];
@@ -3345,20 +3373,20 @@ const fitOf = (kind) => (ART_STYLE === 'toy' ? SPRITES_TOY : SPRITES)[kind].fit;
 const IMG = {};            // имя → Image (fruit-melon, slice-melon, prop-plank, bg)
 const ASSETS = { left: 0, ready: false, onReady: [] };
 function loadAssets(){
-  const names = ['bg', 'toy-bg'].concat(Object.keys(SPRITES).map(k => 'fruit-' + k), Object.keys(SPRITES).map(k => 'slice-' + k), ['prop-plank', 'prop-branch', 'prop-rope', 'prop-rod', 'prop-hook', 'prop-block'],
-    Object.keys(SPRITES_TOY).map(k => 'toy-fruit-' + k), Object.keys(SPRITES_TOY).map(k => 'toy-slice-' + k),
-    ['toy', 'real'].flatMap(st => WEAPON_ORDER.map(w => st + '-weapon-' + w)));   // v6: оружие (листы GPT, tools/slice-weapons.py)
+  const names = [...new Set(['bg', 'toy-bg'].concat(Object.keys(SPRITES).map(k => 'fruit-' + k), Object.keys(SPRITES).map(k => 'slice-' + k), ['prop-plank', 'prop-branch', 'prop-rope', 'prop-rod', 'prop-hook', 'prop-block'],
+    Object.keys(SPRITES_TOY).map(k => 'toy-fruit-' + k), Object.keys(SPRITES_TOY).map(k => 'toy-slice-' + k), SLICE_V8.map(k => 'toy-slice-' + k),   // v8: кокос, огурец и банан вдоль
+    ['toy', 'real'].flatMap(st => WEAPON_ORDER.map(w => st + '-weapon-' + w))))];   // v6: оружие (листы GPT, tools/slice-weapons.py)
   ASSETS.left = names.length;
   for (const n of names){ const im = new Image(); im.decoding = 'async';
     im.onload = im.onerror = () => { if (--ASSETS.left === 0){ warmAssets(); ASSETS.ready = true; log('event', 'assets', names.length); for (const f of ASSETS.onReady.splice(0)) f(); } };
-    const file = n + (n === 'bg' || n === 'toy-bg' ? '.jpg' : '.png');
+    const file = ASSET_FILE[n] || n + (n === 'bg' || n === 'toy-bg' ? '.jpg' : '.png');
     im.src = (window.PULP_ASSETS && window.PULP_ASSETS[file]) || 'assets/' + file; IMG[n] = im; }   // артефакт: картинки base64 (build-artifact.mjs)
 }
 // Прогрев: каждую картинку один раз рисуем в маленький холст — декодирование и загрузка в GPU не падают на кадр
 // первого реза (урок: первый показ глифа/текстуры = кадр-заминка).
 function warmAssets(){ const c = document.createElement('canvas'); c.width = c.height = 8; const g = c.getContext('2d');
   for (const k in IMG){ const im = IMG[k]; if (im.naturalWidth) g.drawImage(im, 0, 0, 8, 8); } g.getImageData(0, 0, 1, 1); }
-const spriteOK = (kind) => ART_STYLE !== 'sticker' && !!SPRITES[kind] && ASSETS.ready && IMG[imgName('fruit', kind)] && IMG[imgName('fruit', kind)].naturalWidth > 0;
+const spriteOK = (kind) => ART_STYLE !== 'sticker' && !!(ART_STYLE === 'toy' ? SPRITES_TOY : SPRITES)[kind] && ASSETS.ready && IMG[imgName('fruit', kind)] && IMG[imgName('fruit', kind)].naturalWidth > 0;
 // Полуоси формы вида (как в kindVerts): у круга r, у эллипса и лимона rx, ry, у клубники — 17×19.
 function shapeAxes(kind, sc){ const sh = KINDS[kind].shape; if (sh[0] === 'circle') return [sh[1] * sc, sh[1] * sc]; return [sh[1] * sc, sh[2] * sc]; }
 // Где лежит спрайт в «картинке» фрукта (начало — центроид формы): прямоугольник x, y, w, h.
@@ -3807,15 +3835,21 @@ const SPR = new Map();     // id → { cv, x0, y0, a, rec, seen } — x0, y0: у
 const BASE = new Map();    // root|ступень → { cv, x0, y0, w, h } — кожура и свет целого фрукта в картинке
 const POOL = [];           // свободные холсты
 let K = 1;                 // пикселей холста на единицу поля (DPR × масштаб вида); спрайты печатаются в нём
-let frameNo = 0, bakeLeft = 0, bakeCount = 0;
+let frameNo = 0, bakeLeft = 0, bakeCount = 0, bakeNew = 0;
 function newCanvas(w, h){ const c = POOL.pop() || document.createElement('canvas'); c.width = Math.max(1, Math.ceil(w)); c.height = Math.max(1, Math.ceil(h)); return c; }
 // Кожура и свет ступенями целого фрукта root при угле света q·VIEW.relight.
 function rootBase(b, q){
   if (spriteOK(b.kind)){                                     // v4: кожура — спрайт GPT целиком (свет уже в нём)
     const key = b.root + '|s' + ART_STYLE; let B = BASE.get(key); if (B) return B;
-    const R = spriteRect(b.kind, b.sc), cvs = newCanvas(R.w * K, R.h * K), g = ctx2d(cvs);
-    g.imageSmoothingQuality = 'high'; g.drawImage(IMG[imgName('fruit', b.kind)], 0, 0, cvs.width, cvs.height);
-    B = { cv: cvs, x0: R.x, y0: R.y, w: R.w, h: R.h, sprite: true };
+    const R = spriteRect(b.kind, b.sc), im = IMG[imgName('fruit', b.kind)], rw = ART_STYLE === 'toy' ? V9.rim[0] : 0;   // v9: toy — единая мягкая тёмная кромка у всех
+    const cvs = newCanvas((R.w + 2 * rw) * K, (R.h + 2 * rw) * K), g = ctx2d(cvs), px = rw * K, iw = R.w * K, ih = R.h * K;
+    g.imageSmoothingQuality = 'high';
+    if (rw){ const t = newCanvas(cvs.width, cvs.height), tg = ctx2d(t), A = ART[b.kind]; tg.drawImage(im, px, px, iw, ih);   // силуэт цветом тёмного края фрукта,
+      tg.globalCompositeOperation = 'source-in'; tg.fillStyle = shade(A.col.dark || A.col.edge || A.col.skin, V9.rim[2]); tg.fillRect(0, 0, t.width, t.height);   // раздутый на rw во все стороны
+      for (let k = 0; k < 12; k++){ const a = k * Math.PI / 6; g.globalAlpha = V9.rim[1]; g.drawImage(t, Math.cos(a) * px, Math.sin(a) * px); }
+      g.globalAlpha = 1; freeSprite({ cv: t }); }
+    g.drawImage(im, px, px, iw, ih);
+    B = { cv: cvs, x0: R.x - rw, y0: R.y - rw, w: R.w + 2 * rw, h: R.h + 2 * rw, sprite: true };
     BASE.set(key, B); return B;
   }
   const key = b.root + '|' + q; let B = BASE.get(key); if (B) return B;
@@ -3843,6 +3877,7 @@ function rootBase(b, q){
   BASE.set(key, B); return B;
 }
 function bakeSprite(b){
+  if (isSlab(b)) return bakeSlab(b);                         // v8: долька срезом к зрителю
   if (spriteOK(b.kind)) return bakeSpriteV4(b);
   const A = ART[b.kind], sc = b.sc, af = b.artFrame, n = b.verts.length, a0 = b.a, q = Math.round(a0 / VIEW.relight);
   const P = b.verts.map(v => [v[0] + af[0], v[1] + af[1]]);
@@ -3878,6 +3913,7 @@ function bakeSprite(b){
   g.restore();
   g.lineJoin = 'round'; g.lineWidth = VIEW.outline; g.strokeStyle = VIEW.ink; pathPoly(g, sil); g.stroke();
   if (deco){ g.save(); g.translate(S.ox, S.oy); A.deco(g, sc, A); g.restore(); }
+  drawStains(g, b);                                          // v8: сок соседней свежей дольки
   bakeCount++;
   return { cv: cvs, x0, y0, a: a0, rec: b, seen: frameNo };
 }
@@ -3903,7 +3939,9 @@ function bakeSpriteV4(b){
     if ((af[0] - a[0]) * nx + (af[1] - a[1]) * ny < 0){ nx = -nx; ny = -ny; }
     cutSprite(g, { a, b: e, ux, uy, nx, ny, L: Ln }, b.kind);
   }
+  if (b.flags.cracked && !b.flags.cut){ const S = smoothShape(b.kind, b.sc); g.save(); g.translate(S.ox, S.oy); drawShellCrack(g, b.sc, b.root); g.restore(); }   // v9: кокос toy — спрайт, трещина поверх
   if (cuts.length) g.restore();
+  drawStains(g, b);                                          // v8: сок соседней свежей дольки
   bakeCount++;
   return { cv: cvs, x0, y0, a: a0, rec: b, seen: frameNo };
 }
@@ -3911,9 +3949,416 @@ function freeSprite(sp){ if (POOL.length < 200){ sp.cv.width = 1; sp.cv.height =
 function resetSprites(){ for (const sp of SPR.values()) freeSprite(sp); SPR.clear(); for (const B of BASE.values()) freeSprite(B); BASE.clear(); for (const M of LIGHT.values()) freeSprite(M); LIGHT.clear(); }
 function sweepSprites(){
   for (const [id, sp] of SPR) if (sp.seen < frameNo - 2){ freeSprite(sp); SPR.delete(id); }
+  slabSweep();
   if (BASE.size > 160){ const live = new Set(); for (const b of G.s ? G.s.bodies : []) live.add(b.root);   // кожура фруктов, от которых ничего не осталось
     for (const [k, B] of BASE) if (!live.has(+k.split('|')[0])){ freeSprite(B); BASE.delete(k); } }
 }
+
+// =====================================================================================================
+// v8: кусок — долька срезом к зрителю (#pieces=slab, по умолчанию; #pieces=band — прежний вид v2–v7: кожура с полоской
+// мякоти). Вся площадь куска — срез в «картинке» фрукта (картинка среза из набора или кодом), корка — каймой только по
+// наружным рёбрам, по рёбрам-срезам — открытая мякоть с кромкой по инструменту (нож — глянец, топор — волокна, пила —
+// бахрома и стружка, булава — раздавленная мякоть и трещины). Толщина — торец дольки вниз-вправо. Вид, ядро не трогает.
+// =====================================================================================================
+const V8 = {
+  flipT: 0.12,              // переворот срезом к зрителю при резе, реальные с (кожура → ребро → мякоть)
+  minK: 0.1,                // кувырок: ребро не тоньше такой доли
+  tumble: [7, 20],          // темп кувырка в свободном полёте, рад/с: от … до
+  tumbleW: 1.1, tumbleV: 0.014,   // …прибавка от угловой скорости (× рад/с) и от скорости (× ед./с)
+  airT: 0.05, airV: 60,     // «свободный полёт»: столько игровых с без касаний и быстрее, ед./с
+  settle: 24,               // коснулся — возврат мякотью к зрителю, 1/с
+  thick: [0.13, 2.6, 7],    // толщина дольки: доля среднего радиуса формы, мин и макс, ед.
+  glossT: 1.0,              // блик свежего среза гаснет за столько реальных с
+  drips: [2, 4], dripMin: 160,    // капли от нижнего края свежего среза: сколько на кусок (кусок не меньше dripMin ед.²)
+  dripT: [0.3, 0.75], dripL: [4, 11], dripR: [1.2, 2.3],   // капля тянется столько с, до такой длины, радиус «бусины», ед.
+  dripMax: 48,              // потолок висящих капель
+  stainT: 1.4, stainMax: 5, stainFrame: 3,   // срез пачкает соседей столько с после реза; пятен на тело; перепечек на пятна за кадр
+  newBake: 10,              // новых долек за кадр (остальные ещё показывают кожуру: первая половина переворота)
+  faceMax: 0.64,            // срезом к зрителю — куски не больше такой доли целого фрукта; больший остаток — ещё фрукт со срезом (кожура + срез)
+};
+const PIECE_MODES = ['slab', 'band'];
+let PIECES = 'slab';
+const FULLA = new Map();   // вид|масштаб → площадь целого фрукта
+function fullArea(kind, sc){ const k = kind + '|' + sc; let a = FULLA.get(k); if (a === undefined){ a = Math.abs(polyArea(kindVerts(kind, sc))); FULLA.set(k, a); } return a; }
+const isSlab = (b) => PIECES === 'slab' && b.cutEdges.some(Boolean) && b.area <= V8.faceMax * fullArea(b.kind, b.sc);
+// Картинка среза для вида: toy — toy-slice-*, real — slice-*, sticker — нет (кодом). Новые срезы v8 (кокос, огурец и банан
+// вдоль) есть только в toy; чего нет — кодом (faceCode).
+const SLICE_V8 = ['coco', 'cuke', 'banana'];
+function sliceName(kind){ return ART_STYLE === 'sticker' ? null : (ART_STYLE === 'toy' ? 'toy-' : '') + 'slice-' + kind; }
+function sliceFit(kind){ const n = sliceName(kind); if (!n) return null; const im = IMG[n]; if (!im || !im.naturalWidth) return null;
+  let F = SLICEFIT[n]; if (F === undefined) F = SLICEFIT[n] = measureSlice(im); return F ? Object.assign({ im }, F) : null; }
+// Рамка непрозрачного у картинки среза (доли) и цвета: корка (кольцо 0,9–0,98) и мякоть (кольцо 0,35–0,7).
+const SLICEFIT = {};
+function measureSlice(im){
+  const N = 128, c = document.createElement('canvas'); c.width = c.height = N; const g = c.getContext('2d', { willReadFrequently: true });
+  g.drawImage(im, 0, 0, N, N); const d = g.getImageData(0, 0, N, N).data;
+  let x0 = N, y0 = N, x1 = -1, y1 = -1;
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (d[(y * N + x) * 4 + 3] > 110){ if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+  if (x1 < 0) return null;
+  const cx = (x0 + x1 + 1) / 2, cy = (y0 + y1 + 1) / 2, hw = (x1 + 1 - x0) / 2, hh = (y1 + 1 - y0) / 2;
+  const avg = (r0, r1) => { let r = 0, gg = 0, b = 0, n = 0;
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++){ const u = (x + 0.5 - cx) / hw, v = (y + 0.5 - cy) / hh, q = Math.hypot(u, v);
+      if (q < r0 || q > r1) continue; const i = (y * N + x) * 4; if (d[i + 3] < 220) continue; r += d[i]; gg += d[i + 1]; b += d[i + 2]; n++; }
+    return n ? [r / n, gg / n, b / n] : null; };
+  return { x: x0 / N, y: y0 / N, w: (x1 + 1 - x0) / N, h: (y1 + 1 - y0) / N, rind: avg(0.9, 0.98), flesh: avg(0.35, 0.7) };
+}
+const mixRgb = (a, b, k) => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
+const shadeRgb = (a, k) => [a[0] * k, a[1] * k, a[2] * k];
+const rgba = (c, al) => 'rgba(' + Math.round(c[0]) + ',' + Math.round(c[1]) + ',' + Math.round(c[2]) + ',' + (+al).toFixed(3) + ')';
+// Палитра дольки: корка, мякоть (из картинки среза или из ART), сок.
+function slabPal(kind){
+  const A = ART[kind], F = sliceFit(kind), juice = hexRgb(KINDS[kind].juice);
+  const rind = (F && F.rind) || hexRgb(A.col.edge || A.col.skin), flesh = (F && F.flesh) || hexRgb(A.col.flesh);
+  return { rind, flesh, juice, light: mixRgb(flesh, [255, 255, 255], 0.5), dark: shadeRgb(flesh, 0.62), juiceDk: shadeRgb(juice, 0.55) };
+}
+
+// --- инструмент каждой кромки: id куска → [{ a, b, w }] — рёбра-срезы в картинке фрукта. Новый кусок наследует кромки
+// родителя (ребро лежит на прямой родительского), новые — инструмент этого удара. ---
+function pieceEdges(b){ const af = b.artFrame, V = b.verts, n = V.length, out = [];
+  for (let i = 0; i < n; i++) if (b.cutEdges[i]){ const p = V[i], q = V[(i + 1) % n]; out.push([[p[0] + af[0], p[1] + af[1]], [q[0] + af[0], q[1] + af[1]]]); }
+  return out; }
+function onLine(a, b, p, tol){ const ex = b[0] - a[0], ey = b[1] - a[1], L = Math.hypot(ex, ey) || 1; return Math.abs((p[0] - a[0]) * ey - (p[1] - a[1]) * ex) / L < tol; }
+function edgeMatch(list, a, e, tol){ if (!list) return null; for (const s of list) if (onLine(s.a, s.b, a, tol) && onLine(s.a, s.b, e, tol)) return s; return null; }
+// Рез (split / shave): кромки детей, состояние дольки (переворот), капли от нижнего края.
+function slabBorn(e, w){
+  const s = G.s, par = FX.etool.get(e.id), wasPiece = FX.slab.has(e.id) || !!par;
+  for (const id of e.into || []){
+    const b = s.bodies.find(q => q.id === id); if (!b) continue;
+    FX.etool.set(id, pieceEdges(b).map(([a, c]) => { const m = edgeMatch(par, a, c, 1.2); return { a, b: c, w: m ? m.w : w }; }));
+    let nx = e.nx, ny = e.ny;
+    if (nx === undefined){ let best = 0; for (const [a, c] of pieceEdges(b)){ const L = Math.hypot(c[0] - a[0], c[1] - a[1]); if (L > best){ best = L; nx = -(c[1] - a[1]) / L; ny = (c[0] - a[0]) / L; } }
+      if (nx === undefined){ nx = 1; ny = 0; } else { const cs = Math.cos(b.a), sn = Math.sin(b.a), x = cs * nx - sn * ny; ny = sn * nx + cs * ny; nx = x; } }   // ребро — в картинке, ось — в мире
+    const cs = Math.cos(b.a), sn = Math.sin(b.a);
+    FX.slab.set(id, { t0: G.rt, nl: [cs * nx + sn * ny, -sn * nx + cs * ny], ph: wasPiece ? 0 : Math.PI, flip: !wasPiece, air: 0, back: null, backRec: null, dir: id & 1 ? 1 : -1 });
+    if (b.area >= V8.dripMin && FX.sdrips.length < V8.dripMax){
+      const n = Math.min(V8.drips[1], V8.drips[0] + Math.floor(b.area / 900)), col = KINDS[b.kind].juice;
+      for (let k = 0; k < n; k++) FX.sdrips.push({ id, start: G.rt + 0.05 + k * 0.09 + R() * 0.12, dur: V8.dripT[0] + R() * (V8.dripT[1] - V8.dripT[0]),
+        L: V8.dripL[0] + R() * (V8.dripL[1] - V8.dripL[0]) * Math.min(1, b.rad / 30), r: V8.dripR[0] + R() * (V8.dripR[1] - V8.dripR[0]) * Math.min(1, b.rad / 26), col, at: null, pick: R() });
+    }
+  }
+}
+// Кадр: переворот, кувырок в свободном полёте (без касаний и быстрее airV), возврат мякотью при касании; пятна на соседях; капли.
+function slabUpdate(gdt){
+  const s = G.s; if (!s || PIECES !== 'slab') return;
+  for (const b of s.bodies){
+    const e = FX.slab.get(b.id); if (!e) continue;
+    const age = G.rt - e.t0;
+    if (e.flip){ if (age < V8.flipT){ const p = age / V8.flipT; e.ph = Math.PI * (1 + p * p * (3 - 2 * p)); continue; } e.flip = false; e.ph = 0; }
+    if (gdt <= 0) continue;
+    const v = b.pb.getLinearVelocity(), sp = Math.hypot(v.x, v.y) * CFG.ppm, w = Math.abs(b.pb.getAngularVelocity());
+    let touch = false;                                       // касание — о стенку, деталь или лежащее тело; летящие вместе куски кувыркаются
+    for (let ce = b.pb.getContactList(); ce; ce = ce.next){ if (!ce.contact.isTouching()) continue; const o = ce.other;
+      if (!o.isDynamic()){ touch = true; break; } const ov = o.getLinearVelocity(); if (Math.hypot(ov.x, ov.y) * CFG.ppm < V8.airV){ touch = true; break; } }
+    if (!touch && sp > V8.airV && !b.flags.chew && !b.flags.swept) e.air += gdt; else e.air = 0;
+    if (e.air > V8.airT) e.ph += e.dir * clamp(V8.tumble[0] + w * V8.tumbleW + sp * V8.tumbleV, V8.tumble[0], V8.tumble[1]) * gdt;
+    else if (e.ph !== 0){ const T = Math.round(e.ph / (2 * Math.PI)) * 2 * Math.PI; e.ph += (T - e.ph) * (1 - Math.exp(-V8.settle * gdt)); if (Math.abs(T - e.ph) < 0.02) e.ph = 0; }
+  }
+  for (let k = 0; k < V8.stainFrame && FX.stainQ.length; k++){
+    const q = FX.stainQ.shift(), b = s.bodies.find(o => o.id === q.id); if (!b || b.flags.chew) continue;
+    const l = toLocal(b, q.x, q.y), x = l[0] + b.artFrame[0], y = l[1] + b.artFrame[1], L = FX.stains.get(b.id) || [];
+    if (L.length >= V8.stainMax || L.some(o => Math.hypot(o.x - x, o.y - y) < 5)){ k--; continue; }
+    L.push({ x, y, r: 2.6 + R() * 3.6, col: q.col, a: R() * 6.28, sd: (R() * 1e9) | 0 }); FX.stains.set(b.id, L);
+    const sp = SPR.get(b.id); if (sp) sp.dirty = true;
+  }
+  for (let i = FX.sdrips.length - 1; i >= 0; i--){
+    const d = FX.sdrips[i]; if (G.rt < d.start) continue;
+    const b = s.bodies.find(o => o.id === d.id); if (!b || b.flags.chew){ FX.sdrips.splice(i, 1); continue; }
+    if (!d.at){ d.at = dripAnchor(b, d.pick); if (!d.at){ FX.sdrips.splice(i, 1); continue; } }
+    if (G.rt - d.start >= d.dur){                              // оторвалась: летит каплей сока
+      const P = toWorld(b, d.at), v = b.pb.getLinearVelocity();
+      spawnP(P_DROP, P[0], P[1] + d.L + d.r, v.x * CFG.ppm, v.y * CFG.ppm + 60, 0.6, d.r * 1.1, pcol(d.col));
+      FX.sdrips.splice(i, 1);
+    }
+  }
+}
+// Точка подвеса капли: на контуре куска среди самых нижних в мире (сок стекает по лицу вниз; pick — какая из нижней трети).
+function dripAnchor(b, pick){
+  const V = b.verts, n = V.length, pts = [];
+  for (let i = 0; i < n; i++){ const p = V[i], q = V[(i + 1) % n], L = Math.hypot(q[0] - p[0], q[1] - p[1]), m = Math.max(1, Math.round(L / 3));
+    for (let k = 0; k <= m; k++){ const t = k / m, x = p[0] + (q[0] - p[0]) * t, y = p[1] + (q[1] - p[1]) * t; pts.push([x, y, toWorld(b, [x, y])[1]]); } }
+  if (!pts.length) return null;
+  pts.sort((a, c) => c[2] - a[2]); const top = pts.slice(0, Math.max(1, Math.ceil(pts.length / 3)));
+  const p = top[Math.min(top.length - 1, Math.floor(pick * top.length))], k = Math.max(0, 1 - 1.4 / (Math.hypot(p[0], p[1]) || 1));
+  return [p[0] * k, p[1] * k];
+}
+// Пятно сока на соседе: касание свежей дольки (слушатель только читает мир).
+function stainCheck(ct, src, dst){
+  if (!src || !dst || src.kind === undefined || dst.kind === undefined || src.id === dst.id) return;
+  const e = FX.slab.get(src.id); if (!e || G.rt - e.t0 > V8.stainT || Math.cos(e.ph) < 0 || FX.stainQ.length > 24 || !isSlab(src)) return;
+  const wm = ct.getWorldManifold(null); if (!wm || !wm.points || !wm.points.length) return;
+  const p = wm.points[0]; FX.stainQ.push({ id: dst.id, x: p.x * CFG.ppm, y: p.y * CFG.ppm, col: KINDS[src.kind].juice });
+}
+// Пятна сока поверх спрайта (g — в картинке фрукта): только по непрозрачному.
+function drawStains(g, b){
+  const L = FX.stains.get(b.id); if (!L) return;
+  g.save(); g.globalCompositeOperation = 'source-atop';
+  for (const o of L){ const rnd = mulberry32(o.sd), c = hexRgb(o.col);
+    g.fillStyle = rgba(shadeRgb(c, 0.92), 0.62); g.beginPath(); g.ellipse(o.x, o.y, o.r, o.r * 0.72, o.a, 0, 6.29); g.fill();
+    for (let k = 0; k < 4; k++){ const a = rnd() * 6.28, d = o.r * (0.9 + rnd() * 0.8); g.beginPath(); g.arc(o.x + Math.cos(a) * d, o.y + Math.sin(a) * d, 0.5 + rnd() * o.r * 0.28, 0, 6.29); g.fill(); }
+    g.fillStyle = 'rgba(255,255,255,0.55)'; g.beginPath(); g.ellipse(o.x - o.r * 0.3, o.y - o.r * 0.28, o.r * 0.32, o.r * 0.18, -0.6, 0, 6.29); g.fill(); }
+  g.restore();
+}
+
+// --- кромка по инструменту: ломаная внутрь куска (силуэт тела в физике тот же) и рисунок мякоти у кромки ---
+const JAG = { axe: 3.0, saw: 5.0, mace: 4.4 };   // шаг ломаной вдоль кромки, ед.; пила — редкая и мелкая (Андрей 21.11: зубчатая «бахрома» не нравится)
+function jagPoints(p, q, w, nin, rnd){
+  const ex = q[0] - p[0], ey = q[1] - p[1], L = Math.hypot(ex, ey), st = JAG[w]; if (!st || L < 3) return [];
+  const m = Math.max(2, Math.round(L / st)), out = [];
+  for (let k = 1; k < m; k++){
+    const t = clamp(k / m + (rnd() - 0.5) * 0.45 / m, 0.02, 0.98), r = rnd();
+    let off = w === 'axe' ? 0.45 + 1.5 * r + (rnd() < 0.2 ? 1.5 : 0) : w === 'saw' ? 0.1 + 0.55 * r : 0.6 + 4.2 * r * r;
+    off *= Math.min(1, t * L / 4, (1 - t) * L / 4);
+    out.push([p[0] + ex * t + nin[0] * off, p[1] + ey * t + nin[1] * off]);
+  }
+  return out;
+}
+function strokeLine(g, pts, off, nin){ g.beginPath(); pts.forEach((p, i) => { const x = p[0] + nin[0] * off, y = p[1] + nin[1] * off; if (i) g.lineTo(x, y); else g.moveTo(x, y); }); g.stroke(); }
+// Точка на ломаной через долю длины t.
+function alongPts(pts, t){ let tot = 0; for (let i = 1; i < pts.length; i++) tot += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+  let d = t * tot; for (let i = 1; i < pts.length; i++){ const L = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); if (d <= L || i === pts.length - 1){ const f = L ? Math.min(1, d / L) : 0; return [pts[i - 1][0] + (pts[i][0] - pts[i - 1][0]) * f, pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * f]; } d -= L; }
+  return pts[0]; }
+function edgeDeco(g, w, pts, nin, L, pal, rnd){
+  g.lineCap = 'round'; g.lineJoin = 'round';
+  const an = Math.atan2(nin[1], nin[0]);
+  if (w === 'knife'){                                          // ровный глянцевый срез
+    g.lineWidth = 3.4; g.strokeStyle = 'rgba(255,255,255,0.2)'; strokeLine(g, pts, 2.4, nin);
+    g.lineWidth = 1.15; g.strokeStyle = 'rgba(255,255,255,0.88)'; strokeLine(g, pts, 0.95, nin);
+    return;
+  }
+  if (w === 'axe'){                                            // раскол: светлая разбитая мякоть у кромки, волокна поперёк, редкие щели
+    g.lineWidth = 4.4; g.strokeStyle = rgba(pal.light, 0.4); strokeLine(g, pts, 0.8, nin);
+    const m = Math.max(3, Math.round(L / 1.9)), lt = new Path2D(), dk = new Path2D();
+    for (let k = 0; k < m; k++){ const P = alongPts(pts, (k + rnd() * 0.8) / m), len = 1.2 + 2.6 * rnd(), j = (rnd() - 0.5) * 0.5, c = Math.cos(j), sn = Math.sin(j);
+      const dx = nin[0] * c - nin[1] * sn, dy = nin[0] * sn + nin[1] * c, q = rnd() < 0.72 ? lt : dk; q.moveTo(P[0], P[1]); q.lineTo(P[0] + dx * len, P[1] + dy * len); }
+    g.lineWidth = 0.8; g.strokeStyle = rgba(pal.light, 0.85); g.stroke(lt); g.lineWidth = 0.7; g.strokeStyle = rgba(shadeRgb(pal.flesh, 0.8), 0.45); g.stroke(dk);
+    g.lineWidth = 0.8; g.strokeStyle = 'rgba(255,255,255,0.55)'; strokeLine(g, pts, 0.6, nin);
+    const cr = new Path2D();
+    for (let k = 0, n = Math.floor(L / 26); k < n; k++){ const P = alongPts(pts, 0.15 + 0.7 * rnd()), len = 3 + 5 * rnd(), j = (rnd() - 0.5) * 0.7;
+      cr.moveTo(P[0], P[1]); cr.lineTo(P[0] + (nin[0] + nin[1] * j) * len * 0.55, P[1] + (nin[1] - nin[0] * j) * len * 0.55); cr.lineTo(P[0] + (nin[0] - nin[1] * j * 0.6) * len, P[1] + (nin[1] + nin[0] * j * 0.6) * len); }
+    g.lineWidth = 0.6; g.strokeStyle = rgba(pal.dark, 0.4); g.stroke(cr);
+    return;
+  }
+  if (w === 'saw'){                                            // пропил: почти ровный срез, мягкая мокрая полоса, редкие светлые крупинки мякоти, блик
+    g.lineWidth = 5.5; g.strokeStyle = rgba(pal.juice, 0.2); strokeLine(g, pts, 0.4, nin);
+    const m = Math.max(2, Math.round(L / 5)), lt = new Path2D();
+    for (let k = 0; k < m; k++){ const P = alongPts(pts, (k + rnd()) / m), d = 0.8 + 2.2 * rnd(), r = 0.35 + 0.45 * rnd(), x = P[0] + nin[0] * d, y = P[1] + nin[1] * d;
+      lt.moveTo(x + r, y); lt.arc(x, y, r, 0, 6.29); }
+    g.fillStyle = rgba(pal.light, 0.7); g.fill(lt);
+    g.lineWidth = 2.6; g.strokeStyle = 'rgba(255,255,255,0.16)'; strokeLine(g, pts, 2.2, nin);
+    g.lineWidth = 1.0; g.strokeStyle = 'rgba(255,255,255,0.7)'; strokeLine(g, pts, 1.0, nin);
+    return;
+  }
+  // булава: раздавленная мякоть — мокрая полоса сока, кляксы, светлые смятые мазки, трещины вглубь
+  g.lineWidth = 9; g.strokeStyle = rgba(pal.juice, 0.24); strokeLine(g, pts, 0, nin);
+  const m = Math.max(2, Math.round(L / 4)), bl = new Path2D(), sm = new Path2D();
+  for (let k = 0; k < m; k++){ const P = alongPts(pts, (k + rnd()) / m), d = 1 + 4.5 * rnd(), rx = 1.3 + 2.2 * rnd(), ry = 0.8 + 1.2 * rnd(), a = an + Math.PI / 2 + (rnd() - 0.5) * 0.6;
+    const x = P[0] + nin[0] * d, y = P[1] + nin[1] * d, x2 = P[0] + nin[0] * (d * 0.5 + 0.8), y2 = P[1] + nin[1] * (d * 0.5 + 0.8);
+    bl.moveTo(x + Math.cos(a) * rx, y + Math.sin(a) * rx); bl.ellipse(x, y, rx, ry, a, 0, 6.29);
+    sm.moveTo(x2 + Math.cos(a) * rx * 0.55, y2 + Math.sin(a) * rx * 0.55); sm.ellipse(x2, y2, rx * 0.55, ry * 0.45, a, 0, 6.29); }
+  g.fillStyle = rgba(pal.juiceDk, 0.22); g.fill(bl); g.fillStyle = rgba(pal.light, 0.6); g.fill(sm);
+  g.lineWidth = 0.8; g.strokeStyle = 'rgba(255,255,255,0.5)'; strokeLine(g, pts, 0.7, nin);
+  const cr = new Path2D();
+  for (let k = 0, n = 1 + Math.floor(L / 20); k < n; k++){ const P = alongPts(pts, 0.1 + 0.8 * rnd()), len = 5 + 8 * rnd(); let x = P[0], y = P[1];
+    cr.moveTo(x, y); for (let j = 0; j < 3; j++){ const a = an + (rnd() - 0.5) * 1.1; x += Math.cos(a) * len / 3; y += Math.sin(a) * len / 3; cr.lineTo(x, y); } }
+  g.lineWidth = 0.75; g.strokeStyle = rgba(pal.dark, 0.5); g.stroke(cr);
+}
+
+// --- лицо дольки кодом (набор sticker и запасной путь, если картинки среза нет): кольца в форме фрукта и своя середина ---
+function faceCode(g, kind, cx, cy, rx, ry, rnd){
+  const A = ART[kind], C = A.col, cap = KINDS[kind].shape[0] === 'capsule';
+  const ring = (d, fill) => { g.beginPath();                    // форма, вдавленная на d (доля меньшей полуоси)
+    if (cap){ const r = ry * (1 - d), hl = rx - ry * d, c = Math.max(0, hl - r); g.moveTo(cx - c, cy - r); g.lineTo(cx + c, cy - r); g.arc(cx + c, cy, r, -Math.PI / 2, Math.PI / 2); g.lineTo(cx - c, cy + r); g.arc(cx - c, cy, r, Math.PI / 2, Math.PI * 1.5); }
+    else g.ellipse(cx, cy, rx * (1 - d), ry * (1 - d), 0, 0, 6.29);
+    g.fillStyle = fill; g.fill(); };
+  const rad = (c0, c1, k) => { const q = g.createRadialGradient(cx - rx * 0.15, cy - ry * 0.2, 0, cx, cy, Math.max(rx, ry) * (k || 1)); q.addColorStop(0, c0); q.addColorStop(1, c1); return q; };
+  const drop = (x, y, a, l, w, col) => { g.save(); g.translate(x, y); g.rotate(a); g.beginPath(); g.moveTo(-l, 0); g.quadraticCurveTo(0, -w, l, 0); g.quadraticCurveTo(0, w, -l, 0); g.fillStyle = col; g.fill(); g.restore(); };
+  const s = Math.min(rx, ry);
+  if (kind === 'melon'){
+    ring(0, C.edge); ring(0.06, '#8fd96a'); ring(0.1, C.rind); ring(0.15, rad('#ff7088', C.flesh));
+    for (let i = 0; i < 11; i++){ const a = i / 11 * 6.283 + rnd() * 0.2, d = 0.52 + rnd() * 0.08; drop(cx + Math.cos(a) * rx * d, cy + Math.sin(a) * ry * d, a, s * 0.065, s * 0.05, C.seed); }
+    for (let i = 0; i < 5; i++){ const a = i / 5 * 6.283 + 0.4, d = 0.27; drop(cx + Math.cos(a) * rx * d, cy + Math.sin(a) * ry * d, a, s * 0.055, s * 0.042, C.seed); }
+  } else if (kind === 'apple'){
+    ring(0, C.skin); ring(0.06, C.flesh2); ring(0.12, rad(C.flesh2, C.flesh, 1.1));
+    g.save(); g.translate(cx, cy); g.beginPath(); for (let i = 0; i < 10; i++){ const a = -Math.PI / 2 + i * Math.PI / 5, r = (i % 2 ? 0.14 : 0.34) * s; g.lineTo(Math.cos(a) * r, Math.sin(a) * r); } g.closePath();
+    g.fillStyle = '#f6e6a8'; g.fill(); g.lineWidth = 0.8; g.strokeStyle = 'rgba(160,120,60,0.45)'; g.stroke(); g.restore();
+    for (let i = 0; i < 5; i++){ const a = -Math.PI / 2 + i * Math.PI * 0.4; drop(cx + Math.cos(a) * s * 0.17, cy + Math.sin(a) * s * 0.17, a, s * 0.08, s * 0.05, C.seed); }
+  } else if (C.seg){                                            // цитрусы: корка, белая подкорка, колесо долек
+    ring(0, C.skin); ring(0.07, C.rind); ring(0.13, C.seg);
+    const n = 10, r0 = s * 0.08;
+    for (let i = 0; i < n; i++){ const a0 = i / n * 6.283 + 0.05, a1 = (i + 1) / n * 6.283 - 0.05, am = (a0 + a1) / 2;
+      g.beginPath(); g.moveTo(cx + Math.cos(am) * r0, cy + Math.sin(am) * r0); g.ellipse(cx, cy, rx * 0.84, ry * 0.84, 0, a0 + 0.04, a1 - 0.04); g.closePath();
+      const q = g.createLinearGradient(cx, cy, cx + Math.cos(am) * rx * 0.84, cy + Math.sin(am) * ry * 0.84); q.addColorStop(0, C.flesh2); q.addColorStop(0.55, C.flesh); q.addColorStop(1, C.flesh);
+      g.fillStyle = q; g.fill(); }
+    g.beginPath(); g.ellipse(cx, cy, rx * 0.09, ry * 0.09, 0, 0, 6.29); g.fillStyle = C.rind; g.fill();
+  } else if (kind === 'berry' || kind === 'pepper'){
+    ring(0, C.skin); ring(0.08, rad(C.flesh, C.skin, 1.05));
+    g.beginPath(); g.ellipse(cx, cy - ry * 0.05, rx * 0.26, ry * 0.5, 0, 0, 6.29); g.fillStyle = C.flesh2; g.fill();
+    g.lineWidth = 0.7; g.strokeStyle = 'rgba(255,240,245,0.55)'; g.beginPath();
+    for (let i = 0; i < 12; i++){ const a = i / 12 * 6.283; g.moveTo(cx + Math.cos(a) * rx * 0.24, cy + Math.sin(a) * ry * 0.45); g.lineTo(cx + Math.cos(a) * rx * 0.8, cy + Math.sin(a) * ry * 0.82); } g.stroke();
+    if (C.seed) for (let i = 0; i < 14; i++){ const a = i / 14 * 6.283; g.beginPath(); g.arc(cx + Math.cos(a) * rx * 0.88, cy + Math.sin(a) * ry * 0.88, s * 0.035, 0, 6.29); g.fillStyle = C.seed; g.fill(); }
+  } else if (kind === 'coco'){
+    ring(0, C.hair); g.lineWidth = 1; g.strokeStyle = C.hair2; g.beginPath();
+    for (let i = 0; i < 30; i++){ const a = rnd() * 6.283, d0 = 0.9 + rnd() * 0.04; g.moveTo(cx + Math.cos(a) * rx * d0, cy + Math.sin(a) * ry * d0); g.lineTo(cx + Math.cos(a + 0.12) * rx * (d0 + 0.05), cy + Math.sin(a + 0.12) * ry * (d0 + 0.05)); } g.stroke();
+    ring(0.12, '#3a2010'); ring(0.14, rad('#ffffff', C.flesh, 1)); ring(0.46, rad('#e9f3f8', '#bcd3df', 0.6));
+    g.beginPath(); g.ellipse(cx, cy - ry * 0.05, rx * 0.5, ry * 0.48, 0, Math.PI * 1.1, Math.PI * 1.9); g.lineWidth = s * 0.06; g.strokeStyle = 'rgba(90,120,140,0.25)'; g.stroke();
+  } else if (kind === 'cuke'){
+    ring(0, C.skin); ring(0.1, '#73c95e'); ring(0.17, '#c6ea7e'); ring(0.5, '#e9fbbf');
+    for (let i = 0; i < 9; i++){ const x = cx - rx * 0.62 + i * rx * 1.24 / 8; drop(x, cy - ry * 0.17, Math.PI / 2, ry * 0.14, ry * 0.085, '#8fbf55'); drop(x, cy - ry * 0.17, Math.PI / 2, ry * 0.1, ry * 0.06, '#ffffff');
+      drop(x + rx * 0.07, cy + ry * 0.17, -Math.PI / 2, ry * 0.14, ry * 0.085, '#8fbf55'); drop(x + rx * 0.07, cy + ry * 0.17, -Math.PI / 2, ry * 0.1, ry * 0.06, '#ffffff'); }
+  } else if (kind === 'banana'){
+    ring(0, C.skin); ring(0.12, '#fff4c8'); ring(0.5, '#ffe58f');
+    g.fillStyle = '#8a5a22'; for (let i = 0; i < 9; i++){ g.beginPath(); g.ellipse(cx - rx * 0.6 + i * rx * 1.2 / 8, cy, ry * 0.075, ry * 0.055, 0, 0, 6.29); g.fill(); }
+    g.fillStyle = C.tip; g.beginPath(); g.ellipse(cx - rx + ry * 0.1, cy, ry * 0.18, ry * 0.3, 0, 0, 6.29); g.ellipse(cx + rx - ry * 0.1, cy, ry * 0.18, ry * 0.3, 0, 0, 6.29); g.fill();
+  } else if (C.pit){                                            // слива, вишня, виноград: янтарная мякоть, косточка
+    ring(0, C.skin); ring(0.06, rad(kind === 'grape' ? C.flesh2 : '#ffd24a', kind === 'grape' ? C.flesh : C.flesh, 1));
+    g.beginPath(); g.ellipse(cx, cy, rx * 0.22, ry * 0.34, 0.2, 0, 6.29); g.fillStyle = C.pit; g.fill();
+    g.beginPath(); g.ellipse(cx - rx * 0.06, cy - ry * 0.1, rx * 0.06, ry * 0.12, 0.2, 0, 6.29); g.fillStyle = 'rgba(255,255,255,0.4)'; g.fill();
+  } else {
+    ring(0, C.edge || C.skin); ring(0.08, rad(C.flesh2 || C.flesh, C.flesh, 1));
+  }
+  g.save(); g.translate(cx - rx * 0.34, cy - ry * 0.38); g.rotate(-0.55);         // мокрый блик
+  g.beginPath(); g.ellipse(0, 0, rx * 0.3, ry * 0.12, 0, 0, 6.29); g.fillStyle = 'rgba(255,255,255,0.42)'; g.fill(); g.restore();
+}
+
+// --- спрайт дольки: торец (толщина) вниз-вправо, лицо — срез в картинке фрукта, корка по наружным рёбрам, кромка по
+// инструменту, контур. Поворот на момент печати запечён (как у bakeSprite). ---
+function bakeSlab(b){
+  const kind = b.kind, sc = b.sc, af = b.artFrame, n = b.verts.length, a0 = b.a;
+  const S = smoothShape(kind, sc), [rx, ry] = shapeAxes(kind, sc), cx = S.ox, cy = S.oy, ink = !spriteOK(kind);
+  const P = b.verts.map(v => [v[0] + af[0], v[1] + af[1]]), tools = FX.etool.get(b.id), pal = slabPal(kind);
+  let sil = S.pts; const cuts = [];
+  for (let i = 0; i < n; i++) if (b.cutEdges[i]){ const a = P[i], e = P[(i + 1) % n], m = edgeMatch(tools, a, e, 1.2); cuts.push({ a, e, w: m ? m.w : 'knife' }); sil = clipHalf(sil, a, e, af[0], af[1]); }
+  if (sil.length < 3) sil = P;
+  // контур лица: наружные рёбра — как есть, рёбра-срезы — ломаная внутрь по инструменту
+  const F = [], segs = [];
+  for (let i = 0; i < sil.length; i++){
+    const p = sil[i], q = sil[(i + 1) % sil.length]; let cut = null;
+    for (const c of cuts) if (onLine(c.a, c.e, p, 0.5) && onLine(c.a, c.e, q, 0.5)){ cut = c; break; }
+    const i0 = F.length; F.push(p);
+    if (cut){ const ex = q[0] - p[0], ey = q[1] - p[1], L = Math.hypot(ex, ey) || 1; let nin = [-ey / L, ex / L];
+      if ((af[0] - p[0]) * nin[0] + (af[1] - p[1]) * nin[1] < 0) nin = [-nin[0], -nin[1]];
+      const rnd = mulberry32(lineHash(nin[0], nin[1], p[0] * nin[0] + p[1] * nin[1], b.root) ^ 0x5bd1);
+      for (const J of jagPoints(p, q, cut.w, nin, rnd)) F.push(J);
+      segs.push({ i0, cut, nin, L, seed: lineHash(nin[0], nin[1], p[0] * nin[0] + p[1] * nin[1], b.root) });
+    } else segs.push({ i0, cut: null });
+  }
+  for (let k = 0; k < segs.length; k++) segs[k].i1 = k + 1 < segs.length ? segs[k + 1].i0 : F.length;
+  const d = clamp(V8.thick[0] * Math.sqrt(rx * ry), V8.thick[1], V8.thick[2]), cs = Math.cos(a0), sn = Math.sin(a0);
+  const tsx = 0.3 * d, tsy = d, tx = cs * tsx + sn * tsy, ty = -sn * tsx + cs * tsy;   // экран «вниз-вправо» → картинка: R(−a0)
+  const Ft = F.map(p => [p[0] - tx / 2, p[1] - ty / 2]), Fb = F.map(p => [p[0] + tx / 2, p[1] + ty / 2]), N = F.length;
+  const olW = ink ? VIEW.outline : 1.3;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const p of Ft.concat(Fb)){ const x = cs * p[0] - sn * p[1], y = sn * p[0] + cs * p[1]; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+  const pad = olW + 1.5; x0 -= pad; y0 -= pad; x1 += pad; y1 += pad;
+  const cvs = newCanvas((x1 - x0) * K, (y1 - y0) * K), g = ctx2d(cvs);
+  g.setTransform(K * cs, K * sn, -K * sn, K * cs, -x0 * K, -y0 * K);
+  g.lineJoin = 'round'; g.lineCap = 'round';
+  // торец: четырёхугольники рёбер, смотрящих по вектору толщины (наружная нормаль — от центра куска)
+  const side = [];
+  for (let k = 0; k < segs.length; k++){ const sg = segs[k];
+    for (let j = sg.i0; j < sg.i1; j++){ const p = F[j], q = F[(j + 1) % N], ex = q[0] - p[0], ey = q[1] - p[1]; let nx = ey, ny = -ex;
+      if ((p[0] + q[0]) / 2 * nx + (p[1] + q[1]) / 2 * ny - (af[0] * nx + af[1] * ny) < 0){ nx = -nx; ny = -ny; }
+      if (nx * tx + ny * ty > 0) side.push({ j, sg, k }); } }
+  const quad = (A, B, j) => { const a = A[j], c = A[(j + 1) % N], e = B[(j + 1) % N], f = B[j]; g.moveTo(a[0], a[1]); g.lineTo(c[0], c[1]); g.lineTo(e[0], e[1]); g.lineTo(f[0], f[1]); g.closePath(); };
+  const olC = ink ? VIEW.ink : rgba(shadeRgb(pal.rind, 0.42), 0.7);
+  g.fillStyle = olC; g.strokeStyle = olC; g.lineWidth = olW;                 // подложка-контур: один путь
+  g.beginPath(); for (const q of side) quad(Ft, Fb, q.j); for (let j = 0; j < N; j++){ const p = Ft[j]; if (j) g.lineTo(p[0], p[1]); else g.moveTo(p[0], p[1]); } g.closePath(); g.fill(); g.stroke();
+  const stripe = kind === 'melon' || kind === 'cuke', groups = new Map();   // торец: один путь на цвет; нижняя половина — в тени
+  for (const q of side){
+    let col;
+    if (!q.sg.cut) col = shadeRgb(pal.rind, stripe && (q.j >> 1) % 2 ? 0.55 : 0.88);
+    else col = q.sg.cut.w === 'knife' ? shadeRgb(pal.flesh, 0.88) : q.sg.cut.w === 'saw' ? mixRgb(shadeRgb(pal.flesh, 0.8), pal.juice, 0.25) : q.sg.cut.w === 'mace' ? mixRgb(shadeRgb(pal.flesh, 0.76), pal.juice, 0.2) : shadeRgb(pal.flesh, 0.84);
+    for (const [c2, A] of [[rgba(col, 1), Ft], [rgba(shadeRgb(col, q.sg.cut ? 0.8 : 0.72), 1), F]]){ let L = groups.get(c2); if (!L) groups.set(c2, L = []); L.push([A, q.j]); }
+  }
+  g.lineWidth = 0.5;
+  for (const [c2, L] of groups){ g.fillStyle = g.strokeStyle = c2; g.beginPath(); for (const [A, j] of L) quad(A, Fb, j); g.fill(); g.stroke(); }
+  // лицо
+  g.save(); pathPoly(g, Ft); g.clip();
+  const fx = cx - tx / 2, fy = cy - ty / 2, Fi = sliceFit(kind);
+  if (Fi){ const W = 2 * rx / Fi.w, H = 2 * ry / Fi.h; g.imageSmoothingQuality = 'high'; g.drawImage(Fi.im, fx - rx - Fi.x * W, fy - ry - Fi.y * H, W, H); }
+  else faceCode(g, kind, fx, fy, rx, ry, mulberry32(b.root * 977 + 5));
+  // корка по наружным рёбрам: тень внутрь (стык лица и торца) и линия корки
+  g.beginPath(); for (const sg of segs){ if (sg.cut) continue; for (let j = sg.i0; j < sg.i1; j++){ const p = Ft[j], q = Ft[(j + 1) % N]; g.moveTo(p[0], p[1]); g.lineTo(q[0], q[1]); } }
+  g.lineWidth = 6; g.strokeStyle = 'rgba(30,10,30,0.1)'; g.stroke();
+  g.lineWidth = 2; g.strokeStyle = rgba(shadeRgb(pal.rind, 0.85), 1); g.stroke();
+  for (const sg of segs){ if (!sg.cut) continue; const pts = Ft.slice(sg.i0, sg.i1 + 1); if (sg.i1 >= N) pts.push(Ft[0]);
+    edgeDeco(g, sg.cut.w, pts, sg.nin, sg.L, pal, mulberry32(sg.seed ^ 0x9e37)); }
+  { const L = Math.hypot(tx, ty) || 1, R0 = Math.max(rx, ry), gr = g.createLinearGradient(fx - tx / L * R0, fy - ty / L * R0, fx + tx / L * R0, fy + ty / L * R0);   // лицо чуть выпуклое: светлее против толщины, темнее к торцу
+    gr.addColorStop(0, 'rgba(255,255,255,0.12)'); gr.addColorStop(0.5, 'rgba(255,255,255,0)'); gr.addColorStop(1, 'rgba(40,10,30,0.13)'); g.fillStyle = gr; pathPoly(g, Ft); g.fill(); }
+  g.restore();
+  if (ink){ g.lineWidth = Math.max(0.8, olW * 0.5); g.strokeStyle = olC; pathPoly(g, Ft); g.stroke(); }
+  g.beginPath(); for (const q of side){ const a = Ft[q.j], c = Ft[(q.j + 1) % N]; g.moveTo(a[0], a[1]); g.lineTo(c[0], c[1]); }   // светлый кант: край лица над торцом
+  g.lineWidth = 0.9; g.strokeStyle = 'rgba(255,255,255,0.45)'; g.stroke();
+  drawStains(g, b);
+  bakeCount++;
+  return { cv: cvs, x0, y0, a: a0, rec: b, seen: frameNo, slab: true };
+}
+
+// --- обратная сторона (кожура) на кадре без печати: целая кожура, отсечённая полуплоскостями срезов, по краю среза — кант
+// мякоти. Видна в первой половине переворота и в кувырке. ---
+function backSil(b){
+  const e = FX.slab.get(b.id); if (e && e.backRec === b && e.backStyle === ART_STYLE) return e.back;
+  const af = b.artFrame, V = b.verts, n = V.length, spr = spriteOK(b.kind);
+  let sil; if (spr){ const B = rootBase(b, 0); sil = [[B.x0, B.y0], [B.x0 + B.w, B.y0], [B.x0 + B.w, B.y0 + B.h], [B.x0, B.y0 + B.h]]; } else sil = smoothShape(b.kind, b.sc).pts;
+  const cuts = [];
+  for (let i = 0; i < n; i++) if (b.cutEdges[i]){ const a = [V[i][0] + af[0], V[i][1] + af[1]], c = [V[(i + 1) % n][0] + af[0], V[(i + 1) % n][1] + af[1]]; cuts.push([a, c]); sil = clipHalf(sil, a, c, af[0], af[1]); }
+  const out = { sil, cuts, spr, flesh: rgbCss(slabPal(b.kind).flesh) };
+  if (e){ e.back = out; e.backRec = b; e.backStyle = ART_STYLE; }
+  return out;
+}
+function squashM(M, nx, ny, k){
+  if (k >= 0.999) return M;
+  const q = k - 1, s00 = 1 + q * nx * nx, s01 = q * nx * ny, s11 = 1 + q * ny * ny;
+  return [s00 * M[0] + s01 * M[2], s00 * M[1] + s01 * M[3], s01 * M[0] + s11 * M[2], s01 * M[1] + s11 * M[3], M[4], M[5]];
+}
+// Состояние дольки на кадре: { k — сжатие по оси, nx, ny — ось (нормаль реза в мире), back — видна кожура, flip — идёт переворот }.
+function slabView(b){
+  const e = FX.slab.get(b.id); if (!e || e.ph === 0) return null;
+  const c = Math.cos(e.ph), cs = Math.cos(b.a), sn = Math.sin(b.a);
+  return { k: Math.max(V8.minK, Math.abs(c)), nx: cs * e.nl[0] - sn * e.nl[1], ny: sn * e.nl[0] + cs * e.nl[1], back: c < 0, flip: e.flip };
+}
+function drawBack(c, b, sh, st){
+  const bs = backSil(b), af = b.artFrame, B = rootBase(b, 0), M = squashM(bodyM(b), st.nx, st.ny, st.k);
+  c.setTransform(K * M[0], K * M[2], K * M[1], K * M[3], K * (M[4] + sh.x) + DPR * view.ox, K * (M[5] + sh.y) + DPR * view.oy);
+  c.translate(-af[0], -af[1]);
+  c.save(); pathPoly(c, bs.sil); c.clip(); c.drawImage(B.cv, B.x0, B.y0, B.w, B.h);
+  c.lineCap = 'round'; c.lineWidth = 3.2; c.strokeStyle = bs.flesh; c.beginPath(); for (const [a, e] of bs.cuts){ c.moveTo(a[0], a[1]); c.lineTo(e[0], e[1]); } c.stroke();
+  c.restore();
+  if (!bs.spr){ c.lineJoin = 'round'; c.lineWidth = VIEW.outline; c.strokeStyle = VIEW.ink; pathPoly(c, bs.sil); c.stroke(); }
+}
+// Блик свежего среза (гаснет за V8.glossT) и капли, что тянутся от нижнего края. Рисуется поверх кусков.
+function drawSlabFX(c, s){
+  if (!FX.slab.size && !FX.sdrips.length) return;
+  const L = VIEW.light;
+  for (const b of s.bodies){
+    const e = FX.slab.get(b.id); if (!e || !isSlab(b)) continue; const age = G.rt - e.t0; if (age >= V8.glossT || e.flip || Math.cos(e.ph) < 0.3) continue;
+    const al = Math.pow(1 - age / V8.glossT, 1.3), st = slabView(b); let M = bodyM(b); if (st) M = squashM(M, st.nx, st.ny, st.k);
+    vbase(c); c.save(); c.transform(M[0], M[2], M[1], M[3], M[4], M[5]);
+    const cs = Math.cos(b.a), sn = Math.sin(b.a), lx = cs * L[0] + sn * L[1], ly = -sn * L[0] + cs * L[1], r = b.rad;
+    pathPoly(c, b.verts); c.clip();
+    const hx = lx * r * 0.3, hy = ly * r * 0.3, gr = c.createRadialGradient(hx, hy, 0, hx, hy, r * 0.62);
+    gr.addColorStop(0, 'rgba(255,255,255,' + (0.62 * al).toFixed(3) + ')'); gr.addColorStop(0.45, 'rgba(255,255,255,' + (0.22 * al).toFixed(3) + ')'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+    c.fillStyle = gr; c.fillRect(-r * 1.2, -r * 1.2, r * 2.4, r * 2.4);
+    const rnd = mulberry32(b.id * 131 + 7);
+    for (let k = 0; k < 3; k++){ const x = (rnd() - 0.5) * r * 0.9, y = (rnd() - 0.5) * r * 0.9, tw = 0.5 + 0.5 * Math.sin(G.rt * 14 + k * 2.1), q = (1.2 + rnd() * 1.6) * al * tw;
+      if (q < 0.2) continue; c.fillStyle = 'rgba(255,255,255,' + (0.9 * al).toFixed(3) + ')'; c.beginPath();
+      c.moveTo(x, y - q * 2); c.lineTo(x + q * 0.45, y - q * 0.45); c.lineTo(x + q * 2, y); c.lineTo(x + q * 0.45, y + q * 0.45); c.lineTo(x, y + q * 2); c.lineTo(x - q * 0.45, y + q * 0.45); c.lineTo(x - q * 2, y); c.lineTo(x - q * 0.45, y - q * 0.45); c.closePath(); c.fill(); }
+    c.restore();
+  }
+  vbase(c);
+  for (const d of FX.sdrips){
+    if (!d.at || G.rt < d.start) continue; const b = s.bodies.find(o => o.id === d.id); if (!b) continue;
+    const p = clamp((G.rt - d.start) / d.dur, 0, 1), P = toWorld(b, d.at), y0 = P[1] + introOff(b), len = d.L * (1 - Math.pow(1 - p, 2)), r = d.r * (0.55 + 0.45 * p), w = Math.min(r * 0.8, 1.3);
+    c.beginPath(); c.moveTo(P[0] - w, y0); c.quadraticCurveTo(P[0] - w * 0.4, y0 + len * 0.6, P[0] - r, y0 + len); c.arc(P[0], y0 + len, r, Math.PI, 0, true);
+    c.quadraticCurveTo(P[0] + w * 0.4, y0 + len * 0.6, P[0] + w, y0); c.closePath(); c.fillStyle = d.col; c.fill();
+    c.beginPath(); c.arc(P[0] - r * 0.35, y0 + len - r * 0.3, r * 0.3, 0, 6.29); c.fillStyle = 'rgba(255,255,255,0.75)'; c.fill();
+  }
+}
+function slabSweep(){
+  const s = G.s; if (!s) return; const live = new Set(s.bodies.map(b => b.id)); for (const g of s.grinding) live.add(g.id);
+  for (const M of [FX.slab, FX.etool, FX.stains]) for (const id of M.keys()) if (!live.has(id)) M.delete(id);
+}
+function setPieces(m){ PIECES = PIECE_MODES.includes(m) ? m : 'slab'; G.save.pieces = PIECES; save(); resetSprites(); log('event', 'pieces', PIECES); }
 
 // =====================================================================================================
 // Сцена: фон мира, задняя стенка короба, детали, жернова, бак, стекло. Статичное печатается в фон уровня (bgClean);
@@ -4019,9 +4464,15 @@ function buildBackground(){
     return;
   }
   if (isV4()){                                                // v4: иллюстрация бара, витрина, дерево и хром; стойка внизу (v5 toy — своя иллюстрация, пластик)
-    drawBgImage(c, ART_STYLE === 'toy' ? IMG['toy-bg'] : IMG.bg); vbase(c); drawBarBack(c, th); drawCaseV4(c);
+    const t9 = toy9();                                        // v9: toy (clear) — спокойный фон, тёмный корпус жерновов вместо стойки, горло щелей, синие опоры, светлый обод
+    drawBgImage(c, ART_STYLE === 'toy' ? IMG['toy-bg'] : IMG.bg); vbase(c);
+    if (t9){ drawBgCalm9(c); drawHousing9(c); } else drawBarBack(c, th);
+    drawCaseV4(c);
     wallClip = new Path2D(); wallClip.rect(0, VIEW.top, CFG.W, CFG.grindY - VIEW.top);
-    drawStaticsV4(c, G.s); drawBeamV4(c); drawGrinderLip(c, th);
+    if (clear9()) for (const st of G.s.statics) if (st.role !== 'wall') wallClip.addPath(polyPath2D(st.poly));   // v9: пятна сока опоры обходят (evenodd)
+    if (t9) drawGapThroats9(c, G.s);
+    drawStaticsV4(c, G.s);
+    if (t9) drawRimToy9(c); else { drawBeamV4(c); drawGrinderLip(c, th); }
     const d = ctx2d(bgDirty); d.setTransform(1, 0, 0, 1, 0, 0); d.globalAlpha = 1; d.drawImage(bgClean, 0, 0);
     return;
   }
@@ -4176,6 +4627,238 @@ function drawPlanksV4(c, s){
     if (g.kind === 'gate'){ const p = g.pb.getPosition(); chromeDisc(c, p.x * CFG.ppm + g.dir * 3, p.y * CFG.ppm, 5.5); } }
 }
 // v5: цвета игрушечного набора — пластик чаши (коралл), прутья — кремовый пластик, валики — лимонный пластик.
+// =====================================================================================================
+// v9: читаемость набора toy (режим clear) и сок на жерновах. Только вид, ядро не трогает. Порядок контраста: фрукты > опоры
+// и щели > жернова > лоток > фон. Опоры — плотный синий пластик (цвета нет ни у одного фрукта) с тёмным кантом и светлой
+// верхней гранью; пятна сока их обходят; щель — тёмное горло и светлые кромки. Жернова — светлые зубчатые валики в тёмном
+// корпусе; влага — сплошная плёнка вдоль ряда (растекается, смешивает цвета, сохнет плавно, капает между валиками); под
+// валиками — стеклянный жёлоб: уровень = доля кучи, дошедшей до жерновов, волна и пузыри от каждого куска; цепочка — валики
+// быстрее, фонтан и волна выше. Набор sticker и real и режим заказа (v3–v6) рисуются как раньше.
+// =====================================================================================================
+const V9 = {
+  rim: [1.0, 0.2, -0.3],     // кромка спрайтов toy: ширина, ед.; непрозрачность каждого из 12 сдвигов силуэта; насколько темнее тёмного края фрукта
+  part: { top: '#62c1ea', mid: '#3b97d3', bot: '#246aa3', ink: '#143a62', lit: '#c4efff', dk: '#174b7c', shadow: 'rgba(16,40,72,0.26)' },   // опоры: синий пластик
+  partR: 4,                  // скругление углов опоры внутрь (силуэт не раздувается — фрукт лежит ровно на краю)
+  throat: [0.3, 20],         // щель: тёмное горло — непрозрачность у кромки и сколько ед. ниже щели гаснет
+  housing: ['#33426a', '#1b2442'],   // корпус жерновов за валиками (тёмный — светлые валики видно с первого взгляда)
+  roller: ['#ffffff', '#eef2f6', '#b5c2cf', '#3e4c66'],   // валик: блик, тело, тень, контур
+  hub: ['#d5dee8', '#4a5a74', '#ff7a4d'],   // ступица, её кант и метка вращения (одна тёплая точка на валик — видно, что крутится)
+  teeth: 8,                  // зубьев на валике
+  film: { n: 50, D: 9, dry: 4.5, max: 1.25, a: 0.82 },   // плёнка сока: ячеек вдоль ряда; растекание, ячеек²/с; сохнет за ≈ dry с; потолок; непрозрачность
+  tear: [0.5, 34, 46],       // кусок в жерновах мочит: влаги (+ до столько же от размера); разброс, ед. (+ до …)
+  dropWet: 0.03,             // каждая жидкая капля, упавшая на валики, добавляет столько влаги (× радиус / 3)
+  trough: { y0: 27, y1: 52, r: 9, lvl: [0.2, 0.84], wave: 3.4, bubbles: 26 },   // жёлоб: верх и низ от grindY, скругление; уровень от доли кучи; волна, ед.; потолок пузырей
+  chainSpin: 0.14,           // цепочка: валики быстрее на 14% за кусок (до 6)
+  vignette: 0.14,            // фон: затемнение краёв
+  wash: 0.2,                 // фон: светлая дымка за полем
+  glass: { w: 7, rim: '#f3fbff', ink: 'rgba(22,58,84,0.55)' },   // стенки короба: ширина, ед.; обод; кант
+};
+const clear9 = () => !!G.s && G.s.mode === 'clear';
+const toy9 = () => ART_STYLE === 'toy' && clear9();
+// Фонтан из жерновов: скорость вверх урезается так, чтобы капля взлетала не выше VIEW.fountH (выше при длинной цепочке).
+function fountClamp(vx, vy){
+  if (!clear9()) return [vx, vy];
+  const h = VIEW.fountH[0] + (VIEW.fountH[1] - VIEW.fountH[0]) * Math.min(1, FX.chain / 8), vm = Math.sqrt(2 * VIEW.pg * h);
+  if (vy < -vm){ const k = vm / -vy; vx *= k; vy = -vm; }
+  if (Math.abs(vx) > vm * 0.7) vx = Math.sign(vx) * vm * 0.7;
+  return [vx, vy];
+}
+// Контур со скруглёнными углами (дугами внутрь).
+function roundPoly(c, P, r){
+  const n = P.length; c.beginPath();
+  for (let i = 0; i < n; i++){ const a = P[(i + n - 1) % n], b = P[i], d = P[(i + 1) % n];
+    const l1 = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, l2 = Math.hypot(d[0] - b[0], d[1] - b[1]) || 1, rr = Math.min(r, l1 / 2.2, l2 / 2.2);
+    const x0 = b[0] + (a[0] - b[0]) * rr / l1, y0 = b[1] + (a[1] - b[1]) * rr / l1;
+    if (i) c.lineTo(x0, y0); else c.moveTo(x0, y0);
+    c.arcTo(b[0], b[1], d[0], d[1], rr); }
+  c.closePath();
+}
+// Опора (клин, крыша, плечо камеры, штырь): плотный синий пластик, светлая верхняя грань, тёмная нижняя, тёмный кант;
+// у щели — светлая кромка по стенке щели и блик на углу.
+function drawToyPart9(c, st, gaps){
+  const P = st.poly, C = V9.part;
+  let y0 = Infinity, y1 = -Infinity, cx = 0, cy = 0; for (const v of P){ y0 = Math.min(y0, v[1]); y1 = Math.max(y1, v[1]); cx += v[0]; cy += v[1]; } cx /= P.length; cy /= P.length;
+  if (st.role === 'peg'){ let r = 0; for (const v of P) r = Math.max(r, Math.hypot(v[0] - cx, v[1] - cy));
+    c.fillStyle = C.shadow; c.beginPath(); c.arc(cx + 2.5, cy + 4, r, 0, 6.29); c.fill();
+    const g = c.createRadialGradient(cx - r * 0.4, cy - r * 0.45, r * 0.1, cx, cy, r); g.addColorStop(0, C.lit); g.addColorStop(0.45, C.mid); g.addColorStop(1, C.bot);
+    c.beginPath(); c.arc(cx, cy, r, 0, 6.29); c.fillStyle = g; c.fill(); c.lineWidth = 2; c.strokeStyle = C.ink; c.stroke(); return; }
+  c.fillStyle = C.shadow; roundPoly(c, P.map(v => [v[0] + 3, v[1] + 6]), V9.partR); c.fill();
+  const g = c.createLinearGradient(0, y0, 0, Math.max(y0 + 36, y1)); g.addColorStop(0, C.top); g.addColorStop(0.3, C.mid); g.addColorStop(1, C.bot);
+  roundPoly(c, P, V9.partR); c.fillStyle = g; c.fill();
+  c.save(); roundPoly(c, P, V9.partR); c.clip();
+  const lips = [];
+  for (let i = 0; i < P.length; i++){
+    const a = P[i], b = P[(i + 1) % P.length], ex = b[0] - a[0], ey = b[1] - a[1], L = Math.hypot(ex, ey); if (L < 3) continue;
+    let nx = -ey / L, ny = ex / L; if ((cx - a[0]) * nx + (cy - a[1]) * ny < 0){ nx = -nx; ny = -ny; }   // n — внутрь
+    const up = ny > 0.35, down = ny < -0.35, mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
+    const gap = !up && !down && gaps.find(q => Math.abs(Math.abs(mx - q.x) - q.w / 2) < 3 && my > q.y - 8 && my < (q.yb || CFG.floorY) + 8);
+    if (gap){ lips.push([a, b, nx, ny]); continue; }
+    if (!up && !down) continue;
+    const w = up ? 6 : 7;
+    c.beginPath(); c.moveTo(a[0], a[1]); c.lineTo(b[0], b[1]); c.lineTo(b[0] + nx * w, b[1] + ny * w); c.lineTo(a[0] + nx * w, a[1] + ny * w); c.closePath();
+    c.globalAlpha = up ? 0.55 : 0.45; c.fillStyle = up ? C.lit : C.dk; c.fill(); c.globalAlpha = 1;
+  }
+  for (const [a, b, nx, ny] of lips){                          // стенка щели: светлая полоса — кромку видно и под фруктами
+    c.beginPath(); c.moveTo(a[0], a[1]); c.lineTo(b[0], b[1]); c.lineTo(b[0] + nx * 4, b[1] + ny * 4); c.lineTo(a[0] + nx * 4, a[1] + ny * 4); c.closePath();
+    c.fillStyle = C.lit; c.globalAlpha = 0.85; c.fill(); c.globalAlpha = 1; }
+  c.restore();
+  roundPoly(c, P, V9.partR); c.lineJoin = 'round'; c.lineWidth = 2.2; c.strokeStyle = C.ink; c.stroke();
+  let A = 0; for (let i = 0; i < P.length; i++){ const p = P[i], q = P[(i + 1) % P.length]; A += p[0] * q[1] - q[0] * p[1]; }
+  c.lineWidth = 1.8; c.strokeStyle = 'rgba(255,255,255,0.75)'; c.lineCap = 'round';
+  for (let i = 0; i < P.length; i++){ const p = P[i], q = P[(i + 1) % P.length], ex = q[0] - p[0], ey = q[1] - p[1], L = Math.hypot(ex, ey); if (L < 12) continue;
+    const ny = (A > 0 ? -ex : ex) / L, nx = (A > 0 ? ey : -ey) / L; if (ny > -0.35) continue;   // блик — по граням, что смотрят вверх
+    const t = Math.min(0.3, V9.partR * 1.6 / L);
+    c.beginPath(); c.moveTo(p[0] + ex * t - nx * 2.6, p[1] + ey * t - ny * 2.6); c.lineTo(q[0] - ex * t - nx * 2.6, q[1] - ey * t - ny * 2.6); c.stroke(); }
+}
+// Щель: тёмное горло — от кромки вниз гаснет (на задней стенке, под фруктами): видно, куда провалится кусок.
+function drawGapThroats9(c, s){
+  for (const q of s.gaps){ const x0 = q.x - q.w / 2, x1 = q.x + q.w / 2, yt = q.y - 6, yb = (q.float ? q.yb : CFG.floorY) + V9.throat[1], a = V9.throat[0];
+    const g = c.createLinearGradient(0, yt, 0, yb); g.addColorStop(0, 'rgba(16,40,72,0)'); g.addColorStop(0.12, 'rgba(16,40,72,' + a + ')'); g.addColorStop(0.55, 'rgba(16,40,72,' + (a * 0.55).toFixed(3) + ')'); g.addColorStop(1, 'rgba(16,40,72,0)');
+    c.fillStyle = g; c.beginPath(); roundRect(c, x0 + 1, yt, x1 - x0 - 2, yb - yt, 6); c.fill(); }
+}
+// Фон toy (clear): дымка за полем и мягкая виньетка — середина спокойнее и светлее, края темнее.
+function drawBgCalm9(c){
+  const W = CFG.W, top = VIEW.top, gy = CFG.grindY;
+  const g = c.createLinearGradient(0, top, 0, gy); g.addColorStop(0, 'rgba(255,255,255,' + (V9.wash * 0.6) + ')'); g.addColorStop(0.5, 'rgba(255,255,255,' + V9.wash + ')'); g.addColorStop(1, 'rgba(255,255,255,' + (V9.wash * 0.5) + ')');
+  c.fillStyle = g; c.fillRect(0, top, W, gy - top);
+  const v = c.createRadialGradient(W / 2, (top + gy) / 2, W * 0.35, W / 2, (top + gy) / 2, W * 1.05); v.addColorStop(0, 'rgba(24,60,70,0)'); v.addColorStop(1, 'rgba(24,60,70,' + V9.vignette + ')');
+  c.fillStyle = v; c.fillRect(-40, top - 80, W + 80, gy - top + 200);
+}
+// Корпус жерновов (печётся в фон): тёмная ниша во всю ширину за валиками.
+function drawHousing9(c){
+  const gy = CFG.grindY, H = V9.housing, y0 = gy - 8, y1 = gy + V9.trough.y0 + 6;
+  const g = c.createLinearGradient(0, y0, 0, y1); g.addColorStop(0, H[0]); g.addColorStop(1, H[1]);
+  c.beginPath(); roundRect(c, -12, y0, CFG.W + 24, y1 - y0, 8); c.fillStyle = g; c.fill();
+  c.fillStyle = 'rgba(255,255,255,0.18)'; c.fillRect(-12, y0 + 1.5, CFG.W + 24, 1.6);
+  c.fillStyle = 'rgba(0,0,0,0.22)'; c.fillRect(-12, y0 - 3, CFG.W + 24, 3);
+}
+// --- плёнка сока вдоль ряда валиков: влага и цвет в ячейках, растекается в стороны и сохнет ---
+function film9(){ if (!FX.film){ const n = V9.film.n; FX.film = { w: new Float32Array(n), r: new Float32Array(n), g: new Float32Array(n), b: new Float32Array(n), t: new Float32Array(n * 4) }; } return FX.film; }
+function filmAdd(x, amt, rgb, spread){
+  const F = film9(), n = V9.film.n, cw = CFG.W / n, i0 = Math.max(0, Math.floor((x - spread * 2.2) / cw)), i1 = Math.min(n - 1, Math.ceil((x + spread * 2.2) / cw));
+  for (let i = i0; i <= i1; i++){ const dx = (i + 0.5) * cw - x, k = amt * Math.exp(-dx * dx / (spread * spread)); if (k < 0.003) continue;
+    const w0 = F.w[i], w1 = w0 + k, o = w0 * 0.5;   // цвет: свежий сок весит вдвое больше старого — смесь не уходит в бурое
+    F.r[i] = (F.r[i] * o + rgb[0] * k) / (o + k); F.g[i] = (F.g[i] * o + rgb[1] * k) / (o + k); F.b[i] = (F.b[i] * o + rgb[2] * k) / (o + k); F.w[i] = Math.min(V9.film.max, w1); }
+}
+function filmUpdate(dt){
+  const F = FX.film; if (!F || dt <= 0) return;
+  const n = V9.film.n, W = F.w, T = F.t, steps = Math.max(1, Math.ceil(V9.film.D * dt / 0.4)), D = V9.film.D * dt / steps;
+  for (let s = 0; s < steps; s++){
+    for (let i = 0; i < n; i++){ const l = i ? i - 1 : 0, r = i < n - 1 ? i + 1 : n - 1;   // растекание: влага и «влага × цвет» (края отражают)
+      T[i] = W[i] + D * (W[l] + W[r] - 2 * W[i]);
+      T[n + i] = W[i] * F.r[i] + D * (W[l] * F.r[l] + W[r] * F.r[r] - 2 * W[i] * F.r[i]);
+      T[2 * n + i] = W[i] * F.g[i] + D * (W[l] * F.g[l] + W[r] * F.g[r] - 2 * W[i] * F.g[i]);
+      T[3 * n + i] = W[i] * F.b[i] + D * (W[l] * F.b[l] + W[r] * F.b[r] - 2 * W[i] * F.b[i]); }
+    for (let i = 0; i < n; i++){ const w = T[i]; if (w > 1e-4){ F.r[i] = T[n + i] / w; F.g[i] = T[2 * n + i] / w; F.b[i] = T[3 * n + i] / w; } W[i] = Math.max(0, w); }
+  }
+  const dry = Math.exp(-dt / V9.film.dry); for (let i = 0; i < n; i++) W[i] *= dry;
+}
+const filmAt = (x) => { const F = FX.film; if (!F) return 0; const n = V9.film.n, i = clamp(Math.floor(x / CFG.W * n), 0, n - 1); return F.w[i]; };
+const filmCol = (x, al) => { const F = FX.film, n = V9.film.n, i = clamp(Math.floor(x / CFG.W * n), 0, n - 1); return 'rgba(' + Math.round(F.r[i]) + ',' + Math.round(F.g[i]) + ',' + Math.round(F.b[i]) + ',' + al.toFixed(3) + ')'; };
+// --- жёлоб под валиками: уровень сока, цвет — смесь последних фруктов, волны и пузыри ---
+function trough9(){ return FX.tr || (FX.tr = { lvl: V9.trough.lvl[0], col: [255, 196, 120], has: false, waves: [], bub: [] }); }
+function troughFeed(x, kind, amt, k){
+  const T = trough9(), c = hexRgb(juiceHex(kind));
+  T.col = T.has ? mixRgb(T.col, c, clamp(amt, 0.15, 0.6)) : c; T.has = true;
+  T.waves.push({ x, t0: G.rt, a: V9.trough.wave * (0.45 + 0.7 * k) * (1 + 0.18 * Math.min(6, FX.chain)) }); if (T.waves.length > 8) T.waves.shift();
+  for (let i = 0; i < 2 + Math.round(4 * k); i++) if (T.bub.length < V9.trough.bubbles) T.bub.push({ x: clamp(x + (R() - 0.5) * 50, 12, CFG.W - 12), d: 0, r: 0.8 + R() * 1.5, v: 7 + R() * 10, ph: R() * 6.28 });
+}
+function troughUpdate(s, rdt){
+  const T = trough9(), left = heapLeft(s), done = (s.ground || 0) / Math.max(1, (s.ground || 0) + left);
+  const L = V9.trough.lvl, target = L[0] + (L[1] - L[0]) * clamp(done, 0, 1);
+  T.lvl += (target - T.lvl) * Math.min(1, rdt * 1.6);
+  for (let i = T.waves.length - 1; i >= 0; i--) if (G.rt - T.waves[i].t0 > 2.2) T.waves.splice(i, 1);
+  for (let i = T.bub.length - 1; i >= 0; i--){ const b = T.bub[i]; b.d += b.v * rdt; if (b.d > 30) T.bub.splice(i, 1); }
+}
+function troughSurf(x, top){
+  const T = FX.tr; let y = top + 0.6 * Math.sin(x * 0.05 + G.rt * 2.2) + 0.4 * Math.sin(x * 0.11 - G.rt * 3.1);
+  for (const w of T.waves){ const t = G.rt - w.t0, d = Math.abs(x - w.x); y -= w.a * Math.exp(-t * 2.4) * Math.exp(-d / 110) * Math.cos(0.09 * (d - 150 * t)); }
+  return y;
+}
+function drawTrough9(c, s, front){
+  const gy = CFG.grindY, Q = V9.trough, x0 = 3, x1 = CFG.W - 3, top = gy + Q.y0, bot = gy + Q.y1, T = trough9();
+  if (!front){
+    c.beginPath(); roundRect(c, x0, top, x1 - x0, bot - top, Q.r); c.fillStyle = 'rgba(214,240,252,0.88)'; c.fill();   // заднее стекло
+    c.save(); c.beginPath(); roundRect(c, x0, top, x1 - x0, bot - top, Q.r); c.clip();
+    const lv = bot - 2 - (bot - top - 4) * T.lvl, col = T.col;
+    c.beginPath(); c.moveTo(x0 - 2, bot + 2); for (let x = x0 - 2; x <= x1 + 2; x += 10) c.lineTo(x, troughSurf(x, lv)); c.lineTo(x1 + 2, troughSurf(x1 + 2, lv)); c.lineTo(x1 + 2, bot + 2); c.closePath();
+    const g = c.createLinearGradient(0, lv - 4, 0, bot); g.addColorStop(0, rgba(mixRgb(col, [255, 255, 255], 0.25), 0.95)); g.addColorStop(0.4, rgba(col, 0.95)); g.addColorStop(1, rgba(shadeRgb(col, 0.7), 0.98));
+    c.fillStyle = g; c.fill();
+    c.beginPath(); for (let x = x0; x <= x1; x += 10){ const y = troughSurf(x, lv) + 0.8; if (x === x0) c.moveTo(x, y); else c.lineTo(x, y); }   // мениск
+    c.lineWidth = 1.3; c.strokeStyle = 'rgba(255,255,255,0.7)'; c.stroke();
+    c.fillStyle = 'rgba(255,255,255,0.75)'; for (const b of T.bub){ const y = bot - 2 - b.d; if (y < troughSurf(b.x, lv) + 1) continue; c.beginPath(); c.arc(b.x + Math.sin(G.rt * 6 + b.ph) * 1.2, y, b.r, 0, 6.29); c.fill(); }
+    c.restore();
+    return;
+  }
+  c.beginPath(); roundRect(c, x0, top, x1 - x0, bot - top, Q.r); c.lineWidth = 1.8; c.strokeStyle = V9.glass.ink; c.stroke();   // переднее стекло: кант, блик по верху, отблески
+  c.fillStyle = 'rgba(255,255,255,0.55)'; c.fillRect(x0 + Q.r, bot - 4.5, x1 - x0 - 2 * Q.r, 1.4);
+  c.fillStyle = 'rgba(255,255,255,0.22)'; c.beginPath(); roundRect(c, 24, top + 2, 14, bot - top - 4, 4); roundRect(c, CFG.W - 70, top + 2, 8, bot - top - 4, 3); c.fill();
+}
+// Жернова toy (clear): корпус в фоне; здесь — жёлоб (задняя стенка и сок), валики, плёнка и капли, переднее стекло жёлоба.
+function drawGrinderToy9(c, s){
+  const gy = CFG.grindY, n = VIEW.rollers, step = CFG.W / n, r = VIEW.rollerR, cy = gy + 15 + FX.jig, C = V9.roller, nt = V9.teeth;
+  drawTrough9(c, s, false);
+  const lv = gy + V9.trough.y1 - 2 - (V9.trough.y1 - V9.trough.y0 - 4) * trough9().lvl;
+  for (let i = 0; i < n; i++){
+    const cx = step * (i + 0.5), a0 = FX.spin * (i % 2 ? 1 : -1) + i * 0.7, y = cy + (FX.rollKick[i] || 0);
+    c.beginPath();
+    for (let k = 0; k < nt; k++){ const a = a0 + k * 2 * Math.PI / nt, hw = Math.PI / nt;   // зуб — трапеция: широкое основание, плоская вершина
+      const pts = [[a - hw * 0.92, r - 5.5], [a - hw * 0.42, r], [a + hw * 0.42, r], [a + hw * 0.92, r - 5.5]];
+      for (const [b, rr] of pts){ const x = cx + Math.cos(b) * rr, yy = y + Math.sin(b) * rr; if (k === 0 && b === pts[0][0]) c.moveTo(x, yy); else c.lineTo(x, yy); } }
+    c.closePath();
+    const g = c.createRadialGradient(cx - r * 0.35, y - r * 0.45, 2, cx, y, r); g.addColorStop(0, C[0]); g.addColorStop(0.45, C[1]); g.addColorStop(1, C[2]);
+    c.fillStyle = g; c.fill(); c.lineJoin = 'round'; c.lineWidth = 1.7; c.strokeStyle = C[3]; c.stroke();
+    c.beginPath(); c.arc(cx, y, 6, 0, 6.29); c.fillStyle = V9.hub[0]; c.fill(); c.lineWidth = 1.3; c.strokeStyle = V9.hub[1]; c.stroke();
+    c.beginPath(); c.arc(cx + Math.cos(a0) * 3.2, y + Math.sin(a0) * 3.2, 1.8, 0, 6.29); c.fillStyle = V9.hub[2]; c.fill();   // метка вращения
+  }
+  const F = FX.film;
+  if (F){
+    let mx = 0; for (let i = 0; i < V9.film.n; i++) mx = Math.max(mx, F.w[i]);
+    if (mx > 0.02){
+      const g = c.createLinearGradient(0, 0, CFG.W, 0);
+      for (let i = 0; i < V9.film.n; i++) g.addColorStop((i + 0.5) / V9.film.n, 'rgba(' + Math.round(F.r[i]) + ',' + Math.round(F.g[i]) + ',' + Math.round(F.b[i]) + ',' + (Math.min(1, F.w[i] * 1.25) * V9.film.a).toFixed(3) + ')');
+      c.save(); c.beginPath();
+      for (let i = 0; i < n; i++){   // плёнка лежит на всём валике по его зубчатому силуэту (Андрей 21.11: сок был только сверху, с ровным краем, низ и зубья — сухие)
+        const cx = step * (i + 0.5), a0 = FX.spin * (i % 2 ? 1 : -1) + i * 0.7, y = cy + (FX.rollKick[i] || 0);
+        for (let k = 0; k < nt; k++){ const a = a0 + k * 2 * Math.PI / nt, hw = Math.PI / nt, pts = [[a - hw * 0.92, r - 5.5], [a - hw * 0.42, r], [a + hw * 0.42, r], [a + hw * 0.92, r - 5.5]];
+          for (let j = 0; j < 4; j++){ const x = cx + Math.cos(pts[j][0]) * pts[j][1], yy = y + Math.sin(pts[j][0]) * pts[j][1]; if (k === 0 && j === 0) c.moveTo(x, yy); else c.lineTo(x, yy); } }
+        c.closePath(); }
+      for (let i = 1; i < n; i++){ const x = step * i; c.moveTo(x + 5.5, cy - r * 0.42); c.ellipse(x, cy - r * 0.42, 5.5, 7, 0, 0, 6.29); }   // перемычки между валиками: плёнка сплошная
+      c.clip();
+      c.fillStyle = g; c.fillRect(-2, cy - r - 10, CFG.W + 4, 2 * r + 20);       // весь валик целиком, без шва по высоте
+      c.restore();
+      c.lineCap = 'round';
+      for (let i = 0; i < n; i++){ const cx = step * (i + 0.5), w = filmAt(cx); if (w < 0.08) continue; const y = cy + (FX.rollKick[i] || 0), al = Math.min(1, w * 1.3);
+        c.globalAlpha = al * 0.8; c.strokeStyle = '#ffffff'; c.lineWidth = 2; c.beginPath(); c.arc(cx, y, r - 3.2, Math.PI * 1.08, Math.PI * 1.5); c.stroke();   // мокрый блик
+        c.globalAlpha = al; c.fillStyle = '#ffffff'; c.beginPath(); c.arc(cx - r * 0.42, y - r * 0.55, 1.6, 0, 6.29); c.fill(); }
+      c.globalAlpha = 1;
+      for (let i = 1; i < n; i++){ const x = step * i, w = filmAt(x); if (w < 0.1) continue;   // капли и струйки между валиками — в жёлоб
+        const yA = cy + r * 0.5, yB = troughSurf(x, lv), al = Math.min(1, w * 1.4);
+        if (w > 0.55){ c.globalAlpha = Math.min(0.75, (w - 0.55) * 1.6); c.strokeStyle = filmCol(x, 1); c.lineWidth = 1.5; c.beginPath(); c.moveTo(x, yA); c.lineTo(x + Math.sin(G.rt * 9 + i) * 0.5, yB); c.stroke(); }
+        for (let k = 0; k < 2; k++){ const ph = (G.rt * (0.7 + 0.8 * w + 0.25 * k) + i * 0.37 + k * 0.5) % 1, y = yA + ph * ph * (yB - yA);
+          c.globalAlpha = al * (1 - ph * 0.3); c.fillStyle = filmCol(x, 1); c.beginPath(); c.ellipse(x, y, 1.2 + 1.1 * w, (1.2 + 1.1 * w) * (1 + ph * 0.8), 0, 0, 6.29); c.fill(); } }
+      c.globalAlpha = 1;
+    }
+  }
+  drawTrough9(c, s, true);
+}
+// Стекло короба toy: заметные боковые стенки (толщина, кант, блик) — видно границы поля.
+function drawGlassToy9(c){
+  const gy = CFG.grindY, W = CFG.W, top = VIEW.top + 10, h = gy - 8 - top, w = V9.glass.w;
+  for (const side of [0, 1]){ const x = side ? W - w : 0, g = c.createLinearGradient(x, 0, x + w, 0);
+    g.addColorStop(0, side ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.5)'); g.addColorStop(1, side ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.18)');
+    c.fillStyle = g; c.fillRect(x, top, w, h);
+    c.fillStyle = V9.glass.ink; c.fillRect(side ? x - 0.6 : x + w - 0.8, top, 1.4, h);     // внутренний кант стенки
+    c.fillStyle = 'rgba(255,255,255,0.85)'; c.fillRect(side ? x + w - 2.6 : x + 1.2, top, 1.4, h); }   // блик по внешней кромке
+  c.fillStyle = 'rgba(255,255,255,0.08)';
+  c.beginPath(); c.moveTo(60, 0); c.lineTo(92, 0); c.lineTo(28, 250); c.lineTo(-4, 250); c.closePath(); c.fill();
+}
+// Обод короба toy: светлый пластик с кантом (не коралловый — навес и обод больше не спорят с кучей).
+function drawRimToy9(c){
+  const y = VIEW.top, W = CFG.W, g = c.createLinearGradient(0, y - 4, 0, y + 14); g.addColorStop(0, '#ffffff'); g.addColorStop(0.5, V9.glass.rim); g.addColorStop(1, '#c9dde6');
+  c.fillStyle = 'rgba(20,50,70,0.16)'; c.fillRect(-12, y + 14, W + 24, 4);
+  c.beginPath(); roundRect(c, -12, y - 4, W + 24, 18, 9); c.fillStyle = g; c.fill(); c.lineWidth = 1.6; c.strokeStyle = V9.glass.ink; c.stroke();
+}
 const TOY = { bowl: '#ff8a7a', bowlLt: '#ffc4b8', bowlDk: '#d9574d', rod: '#fff4dc', rodDk: '#e0b98a', roller: '#ffd447', rollerDk: '#e59a1a', hub: '#ff7a59' };
 // Глухая стенка чаши пластиком: заливка с бликом сверху и тенью снизу, скруглённые углы (толстая обводка того же цвета).
 function drawToyPoly(c, P){
@@ -4184,18 +4867,6 @@ function drawToyPoly(c, P){
   const g = c.createLinearGradient(0, y0, 0, y1); g.addColorStop(0, TOY.bowlLt); g.addColorStop(0.25, TOY.bowl); g.addColorStop(1, TOY.bowlDk);
   c.lineJoin = 'round'; c.lineWidth = 7; c.strokeStyle = g; c.fillStyle = g; pathPoly(c, P); c.fill(); c.stroke();
   c.lineWidth = 2; c.strokeStyle = 'rgba(255,255,255,0.55)'; c.beginPath(); c.moveTo(P[0][0], P[0][1] - 2); c.lineTo(P[1][0], P[1][1] - 2); c.stroke();
-}
-// v7: деталь пластиком: тень, заливка сверху светлее, скругление, блик по верхним граням (наружная нормаль смотрит вверх).
-function drawToyPart(c, P){
-  c.fillStyle = 'rgba(120,50,40,0.16)'; pathPoly(c, P.map(v => [v[0] + 3, v[1] + 6])); c.fill();
-  let y0 = Infinity, y1 = -Infinity; for (const v of P){ y0 = Math.min(y0, v[1]); y1 = Math.max(y1, v[1]); }
-  const g = c.createLinearGradient(0, y0, 0, y1); g.addColorStop(0, TOY.bowlLt); g.addColorStop(Math.min(0.5, 14 / Math.max(14, y1 - y0)), TOY.bowl); g.addColorStop(1, TOY.bowlDk);
-  c.lineJoin = 'round'; c.lineWidth = 7; c.strokeStyle = g; c.fillStyle = g; pathPoly(c, P); c.fill(); c.stroke();
-  let A = 0; for (let i = 0; i < P.length; i++){ const p = P[i], q = P[(i + 1) % P.length]; A += p[0] * q[1] - q[0] * p[1]; }
-  c.lineWidth = 2.4; c.strokeStyle = 'rgba(255,255,255,0.6)'; c.lineCap = 'round';
-  for (let i = 0; i < P.length; i++){ const p = P[i], q = P[(i + 1) % P.length], ex = q[0] - p[0], ey = q[1] - p[1], L = Math.hypot(ex, ey); if (L < 8) continue;
-    const ny = (A > 0 ? -ex : ex) / L; if (ny > -0.35) continue;                    // только грани, что смотрят вверх
-    c.beginPath(); c.moveTo(p[0] + (A > 0 ? ey : -ey) / L * 2.5, p[1] + ny * 2.5 + 0); c.lineTo(q[0] + (A > 0 ? ey : -ey) / L * 2.5, q[1] + ny * 2.5); c.stroke(); }
 }
 // v5: тело чаши — под каждой глухой стенкой клин до низа чаши (как стенки бункера), окна решётки — открыты.
 function drawBowlBody(c, prof, st){
@@ -4212,10 +4883,11 @@ function toyRod(c, x, y, r){
   c.beginPath(); c.arc(x, y, r * 1.1, 0, 6.29); c.fillStyle = g; c.fill();
 }
 function stickerRod(c, x, y, r, th){ c.beginPath(); c.arc(x, y, r * 1.1, 0, 6.29); c.fillStyle = th.metal; c.fill(); c.lineWidth = 1.6; c.strokeStyle = VIEW.ink; c.stroke(); }
+const polyPath2D = (P) => { const q = new Path2D(); P.forEach((v, i) => i ? q.lineTo(v[0], v[1]) : q.moveTo(v[0], v[1])); q.closePath(); return q; };
 function drawStaticsV4(c, s){
   if (s.level.set === 'v7' && ART_STYLE !== 'real'){                // v7: клинья, камеры и полки — пластик (toy) или пластик темы с контуром
     for (const st of s.statics){ if (st.role === 'wall') continue;
-      if (ART_STYLE === 'toy') drawToyPart(c, st.poly); else drawPart(c, st, theme()); }
+      if (ART_STYLE === 'toy') drawToyPart9(c, st, s.gaps); else drawPart(c, st, theme()); }   // v9: toy — синий пластик, кромки щелей
     return;
   }
   const v5 = heapSet(s.level.set), st5 = ART_STYLE;
@@ -4273,6 +4945,7 @@ function drawGrinderV4(c, s){
   if (G.s && heapSet(G.s.level.set)) drawRollerWet(c, cy);
 }
 function drawGrinder(c, s){
+  if (toy9()) return drawGrinderToy9(c, s);                  // v9: светлые валики, плёнка сока вдоль ряда, жёлоб
   if (isV4() && ART_STYLE === 'toy') return drawGrinderToy(c, s);
   if (isV4() && ART_STYLE === 'real') return drawGrinderV4(c, s);
   const th = theme(), gy = CFG.grindY, n = VIEW.rollers, step = CFG.W / n, r = VIEW.rollerR, cy = gy + 15 + FX.jig;
@@ -4351,6 +5024,7 @@ function drawTank(c, s){
 function surfY(x, top){ return top + FX.waveA * (0.6 * Math.sin(x * 0.045 + G.rt * 7) + 0.4 * Math.sin(x * 0.13 - G.rt * 5)) + FX.waveA * 0.8 * Math.exp(-Math.abs(x - FX.waveX) / 30) * Math.sin(G.rt * 16); }
 // Стекло короба спереди: кромки боковых стенок и блики.
 function drawGlassFront(c){
+  if (toy9()) return drawGlassToy9(c);                       // v9: заметные стенки короба
   const gy = CFG.grindY, W = CFG.W;
   c.fillStyle = 'rgba(255,255,255,0.16)'; c.fillRect(0, VIEW.top + 12, 6, gy - VIEW.top - 12); c.fillRect(W - 6, VIEW.top + 12, 6, gy - VIEW.top - 12);
   c.fillStyle = 'rgba(255,255,255,0.6)'; c.fillRect(4.6, VIEW.top + 12, 1.3, gy - VIEW.top - 12); c.fillRect(W - 5.9, VIEW.top + 12, 1.3, gy - VIEW.top - 12);
@@ -4383,20 +5057,26 @@ const FX = {
   rwet: [], gdrops: [], chain: 0, gpop: new Map(),  // v5: сок на каждом валике { a, col }, капли на стекле витрины, цепочка перемола, «лопнул» ли кусок в жерновах
   trail: [], frenzyAt: -9, frenzyEnd: -9, frenzyGlow: 0, chargeShow: 0,   // v2: след пальца { x, y, t, cut }, FRENZY
   w6: { landed: [], fizzle: null, sawShakeAt: 0 }, shiver: new Map(),           // v6: воткнувшееся/упавшее оружие, пустой бросок, дрожь соседей от топора
+  slab: new Map(), etool: new Map(), stains: new Map(), stainQ: [], sdrips: [], sliceW: 'knife',   // v8: доли (переворот, кувырок), кромки по инструменту, пятна, капли
 };
 function resetFX(){
   PT.n = 0; for (const k of ['drips', 'stamps', 'slashes', 'words', 'wq', 'flyers', 'confetti', 'streams', 'bubbles', 'layers', 'rings', 'cracks', 'gateW', 'rollKick', 'trail', 'rwet', 'gdrops']) FX[k].length = 0;
   FX.chain = 0; FX.gpop.clear(); if (typeof LIQ !== 'undefined') LIQ.n = 0;
+  FX.film = null; FX.tr = null; FX.stampTok = undefined;   // v9: плёнка на валиках, жёлоб, ведро пятен
   FX.w6.landed.length = 0; FX.w6.fizzle = null; FX.w6.bounced = null; FX.sweepAt = 0; FX.clang = null; FX.shiver.clear(); if (Sound.saw) Sound.sawOff(); G.autoThrow = null;
   FX.wet = 0; FX.frenzyAt = -9; FX.frenzyEnd = -9; FX.frenzyGlow = 0; FX.chargeShow = 0;
   FX.ropeAt = {}; FX.netAt = {};
   FX.born.clear(); FX.intro.clear(); FX.cutKinds.clear();
+  FX.slab.clear(); FX.etool.clear(); FX.stains.clear(); FX.stainQ.length = 0; FX.sdrips.length = 0; FX.sliceW = 'knife';
   Object.assign(FX, { tankShow: 0, waveA: 0, inflow: 0, load: 0, jig: 0, shake: null, fadeAcc: 0, win: null, pending: 0, hitstopOn: false, slowOn: false,
     goalAt: 0, fountain: 0, tut: { on: false, line: null, t0: 0, n: 0 }, lowWarned: false });
   G.hitstopUntil = 0; G.slowUntil = 0;
 }
 function spawnP(type, x, y, vx, vy, life, size, col){
   if (PT.n >= PN) return;
+  if (type !== P_STREAM && clear9()){ if (PT.n >= VIEW.partLive) return;          // v9: потолок живущих и разлёт у события
+    if (y >= CFG.grindY - 8){ const f = fountClamp(vx, vy); vx = f[0]; vy = f[1]; }   // из жерновов — фонтан не выше fountH
+    else { const v = Math.hypot(vx, vy), vm = VIEW.fxR / Math.max(0.12, life); if (v > vm){ vx *= vm / v; vy *= vm / v; } } }
   const i = PT.n++; PT.type[i] = type; PT.x[i] = x; PT.y[i] = y; PT.vx[i] = vx; PT.vy[i] = vy; PT.life[i] = life; PT.size[i] = size;
   PT.rot[i] = R() * 6.28; PT.vr[i] = (R() - 0.5) * 24; PT.col[i] = col;
 }
@@ -4417,10 +5097,11 @@ function land(i){
   const x = PT.x[i], y = PT.y[i];
   if (PT.type[i] === P_FOUNT && R() > 0.15) return;
   if (x < 3 || x > CFG.W - 3 || y < VIEW.top + 14 || y > CFG.grindY - 3 || FX.stamps.length >= VIEW.stampMax) return;
-  const r = PT.size[i] * (PT.type[i] === P_PULP ? 1.3 : 1.9 + R() * 0.9);
+  const c9 = clear9(); if (c9 && PT.type[i] !== P_DROP) return;                  // v9: на стенку ложатся только капли сока
+  const r = PT.size[i] * (PT.type[i] === P_PULP ? 1.3 : 1.9 + R() * 0.9) * (c9 ? 0.8 : 1);
   FX.stamps.push({ x, y, r, col: PCOL[PT.col[i]], vx: PT.vx[i], vy: PT.vy[i], drip: false });
-  if (PT.type[i] === P_DROP && FX.drips.length < VIEW.dripMax && R() < 0.2)
-    FX.drips.push({ x, y: y + r * 0.6, r: Math.min(3.2, r * 0.55 + 0.6), ph: R() * 6.28, col: PCOL[PT.col[i]], life: 1.4 + R() * 2.2 });
+  if (PT.type[i] === P_DROP && FX.drips.length < (c9 ? VIEW.dripMax9 : VIEW.dripMax) && R() < (c9 ? 0.08 : 0.2))
+    FX.drips.push({ x, y: y + r * 0.6, r: Math.min(3.2, r * 0.55 + 0.6), ph: R() * 6.28, col: PCOL[PT.col[i]], life: c9 ? VIEW.dripLife9[0] + R() * (VIEW.dripLife9[1] - VIEW.dripLife9[0]) : 1.4 + R() * 2.2 });
 }
 function updateDrips(dt){
   if (dt <= 0) return;
@@ -4432,26 +5113,32 @@ function updateDrips(dt){
   }
 }
 // Пятно на задней стенке: клякса, вытянутая по скорости капли, и брызги-спутники. Потёк — след из кружков.
+const SPLATCOL = new Map();   // v9: цвет пятна → смешанный с цветом стенки (VIEW.splatMix)
+function splatCol(col){ let m = SPLATCOL.get(col); if (!m){ m = rgbCss(mixRgb(hexRgb(col.length === 7 ? col : '#ff4d6d'), [214, 242, 226], VIEW.splatMix)); SPLATCOL.set(col, m); } return m; }
 function drawSplat(c, st){
-  c.fillStyle = st.col;
-  if (st.drip){ c.globalAlpha = 0.32; c.beginPath(); c.arc(st.x, st.y, st.r, 0, 6.29); c.fill(); return; }
-  c.globalAlpha = 0.58;
+  const c9 = clear9();
+  c.fillStyle = c9 ? splatCol(st.col) : st.col;
+  if (st.drip){ c.globalAlpha = c9 ? VIEW.dripA : 0.32; c.beginPath(); c.arc(st.x, st.y, st.r, 0, 6.29); c.fill(); return; }
+  c.globalAlpha = c9 ? VIEW.splatA[0] : 0.58;
   const v = Math.hypot(st.vx, st.vy) || 1, a = Math.atan2(st.vy, st.vx), e = Math.min(1.8, 1 + v / 600);
   c.beginPath(); c.ellipse(st.x, st.y, st.r * e, st.r / Math.sqrt(e), a, 0, 6.29); c.fill();
-  c.globalAlpha = 0.42;
-  for (let k = 0; k < 3; k++){ const b = a + (R() - 0.5) * 2.2, d = st.r * (1.5 + R()), rr = st.r * (0.18 + R() * 0.25);
+  c.globalAlpha = c9 ? VIEW.splatA[1] : 0.42;
+  for (let k = 0; k < (c9 ? 1 : 3); k++){ const b = a + (R() - 0.5) * 2.2, d = st.r * (1.5 + R()), rr = st.r * (0.18 + R() * 0.25);
     c.beginPath(); c.arc(st.x + Math.cos(b) * d, st.y + Math.sin(b) * d, rr, 0, 6.29); c.fill(); }
 }
-function flushStamps(){
+function flushStamps(rdt){
+  if (clear9()) FX.stampTok = Math.min(VIEW.stampBurst, (FX.stampTok === undefined ? VIEW.stampBurst : FX.stampTok) + (rdt || 0) * VIEW.stampRate);   // v9: не больше stampRate в с
   if (!FX.stamps.length || !wallClip) return;
   const d = ctx2d(bgDirty);
   d.save(); vbase(d); d.clip(wallClip, 'evenodd');
-  for (const st of FX.stamps) drawSplat(d, st);
+  if (clear9()){ let k = 0; for (const st of FX.stamps){ if (st.drip ? FX.stampTok < 0.05 : FX.stampTok < 1) continue; FX.stampTok -= st.drip ? 0.05 : 1; drawSplat(d, st); k++; } }
+  else for (const st of FX.stamps) drawSplat(d, st);
   d.restore(); d.globalAlpha = 1;
   FX.stamps.length = 0;
 }
 // v3: в режиме заказа стенка отмывается в 2,5 раза быстрее — композиция камер читается и после нескольких сходов.
-function fadeWall(){ const d = ctx2d(bgDirty); d.setTransform(1, 0, 0, 1, 0, 0); d.globalAlpha = VIEW.splatFade[1] * (isV4() ? 4 : isOrder() ? 2.5 : 1); d.drawImage(bgClean, 0, 0); d.globalAlpha = 1; }
+// v9 (clear): пятно сходит до 10% за VIEW.wallLife — подмыв шагами wallStep с долей 1 − 0,1^(шаг / wallLife).
+function fadeWall(){ const d = ctx2d(bgDirty); d.setTransform(1, 0, 0, 1, 0, 0); d.globalAlpha = clear9() ? 1 - Math.pow(0.1, VIEW.wallStep / VIEW.wallLife) : VIEW.splatFade[1] * (isV4() ? 4 : isOrder() ? 2.5 : 1); d.drawImage(bgClean, 0, 0); d.globalAlpha = 1; }
 
 // =====================================================================================================
 // v5. Жидкий сок: слитная жидкость на WebGL поверх холста (приём Squish Pour). Капли — частицы вида (ядро о них не знает):
@@ -4477,9 +5164,11 @@ const LIQ = { n: 0, on: false, gl: null, dirty: false, acc: 0, dacc: 0 };
 (function(){ const N = LQV.max; for (const k of ['x', 'y', 'vx', 'vy', 'life', 'r', 'age', 'lx', 'ly']) LIQ[k] = new Float32Array(N);
   LIQ.mode = new Uint8Array(N); LIQ.col = new Uint8Array(N); LIQ.bid = new Int32Array(N); })();
 const LCOL = [];
-const lcol = (hex) => { let i = LCOL.findIndex(c => c.hex === hex); if (i < 0){ const c = hexRgb(hex); LCOL.push({ hex, rgb: [c[0] / 255, c[1] / 255, c[2] / 255] }); i = LCOL.length - 1; } return i; };
+const lcol = (hex) => { let i = LCOL.findIndex(c => c.hex === hex); if (i < 0){ const c = hexRgb(hex); LCOL.push({ hex, rgb: [c[0] / 255, c[1] / 255, c[2] / 255], rgb255: c }); i = LCOL.length - 1; } return i; };
+let FILMON = false;   // v9: жидкие капли, долетевшие до валиков, мочат плёнку (toy, clear)
 const L_FREE = 0, L_FOUNT = 1, L_FLOW = 2, L_STREAM = 3, L_DRAIN = 4, L_STICK = 5;
-const juiceHex = (kind) => (FLAVORS[KINDS[kind].flavor] || FLAVORS.red).juice;
+const JUICE9 = { apple: '#ffc95c' };   // v9 toy: яблоко красное — его жидкий сок золотистый (как брызги KINDS.apple.juice), а не зелёный вкус v4
+const juiceHex = (kind) => (ART_STYLE === 'toy' && JUICE9[kind] && G.s && G.s.mode === 'clear') ? JUICE9[kind] : (FLAVORS[KINDS[kind].flavor] || FLAVORS.red).juice;
 function liqSpawn(mode, x, y, vx, vy, life, r, hex){
   if (!LIQ.on || LIQ.n >= LQV.max) return -1;
   const i = LIQ.n++; LIQ.mode[i] = mode; LIQ.x[i] = x; LIQ.y[i] = y; LIQ.vx[i] = vx; LIQ.vy[i] = vy; LIQ.life[i] = life; LIQ.r[i] = r; LIQ.age[i] = 0;
@@ -4491,9 +5180,10 @@ const chainBoost = () => 1 + LQV.chainK * Math.min(8, FX.chain);
 function liqSlice(e){
   if (!LIQ.on) return;
   const hex = juiceHex(e.kind), p = e.p, q = e.q, dx = q[0] - p[0], dy = q[1] - p[1], len = Math.hypot(dx, dy) || 1, [ux, uy] = FX.lastBlade;
-  const n = Math.round(clamp(len * 0.2, LQV.jet[0], LQV.jet[1]) * Math.min(1, 6 / Math.max(1, FX.cutN)));
-  for (let k = 0; k < n; k++){ const t = 0.15 + 0.7 * R(), sp = LQV.jetV[0] + R() * (LQV.jetV[1] - LQV.jetV[0]), side = (R() - 0.5) * 2;
-    liqSpawn(L_FREE, p[0] + dx * t, p[1] + dy * t, ux * sp + e.nx * side * 70 + (R() - 0.5) * 60, uy * sp + e.ny * side * 70 - 40 + (R() - 0.5) * 60, 0.5 + R() * 0.5, 2.6 + R() * 2.4, hex); }
+  const J = clear9() ? VIEW.jetK : [1, 1, 1];                                         // v9: струйка короче и ближе к резу
+  const n = Math.max(2, Math.round(clamp(len * 0.2, LQV.jet[0], LQV.jet[1]) * Math.min(1, 6 / Math.max(1, FX.cutN)) * J[0]));
+  for (let k = 0; k < n; k++){ const t = 0.15 + 0.7 * R(), sp = (LQV.jetV[0] + R() * (LQV.jetV[1] - LQV.jetV[0])) * J[1], side = (R() - 0.5) * 2;
+    liqSpawn(L_FREE, p[0] + dx * t, p[1] + dy * t, ux * sp + (e.nx * side * 70 + (R() - 0.5) * 60) * J[1], uy * sp + (e.ny * side * 70 - 40 + (R() - 0.5) * 60) * J[1], (0.5 + R() * 0.5) * J[2], 2.6 + R() * 2.4, hex); }
   const mx = (p[0] + q[0]) / 2, my = (p[1] + q[1]) / 2;
   for (const id of e.into){ const b = G.s.bodies.find(o => o.id === id); if (!b) continue; const cs = Math.cos(b.a), sn = Math.sin(b.a);
     for (let k = 0; k < 2; k++){ const t = (k + 0.5) / 2 - 0.5, wx = mx + dx * t * 0.6 - b.x, wy = my + dy * t * 0.6 - b.y;
@@ -4503,23 +5193,24 @@ function liqSlice(e){
 // Кусок долетел до жерновов: фонтан сока вверх по массе (× цепочка) и капли на стекло витрины у крупных.
 function liqTear(e, k, w){
   if (!LIQ.on) return;
-  const hex = juiceHex(e.kind), n = Math.round(LQV.tear[0] + (LQV.tear[1] - LQV.tear[0]) * k), boost = chainBoost();
-  for (let i = 0; i < n; i++){ const a = -Math.PI / 2 + (R() - 0.5) * 1.5, sp = (LQV.tearV[0] + R() * (LQV.tearV[1] - LQV.tearV[0])) * boost * (0.6 + 0.4 * k);
-    liqSpawn(L_FOUNT, e.x + (R() - 0.5) * w, CFG.grindY - 2, Math.cos(a) * sp, Math.sin(a) * sp, 0.9, 2.6 + R() * 2.2 * (0.6 + k), hex); }
+  const c9 = clear9(), hex = juiceHex(e.kind), n = Math.round((LQV.tear[0] + (LQV.tear[1] - LQV.tear[0]) * k) * (c9 ? VIEW.fountLiq[0] : 1)), boost = chainBoost(), rz = c9 ? VIEW.fountLiq[1] : 1;
+  for (let i = 0; i < n; i++){ const a = -Math.PI / 2 + (R() - 0.5) * 1.5, sp = (LQV.tearV[0] + R() * (LQV.tearV[1] - LQV.tearV[0])) * boost * (0.6 + 0.4 * k), f = fountClamp(Math.cos(a) * sp, Math.sin(a) * sp);
+    liqSpawn(L_FOUNT, e.x + (R() - 0.5) * w, CFG.grindY - 2, f[0], f[1], 0.9, (2.6 + R() * 2.2 * (0.6 + k)) * rz, hex); }
   if (k > 0.3 || FX.chain > 3) glassDrop(hex, e.x);
 }
 // Лопнул в жерновах: клякса в обе стороны и вверх, сок вниз в сборник.
 function liqPop(g){
   if (!LIQ.on) return;
-  const hex = juiceHex(g.kind), m = Math.sqrt(g.area), n = Math.round(clamp(m * 0.28, 5, 14)), boost = chainBoost();
-  for (let i = 0; i < n; i++){ const side = i % 2 ? 1 : -1, a = -Math.PI / 2 + side * (0.35 + R() * 0.9), sp = (180 + R() * 380) * boost;
-    liqSpawn(L_FOUNT, g.x + side * 4, CFG.grindY + 4, Math.cos(a) * sp, Math.sin(a) * sp, 0.8, 3.2 + R() * 2.6, hex); }
-  for (let i = 0; i < Math.round(n / 3); i++) liqSpawn(L_FLOW, g.x + (R() - 0.5) * 30, CFG.grindY + 30, (R() - 0.5) * 60, 40 + R() * 60, 2, 2.2 + R() * 1.4, hex);
+  const c9 = clear9(), hex = juiceHex(g.kind), m = Math.sqrt(g.area), n = Math.round(clamp(m * 0.28, 5, 14) * (c9 ? VIEW.fountLiq[0] : 1)), boost = chainBoost(), rz = c9 ? VIEW.fountLiq[1] : 1;
+  for (let i = 0; i < n; i++){ const side = i % 2 ? 1 : -1, a = -Math.PI / 2 + side * (0.35 + R() * 0.9), sp = (180 + R() * 380) * boost, f = fountClamp(Math.cos(a) * sp, Math.sin(a) * sp);
+    liqSpawn(L_FOUNT, g.x + side * 4, CFG.grindY + 4, f[0], f[1], 0.8, (3.2 + R() * 2.6) * rz, hex); }
+  if (toy9()){ filmAdd(g.x, 0.45, hexRgb(hex), 42); troughFeed(g.x, g.kind, 0.35, clamp(m / 60, 0, 1)); }   // v9: лопнул — плёнка и волна в жёлобе
+  if (!toy9()) for (let i = 0; i < Math.round(n / 3); i++) liqSpawn(L_FLOW, g.x + (R() - 0.5) * 30, CFG.grindY + 30, (R() - 0.5) * 60, 40 + R() * 60, 2, 2.2 + R() * 1.4, hex);   // v9 toy: сок уходит в жёлоб (рисует жёлоб)
 }
 // Капля на стекле витрины: ложится крупной линзой и медленно стекает рывками, оставляя след.
 function glassDrop(hex, x){
-  if (FX.gdrops.length >= LQV.glassDrops) FX.gdrops.shift();
-  const y = VIEW.top + 60 + R() * (CFG.grindY - VIEW.top - 160);
+  if (FX.gdrops.length >= (clear9() ? VIEW.glassDrops9 : LQV.glassDrops)) FX.gdrops.shift();
+  const y = clear9() ? CFG.grindY - 50 - R() * 110 : VIEW.top + 60 + R() * (CFG.grindY - VIEW.top - 160);   // v9: клякса на стекле — над жерновами, не на куче
   FX.gdrops.push({ x: clamp(x + (R() - 0.5) * 160, 16, CFG.W - 16), y, y0: y, r: 3.5 + R() * 4, col: hex, t0: G.rt, v: 0, next: 0 });
 }
 function updateGlassDrops(rdt){
@@ -4539,7 +5230,7 @@ function drawGlassDrops(c){
 }
 function liqUpdate(gdt, rdt){
   if (!LIQ.on) return;
-  const s = G.s, O = FX.o, gy = CFG.grindY, [sx, sy] = BAR.spout, [dx0, dy0, dx1] = BAR.drain;
+  const s = G.s, O = FX.o, gy = CFG.grindY, [sx, sy] = BAR.spout, [dx0, dy0, dx1] = BAR.drain; FILMON = toy9();
   if (s && s.mode === 'order' && O){                         // струя из носика в стакан или в слив
     LIQ.acc += rdt * LQV.stream * Math.min(1, O.pour * 1.4); LIQ.dacc += rdt * LQV.stream * 0.7 * Math.min(1, O.waste * 1.4);
     while (LIQ.acc >= 1){ LIQ.acc--; liqSpawn(L_STREAM, sx + (R() - 0.5) * 3, sy + 16, (R() - 0.5) * 10, 160 + R() * 60, 3, 3.2 + R() * 1.6 * Math.min(1, O.pour), O.pourCol); }
@@ -4563,10 +5254,11 @@ function liqUpdate(gdt, rdt){
       if (LIQ.y[i] >= dy0 + 10 || LIQ.x[i] > dx1 || LIQ.life[i] <= 0) liqKill(i); continue; }
     LIQ.vy[i] += g * dt; LIQ.vx[i] *= drag; LIQ.x[i] += LIQ.vx[i] * dt; LIQ.y[i] += LIQ.vy[i] * dt;
     if (LIQ.y[i] > gy - 2 && LIQ.vy[i] > 0 && LIQ.x[i] > -10 && LIQ.x[i] < CFG.W + 10){   // в жернова: часть стекает по сборнику
-      if (R() < 0.12) liqSpawn(L_FLOW, LIQ.x[i], gy + 30, LIQ.vx[i] * 0.2, 40, 2, Math.min(3, LIQ.r[i]), LCOL[LIQ.col[i]].hex);
+      if (FILMON) filmAdd(LIQ.x[i], V9.dropWet * LIQ.r[i] / 3, LCOL[LIQ.col[i]].rgb255, 16);   // v9: сок падает на валики — они мокнут
+      else if (R() < 0.12) liqSpawn(L_FLOW, LIQ.x[i], gy + 30, LIQ.vx[i] * 0.2, 40, 2, Math.min(3, LIQ.r[i]), LCOL[LIQ.col[i]].hex);
       liqKill(i); continue; }
     if (LIQ.life[i] <= 0){ const x = LIQ.x[i], y = LIQ.y[i];
-      if (m === L_FREE && x > 3 && x < CFG.W - 3 && y > VIEW.top + 14 && y < gy - 3 && FX.stamps.length < VIEW.stampMax)
+      if (m === L_FREE && x > 3 && x < CFG.W - 3 && y > VIEW.top + 14 && y < gy - 3 && FX.stamps.length < VIEW.stampMax && (!clear9() || R() < VIEW.liqStamp))
         FX.stamps.push({ x, y, r: LIQ.r[i] * 1.6, col: LCOL[LIQ.col[i]].hex, vx: LIQ.vx[i], vy: LIQ.vy[i], drip: R() < 0.25 });
       liqKill(i); }
   }
@@ -4803,16 +5495,16 @@ function shakeOff(){
 // Рез: брызги сока по направлению лезвия из каждой точки хорды, кусочки мякоти, косточки; куски — в «свежие».
 function splitFX(e){
   const K0 = KINDS[e.kind], A = ART[e.kind], p = e.p, q = e.q, dx = q[0] - p[0], dy = q[1] - p[1], len = Math.hypot(dx, dy);
-  const [ux, uy] = FX.lastBlade, nx = e.nx, ny = e.ny, cj = pcol(K0.juice), cf = pcol(A.col.flesh);
-  const n = clamp(Math.round(len * 0.32 * Math.min(1, VIEW.sprayCut / FX.cutN) * (LIQ.on && isOrder() ? 0.35 : 1)), 2, 34);   // v5: сок — жидким слоем, тут мелкие брызги
+  const [ux, uy] = FX.lastBlade, nx = e.nx, ny = e.ny, cj = pcol(K0.juice), cf = pcol(A.col.flesh), c9 = clear9(), dz = c9 ? VIEW.dropSize : 1, dl = c9 ? VIEW.dropLife : 1;
+  const n = clamp(Math.round(len * 0.32 * Math.min(1, VIEW.sprayCut / FX.cutN) * (LIQ.on && isOrder() ? 0.35 : 1) * (c9 ? VIEW.dropK : 1)), c9 ? 1 : 2, 34);   // v5: сок — жидким слоем, тут мелкие брызги
   for (let k = 0; k < n; k++){ const t = R(), sp = 120 + R() * 330, side = (R() - 0.5) * 2;
-    spawnP(P_DROP, p[0] + dx * t, p[1] + dy * t, ux * sp + nx * side * 110, uy * sp + ny * side * 110 - 70, 0.22 + R() * 0.42, 1.3 + R() * 2.3, cj); }
-  for (let k = 0; k < Math.ceil(n / 4); k++){ const t = R(), side = R() < 0.5 ? -1 : 1, sp = 60 + R() * 160;
+    spawnP(P_DROP, p[0] + dx * t, p[1] + dy * t, ux * sp + nx * side * 110, uy * sp + ny * side * 110 - 70, (0.22 + R() * 0.42) * dl, (1.3 + R() * 2.3) * dz, cj); }
+  if (!c9) for (let k = 0; k < Math.ceil(n / 4); k++){ const t = R(), side = R() < 0.5 ? -1 : 1, sp = 60 + R() * 160;   // v9 clear: мякоть — только у жерновов
     spawnP(P_PULP, p[0] + dx * t, p[1] + dy * t, ux * sp * 0.6 + nx * side * 90, uy * sp * 0.6 + ny * side * 90 - 90, 0.35 + R() * 0.4, 2.2 + R() * 2.6, cf); }
   if (e.kind === 'melon' || e.kind === 'apple' || e.kind === 'dragon' || e.kind === 'passion'){ const cs = pcol(A.col.seed);
-    for (let k = 0; k < (len > 60 ? 4 : 2); k++){ const t = 0.3 + 0.4 * R(); spawnP(P_SEED, p[0] + dx * t, p[1] + dy * t, (R() - 0.5) * 160, -60 - R() * 140, 0.6, 2.4, cs); } }
+    for (let k = 0; k < (len > 60 ? 4 : 2) - (c9 ? 1 : 0); k++){ const t = 0.3 + 0.4 * R(); spawnP(P_SEED, p[0] + dx * t, p[1] + dy * t, (R() - 0.5) * 160, -60 - R() * 140, 0.6, 2.4, cs); } }
   // сок прилипает к задней стенке прямо по линии реза (под фруктом; видно, когда куча сойдёт)
-  for (let k = 0, m = clamp(Math.round(len / VIEW.cutStain), 2, 9); k < m; k++){ const t = (k + R()) / m, side = (R() - 0.5) * 7;
+  for (let k = 0, m = c9 ? clamp(Math.round(len / 40), 1, 3) : clamp(Math.round(len / VIEW.cutStain), 2, 9); k < m; k++){ const t = (k + R()) / m, side = (R() - 0.5) * 7;
     FX.stamps.push({ x: p[0] + dx * t + nx * side, y: p[1] + dy * t + ny * side, r: 2 + R() * 3.4, col: K0.juice, vx: ux * 380, vy: uy * 380, drip: false }); }
   for (const id of e.into) FX.born.set(id, { t: G.rt, nx, ny });
   FX.cutKinds.add(CUT_SOUND[e.kind]);
@@ -4820,10 +5512,11 @@ function splitFX(e){
 }
 // Мелочь сразу в сок: брызги во все стороны.
 function burst(kind, x, y, n, up){
-  const cj = pcol(KINDS[kind].juice), cf = pcol(ART[kind].col.flesh);
+  const cj = pcol(KINDS[kind].juice), cf = pcol(ART[kind].col.flesh), c9 = clear9(), dz = c9 ? VIEW.dropSize : 1, dl = c9 ? VIEW.dropLife : 1;
+  if (c9) n = Math.max(2, Math.round(n * VIEW.dropK));                              // v9: меньше и крупнее, без мякоти
   for (let k = 0; k < n; k++){ const a = up ? -Math.PI / 2 + (R() - 0.5) * 1.6 : R() * 6.28, sp = 100 + R() * 220;
-    spawnP(P_DROP, x, y, Math.cos(a) * sp, Math.sin(a) * sp - 40, 0.25 + R() * 0.35, 1.2 + R() * 2, cj); }
-  for (let k = 0; k < Math.ceil(n / 4); k++) spawnP(P_PULP, x, y, (R() - 0.5) * 200, -80 - R() * 160, 0.4 + R() * 0.3, 2 + R() * 2, cf);
+    spawnP(P_DROP, x, y, Math.cos(a) * sp, Math.sin(a) * sp - 40, (0.25 + R() * 0.35) * dl, (1.2 + R() * 2) * dz, cj); }
+  if (!c9) for (let k = 0; k < Math.ceil(n / 4); k++) spawnP(P_PULP, x, y, (R() - 0.5) * 200, -80 - R() * 160, 0.4 + R() * 0.3, 2 + R() * 2, cf);
 }
 // Сок пришёл: слой в баке, волна, пузыри, струя из жерновов в бак, фонтан из щели (если это не мелочь в воздухе), тон бутылки.
 function juiceFX(e){
@@ -4832,6 +5525,12 @@ function juiceFX(e){
     FX.inflow += share; if (e.crumb) return;
     const y = CFG.grindY - 2, n = Math.min(4, 1 + Math.floor(e.amount / 30)), cj = pcol(K0.juice);
     for (let k = 0; k < n && FX.fountain > 0; k++, FX.fountain--) spawnP(P_FOUNT, e.x + (R() - 0.5) * 16, y, (R() - 0.5) * 170, -(170 + R() * 250), 0.35 + R() * 0.35, 1.3 + R() * 2, cj);
+    return;
+  }
+  if (s.mode === 'clear'){                                    // v9: бака нет — приток, звук и фонтан из щели (как в заказе)
+    FX.inflow += share; Sound.playRL('pour', 0.07, +(s.juice / s.goal).toFixed(2)); if (e.crumb) return;
+    const y = CFG.grindY - 2, cj = pcol(K0.juice);
+    if (FX.fountain > 0){ FX.fountain--; spawnP(P_FOUNT, e.x + (R() - 0.5) * 16, y, (R() - 0.5) * 170, -(170 + R() * 250), (0.35 + R() * 0.35) * VIEW.dropLife, (1.3 + R() * 2) * VIEW.dropSize, cj); }
     return;
   }
   addLayer(e.kind, e.amount);
@@ -4908,13 +5607,13 @@ function sliceFX(e){
 // валики под ним подпрыгивают и мокнут соком.
 function tearFX(e){
   const K0 = KINDS[e.kind], A = ART[e.kind], m = Math.sqrt(e.area), k = clamp((m - 25) / 105, 0, 1), sz = clamp(m / 40, 0.7, 2.4);
-  const n = Math.round(VIEW.tearBits[0] + (VIEW.tearBits[1] - VIEW.tearBits[0]) * k), cj = pcol(K0.juice), cf = pcol(A.col.flesh), w = Math.min(70, m * 0.6);
-  for (let i = 0; i < (LIQ.on && isOrder() ? Math.round(n * 0.3) : n); i++){ const a = -Math.PI / 2 + (R() - 0.5) * 1.9, sp = 240 + R() * 520;
-    spawnP(P_DROP, e.x + (R() - 0.5) * w, CFG.grindY - 4, Math.cos(a) * sp, Math.sin(a) * sp, 0.3 + R() * 0.45, (1.6 + R() * 2.6) * sz, cj); }
-  for (let i = 0; i < Math.ceil(n / 3); i++){ const a = -Math.PI / 2 + (R() - 0.5) * 1.5, sp = 200 + R() * 380;
+  const n = Math.round(VIEW.tearBits[0] + (VIEW.tearBits[1] - VIEW.tearBits[0]) * k), cj = pcol(K0.juice), cf = pcol(A.col.flesh), w = Math.min(70, m * 0.6), c9 = clear9();
+  for (let i = 0; i < Math.round((LIQ.on && isOrder() ? n * 0.3 : n) * (c9 ? VIEW.dropK : 1)); i++){ const a = -Math.PI / 2 + (R() - 0.5) * 1.9, sp = 240 + R() * 520;
+    spawnP(P_DROP, e.x + (R() - 0.5) * w, CFG.grindY - 4, Math.cos(a) * sp, Math.sin(a) * sp, 0.3 + R() * 0.45, (1.6 + R() * 2.6) * sz * (c9 ? VIEW.dropSize : 1), cj); }
+  for (let i = 0; i < Math.ceil(n / 3 * (c9 ? VIEW.pulpGrind : 1)); i++){ const a = -Math.PI / 2 + (R() - 0.5) * 1.5, sp = 200 + R() * 380;
     spawnP(P_PULP, e.x + (R() - 0.5) * w, CFG.grindY - 4, Math.cos(a) * sp, Math.sin(a) * sp, 0.45 + R() * 0.35, (2.6 + R() * 3.4) * sz, i % 3 ? cf : pcol(A.col.skin || K0.skin)); }
   if (A.col.seed && (e.kind === 'melon' || e.kind === 'apple' || e.kind === 'dragon' || e.kind === 'passion' || e.kind === 'kiwi')){ const cs = pcol(A.col.seed);
-    for (let i = 0; i < 2 + Math.round(4 * k); i++) spawnP(P_SEED, e.x + (R() - 0.5) * w, CFG.grindY - 4, (R() - 0.5) * 300, -250 - R() * 300, 0.7, 2.6, cs); }
+    for (let i = 0; i < (c9 ? 1 + Math.round(2 * k) : 2 + Math.round(4 * k)); i++) spawnP(P_SEED, e.x + (R() - 0.5) * w, CFG.grindY - 4, (R() - 0.5) * 300, -250 - R() * 300, 0.7, 2.6, cs); }
   shake(0, 1, VIEW.tearShake[0] + (VIEW.tearShake[1] - VIEW.tearShake[0]) * k);
   const step = CFG.W / VIEW.rollers;
   for (let i = 0; i < VIEW.rollers; i++){ const d = Math.abs((i + 0.5) * step - e.x); if (d < w / 2 + step) FX.rollKick[i] = Math.max(FX.rollKick[i] || 0, (2 + 5 * k) * (1 - d / (w / 2 + step + 1))); }
@@ -4923,6 +5622,7 @@ function tearFX(e){
   if (isOrder()){                                            // v5: цепочка перемола, фонтан жидким соком, валики под куском мокнут его соком
     FX.chain += 1; liqTear(e, k, w); const jc = juiceHex(e.kind);
     for (let i = 0; i < VIEW.rollers; i++){ const d = Math.abs((i + 0.5) * step - e.x); if (d < w / 2 + step * 1.2) FX.rwet[i] = { a: Math.min(1, ((FX.rwet[i] && FX.rwet[i].col === jc ? FX.rwet[i].a : 0)) + 0.6), col: jc }; }
+    if (toy9()){ filmAdd(e.x, V9.tear[0] * (1 + k), hexRgb(jc), V9.tear[1] + V9.tear[2] * k); troughFeed(e.x, e.kind, 0.25 + 0.5 * k, k); }   // v9: плёнка вдоль ряда и волна в жёлобе
   }
   Sound.playRL('tear', 0.05, Math.round(e.area) + (isOrder() ? Math.min(8, Math.round(FX.chain)) * 10000 : 0));
   rumble(0.25 + 0.75 * k, VIEW.grindRumble[0] + (VIEW.grindRumble[1] - VIEW.grindRumble[0]) * k);   // вибрация перемола: непрерывное мурчание, сильнее и дольше на крупном куске
@@ -4931,7 +5631,7 @@ function tearFX(e){
 // Кусок исчез в жерновах: последний хлюп.
 function groundFX(e){
   const m = Math.sqrt(e.area || 400), cj = pcol(KINDS[e.kind].juice);
-  for (let i = 0; i < Math.min(14, 3 + m / 10); i++){ const a = -Math.PI / 2 + (R() - 0.5) * 1.2, sp = 150 + R() * 300; spawnP(P_FOUNT, e.x + (R() - 0.5) * 20, CFG.grindY, Math.cos(a) * sp, Math.sin(a) * sp, 0.35, 1.5 + R() * 2, cj); }
+  for (let i = 0; i < Math.min(14, 3 + m / 10) * (clear9() ? VIEW.dropK : 1); i++){ const a = -Math.PI / 2 + (R() - 0.5) * 1.2, sp = 150 + R() * 300; spawnP(P_FOUNT, e.x + (R() - 0.5) * 20, CFG.grindY, Math.cos(a) * sp, Math.sin(a) * sp, 0.35, 1.5 + R() * 2, cj); }
   Sound.playRL('ground', 0.1, Math.round(e.area || 0));
 }
 // Пока кусок в жерновах — из-под валиков бьёт сок и летят клочки (по размеру куска); валики остывают и обсыхают.
@@ -4939,17 +5639,19 @@ function updateGrindFX(gdt){
   const s = G.s; if (!s) return;
   if (isOrder()){ FX.chain *= Math.exp(-gdt * 1.3); for (const w of FX.rwet) if (w) w.a *= Math.exp(-gdt * 0.18);
     for (const g of s.grinding){ if (g.p >= LQV.pop && !FX.gpop.has(g.id)){ FX.gpop.set(g.id, G.rt); liqPop(g); Sound.playRL('squish', 0.04, Math.round(g.area) + Math.min(8, Math.round(FX.chain)) * 10000);
-        const cf = pcol(ART[g.kind].col.flesh); for (let i = 0; i < 4 + Math.round(Math.sqrt(g.area) / 12); i++){ const a = -Math.PI / 2 + (R() - 0.5) * 2.4, sp = 160 + R() * 300;
+        const cf = pcol(ART[g.kind].col.flesh); for (let i = 0; i < (4 + Math.round(Math.sqrt(g.area) / 12)) * (clear9() ? VIEW.pulpGrind : 1); i++){ const a = -Math.PI / 2 + (R() - 0.5) * 2.4, sp = 160 + R() * 300;
           spawnP(P_PULP, g.x, CFG.grindY, Math.cos(a) * sp, Math.sin(a) * sp, 0.5 + R() * 0.3, 3 + R() * 3.5, cf); } }
-      if (LIQ.on && R() < gdt * 18 * Math.sqrt(g.area) / 40) liqSpawn(L_FLOW, g.x + (R() - 0.5) * 24, CFG.grindY + 30, (R() - 0.5) * 50, 50, 2, 2 + R() * 1.4, juiceHex(g.kind)); }
+      if (toy9()) filmAdd(g.x, gdt * 1.4, hexRgb(juiceHex(g.kind)), 26);                     // v9: жуёт — плёнка не сохнет
+      else if (LIQ.on && R() < gdt * 18 * Math.sqrt(g.area) / 40) liqSpawn(L_FLOW, g.x + (R() - 0.5) * 24, CFG.grindY + 30, (R() - 0.5) * 50, 50, 2, 2 + R() * 1.4, juiceHex(g.kind)); }
     if (FX.gpop.size > 60) for (const [id, t] of FX.gpop) if (G.rt - t > 3) FX.gpop.delete(id); }
   for (const g of s.grinding){
-    const m = Math.sqrt(g.area), rate = m * 2.4 / g.dur * (1 - g.p);
+    const m = Math.sqrt(g.area), rate = m * 2.4 / g.dur * (1 - g.p) * (clear9() ? 0.5 : 1);
     g.fxAcc = (g.fxAcc || 0) + rate * gdt;
     const cj = pcol(KINDS[g.kind].juice), cf = pcol(ART[g.kind].col.flesh), w = Math.min(70, m * 0.6), sz = clamp(m / 45, 0.7, 2);
     while (g.fxAcc >= 1){ g.fxAcc--; const a = -Math.PI / 2 + (R() - 0.5) * 1.7, sp = 160 + R() * 420;
-      if (LIQ.on && isOrder() && R() < 0.75){ if (R() < 0.25) liqSpawn(L_FOUNT, g.x + (R() - 0.5) * w, CFG.grindY - 3, Math.cos(a) * sp * chainBoost(), Math.sin(a) * sp * chainBoost(), 0.8, 3 + R() * 2.5, juiceHex(g.kind)); continue; }
-      spawnP(R() < 0.75 ? P_FOUNT : P_PULP, g.x + (R() - 0.5) * w, CFG.grindY - 3, Math.cos(a) * sp, Math.sin(a) * sp, 0.3 + R() * 0.3, (1.4 + R() * 2.4) * sz, R() < 0.75 ? cj : cf); }
+      const c9 = clear9();
+      if (LIQ.on && isOrder() && R() < (c9 ? 0.92 : 0.75)){ if (R() < (c9 ? 0.25 * VIEW.fountLiq[0] : 0.25)){ const f = fountClamp(Math.cos(a) * sp * chainBoost(), Math.sin(a) * sp * chainBoost()); liqSpawn(L_FOUNT, g.x + (R() - 0.5) * w, CFG.grindY - 3, f[0], f[1], 0.8, 3 + R() * 2.5, juiceHex(g.kind)); } continue; }
+      const pu = R() >= (c9 ? 0.9 : 0.75); spawnP(pu ? P_PULP : P_FOUNT, g.x + (R() - 0.5) * w, CFG.grindY - 3, Math.cos(a) * sp, Math.sin(a) * sp, 0.3 + R() * 0.3, (1.4 + R() * 2.4) * sz * (c9 ? VIEW.dropSize : 1), pu ? cf : cj); }
   }
   const dec = Math.exp(-gdt * 14); for (let i = 0; i < FX.rollKick.length; i++) if (FX.rollKick[i]) FX.rollKick[i] *= dec;
   FX.wet *= Math.exp(-gdt * 0.7);
@@ -5033,11 +5735,11 @@ function onEvent(e){
       if (s.moves === 1 && !FX.lowWarned && !e.free){ FX.lowWarned = true; Sound.play('low'); }
       hideHint();
       break; }
-    case 'slice': sliceFX(e); break;               // v2: тело разрезано следом пальца (v6: ножом или пилой)
+    case 'slice': FX.sliceW = e.w || 'knife'; sliceFX(e); break;               // v2: тело разрезано следом пальца (v6: ножом или пилой)
     case 'throw': throwFX(e); break;               // v6: оружие брошено
     case 'chop': chopFX(e); break;
     case 'smash': smashFX(e); break;
-    case 'shave': shaveFX(e); break;
+    case 'shave': shaveFX(e); if (PIECES === 'slab') slabBorn(e, 'saw'); break;
     case 'land': landFX(e); break;
     case 'bounce': bounceFX(e); break;              // v7: нож отскочил от твёрдого / пила заглохла
     case 'mace': maceFX(e); break;                  // v7: круг удара булавы
@@ -5050,7 +5752,7 @@ function onEvent(e){
     case 'waste': wasteFX(e); break;               // v3: чужой вкус — в слив
     case 'short': shortFX(e); break;
     case 'served': servedFX(e); break;
-    case 'split': splitFX(e); break;
+    case 'split': splitFX(e); if (PIECES === 'slab') slabBorn(e, e.w || FX.sliceW || 'knife'); FX.sliceW = 'knife'; break;
     case 'crumb': burst(e.kind, e.x, e.y, 10, false); break;
     case 'grind': tearFX(e); break;                 // v2: кусок долетел до жерновов
     case 'juice': juiceFX(e); break;
@@ -5084,6 +5786,7 @@ function onContact(ct){                       // удар кусков: силь
   const A = ct.getFixtureA().getBody(), B = ct.getFixtureB().getBody(), va = A.getLinearVelocity(), vb = B.getLinearVelocity();
   const v = Math.hypot(va.x - vb.x, va.y - vb.y) * CFG.ppm;
   if (v > VIEW.bumpMin && v > G.bump) G.bump = v;
+  if (PIECES === 'slab' && FX.slab.size){ const ra = A.getUserData(), rb = B.getUserData(); stainCheck(ct, ra, rb); stainCheck(ct, rb, ra); }   // v8: свежий срез пачкает соседа
 }
 
 // =====================================================================================================
@@ -5440,6 +6143,8 @@ window.addEventListener('hashchange', () => { const h = location.hash.slice(1);
   if (h === 'v7' || h === 'clear'){ setGoalMode('clear'); startLevel(curLevel()); return; }
   if (h === 'v6'){ setGoalMode('order'); setOrderSet('v6'); startLevel(curLevel()); return; }
   if (h.startsWith('style=')){ setStyle(h.slice(6)); if (!G.s) startLevel(curLevel()); else goto('game'); return; }
+  if (h.startsWith('pieces=')){ setPieces(h.slice(7)); if (G.lab) labUI(true); if (!G.s) startLevel(curLevel()); else goto('game'); return; }   // v8
+  if (h === 'cutlab'){ setGoalMode('clear'); startLab(); return; }
   if (h === 'game' && !G.s) startLevel(curLevel()); else if (h && h !== G.screen) goto(h); });
 
 let toastUntil = 0;
@@ -5458,11 +6163,14 @@ function setLayout(mode){ const L = mode === 'clear' ? VIEW7 : mode === 'order' 
 const curSet = () => CFG.goalMode === 'clear' ? 'v7' : CFG.orderSet;   // v7: набор уровней «развали»
 function prepLevel(n){ if (CFG.goalMode !== 'order' && CFG.goalMode !== 'clear') return; n = ((n - 1) % levelTable().length) + 1; if (G.prep && G.prep.n === n && G.prep.set === curSet()) return;
   G.prep = createBegin(n); G.prep.set = curSet(); log('event', 'prep', 'level=' + n); }
-function startLevel(n){
+function startLevel(n, pre){                                  // pre — готовое состояние (v8: стенд #cutlab)
   n = Math.max(1, n | 0);
   if (CFG.goalMode === 'order' || CFG.goalMode === 'clear') n = ((n - 1) % levelTable().length) + 1;   // уровни заказа и v7 по кругу
   const P0 = G.prep; G.prep = null; G.sol7 = 0;
-  if (P0 && P0.n === n && P0.set === curSet() && P0.s.level.set === curSet()){ createSettleStep(P0, P0.max + 1); G.s = createEnd(P0.s); }
+  if (!pre && G.lab) labUI(false);
+  G.lab = !!pre; if (!pre && G.zoom){ G.zoom = null; fit(); }
+  if (pre) G.s = pre;
+  else if (P0 && P0.n === n && P0.set === curSet() && P0.s.level.set === curSet()){ createSettleStep(P0, P0.max + 1); G.s = createEnd(P0.s); }
   else G.s = createState(n); G.aim = null; G.preview = []; G.endAt = 0; G.endKind = ''; G.nextAt = 0; G.acc = 0; G.last = performance.now();
   drainEvents(G.s);
   fxr = mulberry32(n * 9973 + 17); resetFX(); resetSprites(); resetOrderFX();
@@ -5478,6 +6186,39 @@ function startLevel(n){
   $('toast').classList.add('hide'); toastUntil = 0;
   TRAYV.key = ''; goto('game'); hud(); fit();
   if (Sound.ac){ Sound.motorOn(); Music.start(); }
+}
+// v8: стенд #cutlab — все фрукты линейки v7 в два ряда на глухих полках (куски остаются на виду), любой инструмент по 99,
+// кнопки: Zoom (весь стенд → верхний ряд → нижний), Pieces (slab ↔ band), Reset. Ядро то же: newState + makeFruit + доосадка.
+const LAB = {
+  parts: [['block', 0, 386, 400, 400], ['block', 0, 600, 400, 614]],
+  rows: [{ y: 386, items: [['melon', 0.72], ['coco', 1], ['apple', 1.05], ['orange', 1.05], ['lemon', 1.1]] },
+         { y: 600, items: [['lime', 1.15], ['plum', 1.1], ['berry', 1.15], ['cuke', 0.9], ['banana', 0.9]] }],
+  zooms: [null, { k: 1.9, x: 200, y: 336 }, { k: 1.9, x: 200, y: 560 }],
+};
+function labState(){
+  const L = Object.assign({ tier: 0, tpl: 'lab', theme: 0, specials: [], mode: 'clear', n: 1, idx: 1, set: 'v7', lab: true, name: 'Cut Lab', pile: [],
+    loadout: { knife: 99, axe: 99, saw: 99, mace: 99 } }, { parts: LAB.parts });
+  const s = newState(L);
+  for (const row of LAB.rows){
+    const it = row.items.map(([kind, sc]) => { const V = kindVerts(kind, sc); let hw = 0, hh = 0; for (const v of V){ hw = Math.max(hw, Math.abs(v[0])); hh = Math.max(hh, Math.abs(v[1])); } return { kind, sc, hw, hh }; });
+    const tot = it.reduce((a, q) => a + 2 * q.hw, 0), gap = (CFG.W - 20 - tot) / (it.length - 1); let x = 10;
+    for (const q of it){ makeFruit(s, q.kind, x + q.hw, row.y - q.hh - 1.5, 0, q.sc); x += 2 * q.hw + gap; }
+  }
+  const job = { n: 1, s, k: 0, max: Math.round(CFG.createSettle / CFG.dt), done: false }; createSettleStep(job, job.max + 1);
+  return createEnd(s);
+}
+function startLab(){ G.zoomI = G.zoomI || 0; startLevel(1, labState()); G.zoom = LAB.zooms[G.zoomI % LAB.zooms.length]; fit(); labUI(true); log('event', 'cutlab', 'bodies=' + G.s.bodies.length); }
+function labUI(on){
+  let el = document.getElementById('lab');
+  if (!on){ if (el) el.remove(); return; }
+  if (!el){ el = document.createElement('div'); el.id = 'lab'; el.style.cssText = 'position:absolute;left:8px;top:58px;display:flex;gap:6px;z-index:2;pointer-events:auto';
+    for (const [id, txt] of [['lab-reset', 'Reset'], ['lab-zoom', 'Zoom'], ['lab-pieces', '']]){ const b = document.createElement('button'); b.id = id; b.className = 'btn plain'; b.style.cssText = 'font-size:14px;padding:7px 11px;border-radius:12px;box-shadow:inset 0 -3px 0 rgba(0,0,0,.1),0 3px 0 var(--ink)'; b.textContent = txt; el.appendChild(b); }
+    $('frame').appendChild(el);
+    $('lab-reset').onclick = () => startLab();
+    $('lab-zoom').onclick = () => { G.zoomI = (G.zoomI + 1) % LAB.zooms.length; G.zoom = LAB.zooms[G.zoomI]; fit(); };
+    $('lab-pieces').onclick = () => { setPieces(PIECES === 'slab' ? 'band' : 'slab'); labUI(true); };
+  }
+  $('lab-pieces').textContent = 'Pieces: ' + PIECES;
 }
 const HUDV = { level: -1, moves: -1, low: null, muted: null };
 function bumpEl(el){ if (REDUCED) return; el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); }
@@ -5622,10 +6363,11 @@ function fit(){
   const top = hudB + VIEW.hudGap, avail = r.height - top - padB - 2 - trayH, span = VIEW.bottom - VIEW.top;
   const k = Math.min(r.width / CFG.W, avail / span);
   const nv = { k, ox: (r.width - CFG.W * k) / 2, oy: top + (avail - span * k) / 2 - VIEW.top * k, w: r.width, h: r.height };
+  if (G.zoom){ const z = G.zoom, k2 = k * z.k; nv.k = k2; nv.ox = r.width / 2 - z.x * k2; nv.oy = top + avail / 2 - z.y * k2; }   // v8: стенд — крупно
   const cw = Math.round(r.width * DPR), ch = Math.round(r.height * DPR);
   const changed = cv.width !== cw || cv.height !== ch || Math.abs(nv.k - view.k) > 1e-6 || Math.abs(nv.ox - view.ox) > 0.01 || Math.abs(nv.oy - view.oy) > 0.01;
   view = nv;
-  if (changed){ cv.width = cw; cv.height = ch; K = DPR * k; resetSprites(); buildBackground(); }
+  if (changed){ cv.width = cw; cv.height = ch; K = DPR * nv.k; resetSprites(); buildBackground(); }
 }
 let fitTimer = 0;
 const refit = () => { clearTimeout(fitTimer); fitTimer = setTimeout(fit, 140); };
@@ -5656,7 +6398,7 @@ function bodyM(b, d){
   d = angDiff(d, 0);
   let m11 = 1, m12 = 0, m21 = 0, m22 = 1;
   if (Math.abs(d) > 0.004){ const cs = Math.cos(d), sn = Math.sin(d); m11 = cs; m12 = -sn; m21 = sn; m22 = cs; }
-  const bn = FX.born.get(b.id);
+  const bn = isSlab(b) ? null : FX.born.get(b.id);           // v8: у дольки вместо сплющивания — переворот (slabView)
   if (bn){ const age = G.rt - bn.t;
     if (age < VIEW.squashT){
       const q = VIEW.squash * Math.exp(-age / 0.07) * Math.cos(age * 30), nx = bn.nx, ny = bn.ny, a1 = 1 - q, a2 = 1 + q * 0.5;
@@ -5672,14 +6414,20 @@ function bodyM(b, d){
 // Тело (фрукт или кусок): спрайт из ART по b.kind / b.root / b.artFrame. Новый кусок печётся сразу; повёрнутый —
 // перепекается со светом в пределах бюджета кадра; кусок в жерновах рисуется прежним спрайтом, обрезанным линией укуса.
 function drawBody(c, b, sh){
+  const st = isSlab(b) ? slabView(b) : null;                // v8: переворот и кувырок дольки
+  if (st && st.back){ drawBack(c, b, sh, st); return; }
   let sp = SPR.get(b.id);
-  if (!sp){ sp = bakeSprite(b); SPR.set(b.id, sp); }
+  if (!sp){
+    if (st && st.flip && bakeNew <= 0){ drawBack(c, b, sh, st); return; }   // печать дольки отложена на кадр — пока кожура
+    sp = bakeSprite(b); SPR.set(b.id, sp); if (sp.slab) bakeNew--;
+  }
   else if (!b.flags.chew && bakeLeft > 0){
     const d = Math.abs(angDiff(b.a, sp.a));
-    if (sp.rec !== b || d > VIEW.relight || (d > 0.004 && !b.pb.isAwake())){ bakeLeft--; freeSprite(sp); sp = bakeSprite(b); SPR.set(b.id, sp); }   // свет, или улёгся под углом
+    if (sp.rec !== b || sp.dirty || d > VIEW.relight || (d > 0.004 && !b.pb.isAwake())){ bakeLeft--; freeSprite(sp); sp = bakeSprite(b); SPR.set(b.id, sp); }   // свет, или улёгся под углом, или пятно сока (v8)
   }
   sp.seen = frameNo;
-  const M = bodyM(b, b.a - sp.a), cs = Math.cos(sp.a), sn = Math.sin(sp.a), af = b.artFrame;
+  let M = bodyM(b, b.a - sp.a); if (st) M = squashM(M, st.nx, st.ny, st.k);
+  const cs = Math.cos(sp.a), sn = Math.sin(sp.a), af = b.artFrame;
   const ax = sp.x0 - (cs * af[0] - sn * af[1]), ay = sp.y0 - (sn * af[0] + cs * af[1]);    // угол спрайта относительно центра тела
   let e = K * (M[4] + M[0] * ax + M[1] * ay + sh.x) + DPR * view.ox, f = K * (M[5] + M[2] * ax + M[3] * ay + sh.y) + DPR * view.oy;
   const still = M[0] === 1 && M[1] === 0 && M[2] === 0;
@@ -5718,8 +6466,10 @@ function drawShadows(c, s){
   const [dx, dy, al] = VIEW.shadow; c.beginPath();
   for (const b of s.bodies){
     if (b.area < VIEW.shadowMin) continue;                      // у мелочи тень не видна за самим куском
-    const cs = Math.cos(b.a), sn = Math.sin(b.a), oy = introOff(b) + dy, V = b.verts;
-    for (let i = 0; i < V.length; i++){ const x = b.x + cs * V[i][0] - sn * V[i][1] + dx, y = b.y + oy + sn * V[i][0] + cs * V[i][1]; if (i) c.lineTo(x, y); else c.moveTo(x, y); }
+    const cs = Math.cos(b.a), sn = Math.sin(b.a), oy = introOff(b) + dy, V = b.verts, st = isSlab(b) ? slabView(b) : null, q = st ? st.k - 1 : 0;   // v8: тень сжимается с долькой
+    for (let i = 0; i < V.length; i++){ let ux = cs * V[i][0] - sn * V[i][1], uy = sn * V[i][0] + cs * V[i][1];
+      if (q){ const d = (ux * st.nx + uy * st.ny) * q; ux += d * st.nx; uy += d * st.ny; }
+      const x = b.x + ux + dx, y = b.y + oy + uy; if (i) c.lineTo(x, y); else c.moveTo(x, y); }
     c.closePath();
   }
   c.fillStyle = 'rgba(43,33,64,' + (isV4() ? al * 0.7 : al) + ')'; c.fill();
@@ -5791,7 +6541,7 @@ function drawGleams(c, s){
   c.lineCap = 'round'; c.lineWidth = 2.2;
   const sparks = [];
   for (const b of s.bodies){
-    const bn = FX.born.get(b.id); if (!bn) continue;
+    const bn = FX.born.get(b.id); if (!bn || isSlab(b)) continue;
     const age = G.rt - bn.t; if (age >= VIEW.gleamT) continue;
     const al = 1 - age / VIEW.gleamT, M = bodyM(b), V = b.verts, n = V.length;
     const W = (v) => { const L = Math.hypot(v[0], v[1]) || 1, k = Math.max(0, 1 - 2.6 / L), x = v[0] * k, y = v[1] * k; return [M[4] + M[0] * x + M[1] * y, M[5] + M[2] * x + M[3] * y]; };
@@ -6181,11 +6931,11 @@ function smashFX(e){
   if (e.k <= 1){ G.slowUntil = Math.max(G.slowUntil, G.rt + W6.smashSlow); if (!FX.slowOn){ FX.slowOn = true; log('fx.start', 'slowmo', 'mace'); } }   // замедление — один раз, на первом ударе
   shake(e.ux, e.uy, W6.smashShake); Sound.play('w.smash', e.area); buzz(35);
   FX.rings.push({ x: e.x, y: e.y, r: W6.ringR, t0: G.rt, col: juiceHex(e.kind) }); log('fx.start', 'blast', 'mace');
-  const hex = juiceHex(e.kind), cj = pcol(KINDS[e.kind].juice);
-  for (let k = 0; k < 14; k++){ const a = k * Math.PI * 2 / 14 + R() * 0.3, r = W6.ringR * (0.55 + R() * 0.4);   // вмятина-кольцо брызг на стенке
-    FX.stamps.push({ x: e.x + Math.cos(a) * r, y: e.y + Math.sin(a) * r, r: 2.5 + R() * 3.5, col: KINDS[e.kind].juice, vx: Math.cos(a) * 300, vy: Math.sin(a) * 300, drip: k % 3 === 0 }); }
-  for (let k = 0; k < 28; k++){ const a = R() * 6.283, sp = 220 + R() * 480; spawnP(P_DROP, e.x, e.y, Math.cos(a) * sp, Math.sin(a) * sp - 60, 0.25 + R() * 0.35, 1.4 + R() * 2.4, cj); }   // брызги во все стороны
-  if (LIQ.on) for (let k = 0; k < 9; k++){ const a = k * 0.698 + R() * 0.4, sp = 260 + R() * 260; liqSpawn(L_FREE, e.x + Math.cos(a) * 8, e.y + Math.sin(a) * 8, Math.cos(a) * sp, Math.sin(a) * sp - 60, 0.4 + R() * 0.3, 2.2 + R() * 1.6, hex); }   // и кляксы кольцом — не лужей
+  const hex = juiceHex(e.kind), cj = pcol(KINDS[e.kind].juice), c9 = clear9(), nr = c9 ? 6 : 14, nd = c9 ? Math.round(28 * VIEW.dropK) : 28, nl = c9 ? 6 : 9, lv = c9 ? 0.6 : 1;   // v9: меньше и ближе
+  for (let k = 0; k < nr; k++){ const a = k * Math.PI * 2 / nr + R() * 0.3, r = W6.ringR * (0.55 + R() * 0.4);   // вмятина-кольцо брызг на стенке
+    FX.stamps.push({ x: e.x + Math.cos(a) * r, y: e.y + Math.sin(a) * r, r: (2.5 + R() * 3.5) * (c9 ? 0.8 : 1), col: KINDS[e.kind].juice, vx: Math.cos(a) * 300, vy: Math.sin(a) * 300, drip: !c9 && k % 3 === 0 }); }
+  for (let k = 0; k < nd; k++){ const a = R() * 6.283, sp = 220 + R() * 480; spawnP(P_DROP, e.x, e.y, Math.cos(a) * sp, Math.sin(a) * sp - 60, (0.25 + R() * 0.35) * (c9 ? VIEW.dropLife : 1), (1.4 + R() * 2.4) * (c9 ? VIEW.dropSize : 1), cj); }   // брызги во все стороны
+  if (LIQ.on) for (let k = 0; k < nl; k++){ const a = k * Math.PI * 2 / nl + R() * 0.4, sp = (260 + R() * 260) * lv; liqSpawn(L_FREE, e.x + Math.cos(a) * 8, e.y + Math.sin(a) * 8, Math.cos(a) * sp, Math.sin(a) * sp - 60, (0.4 + R() * 0.3) * lv, 2.2 + R() * 1.6, hex); }   // и кляксы кольцом — не лужей
   burst(e.kind, e.x, e.y, 16, false);
 }
 function shaveFX(e){ log('event', 'shave', e.kind + ' area=' + e.area); burst(e.kind, e.x, e.y, 8, false); Sound.playRL('w.shave', 0.06, e.area); }
@@ -6252,7 +7002,7 @@ function render(){
   vbase(ctx, sh.x, sh.y);
   if (G.rt < G.introUntil){ ctx.save(); ctx.beginPath(); ctx.rect(-10, VIEW.top + 12, CFG.W + 20, VIEW.bottom); ctx.clip(); drawShadows(ctx, s); ctx.restore(); }
   else drawShadows(ctx, s);
-  bakeLeft = VIEW.bakeBudget;
+  bakeLeft = VIEW.bakeBudget; bakeNew = V8.newBake;
   const v4 = isV4();
   if (v4){ drawRopesV4(ctx, s); drawPlanksV4(ctx, s); } else drawDynParts(ctx, s);   // v4: верёвки и черенки — за фруктами
   const intro = G.rt < G.introUntil;                         // въезд: фрукты появляются из-под обода, не поверх HUD
@@ -6264,7 +7014,7 @@ function render(){
   vbase(ctx, sh.x, sh.y);
   if (v4){ for (const p of s.level.parts) if (p[0] === 'grate') drawGrateFrontV4(ctx, p); for (const N of s.nets) drawNetV4(ctx, N); }
   else drawRopes(ctx, s);
-  drawGleams(ctx, s);
+  drawGleams(ctx, s); if (PIECES === 'slab') drawSlabFX(ctx, s);   // v8: блик свежей дольки и капли (блеск кромки — у кусков-остатков)
   drawRings(ctx);
   drawFlight(ctx, s);                            // v6: летящее и воткнувшееся оружие
   drawGrinder(ctx, s);
@@ -6310,14 +7060,14 @@ function frameStep(realDt){
   G.timeScale = G.speed * (hs ? 0 : fz ? CFG.frenzySlow : sm ? VIEW.slowmo[0] : 1);
   const live = !!G.s && (G.screen === 'game' || G.screen === 'win');
   const gdt = live ? realDt * G.timeScale : 0;
-  FX.fountain = 24;                                          // брызг фонтана на кадр
+  FX.fountain = clear9() ? VIEW.fountBits : 24;              // брызг фонтана на кадр (v9 clear — меньше)
   if (live) advance(gdt);
   fxUpdate(gdt, realDt);
 }
 function fxUpdate(gdt, rdt){
   const s = G.s;
-  updateParticles(gdt); updateDrips(gdt); flushStamps();
-  FX.fadeAcc += rdt; if (FX.fadeAcc >= VIEW.splatFade[0]){ FX.fadeAcc = 0; fadeWall(); }
+  updateParticles(gdt); updateDrips(gdt); flushStamps(rdt); slabUpdate(gdt);
+  FX.fadeAcc += rdt; if (FX.fadeAcc >= (clear9() ? VIEW.wallStep : VIEW.splatFade[0])){ FX.fadeAcc = 0; fadeWall(); }
   updateConfetti(rdt);
   for (let i = FX.wq.length - 1; i >= 0; i--) if (G.rt >= FX.wq[i].at){ const w = FX.wq.splice(i, 1)[0]; addWord(w.text, w.x, w.y, w.o); }
   for (let i = FX.words.length - 1; i >= 0; i--){ const w = FX.words[i]; if (G.rt - w.t0 >= w.dur){ FX.words.splice(i, 1); log('fx.end', 'word', w.text); } }
@@ -6334,7 +7084,8 @@ function fxUpdate(gdt, rdt){
   if (!s) return;
   let n = 0; for (const b of s.bodies) if (b.flags.chew) n++;
   FX.load += (Math.min(1, n / 3 + FX.inflow * 25) - FX.load) * Math.min(1, rdt * 5);
-  FX.spin += gdt * (VIEW.grindSpin[0] + (VIEW.grindSpin[1] - VIEW.grindSpin[0]) * FX.load);
+  FX.spin += gdt * (VIEW.grindSpin[0] + (VIEW.grindSpin[1] - VIEW.grindSpin[0]) * FX.load) * (toy9() ? 1 + V9.chainSpin * Math.min(6, FX.chain) : 1);   // v9: цепочка — валики быстрее
+  if (toy9()){ filmUpdate(gdt); troughUpdate(s, rdt); }
   FX.jig = REDUCED ? 0 : FX.load * 0.7 * Math.sin(G.rt * 47);
   FX.inflow *= Math.exp(-rdt * 4);
   if (G.rt - Sound.motorAt > 0.1){ Sound.motorAt = G.rt; Sound.motorSet(FX.load, G.screen === 'game' || G.screen === 'win'); }
@@ -6347,11 +7098,12 @@ function fxUpdate(gdt, rdt){
   updateGrindFX(gdt); liqUpdate(gdt, rdt); updateGlassDrops(rdt);
   const F6 = s.flight;                                        // v6: пила под нагрузкой — мотор садится, веер сока вдоль пропила, дрожь
   if (F6 && F6.w === 'saw'){ Sound.sawSet(F6.load > 0);
-    if (F6.load > 0 && gdt > 0){ for (const id of F6.inside.keys()){ const b = s.bodies.find(q => q.id === id); if (!b) continue; const cj = pcol(KINDS[b.kind].juice), hex = juiceHex(b.kind), ux = F6.ux || 1, uy = F6.uy || 0;
-        for (let k = 0; k < VIEW.sawDrops; k++){ const side = R() < 0.5 ? -1 : 1, sp = 140 + R() * 340; spawnP(P_DROP, F6.x, F6.y, -ux * sp * 0.5 - uy * side * sp, -uy * sp * 0.5 + ux * side * sp - 90, 0.28 + R() * 0.34, 1.6 + R() * 2.6, cj); }
-        if (R() < VIEW.sawPulp){ const side = R() < 0.5 ? -1 : 1, sp = 110 + R() * 220; spawnP(P_PULP, F6.x, F6.y, -ux * sp * 0.6 - uy * side * sp, -uy * sp * 0.6 + ux * side * sp - 120, 0.45 + R() * 0.3, 2.6 + R() * 3, pcol(KINDS[b.kind].flesh || KINDS[b.kind].juice)); }
-        if (LIQ.on) for (const side of [-1, 1]){ if (R() < VIEW.sawLiq) liqSpawn(L_FREE, F6.x, F6.y, -uy * side * (150 + R() * 90) - ux * 70, ux * side * (150 + R() * 90) - uy * 70 - 70, 0.55, 2.6 + R() * 2.2, hex); }
-        if (G.rt - (FX.w6.sawStampAt || 0) > VIEW.sawStampGap){ FX.w6.sawStampAt = G.rt; const side = R() < 0.5 ? -1 : 1, d = 10 + R() * 26;   // пятна сока на стенке вдоль пропила
+    if (F6.load > 0 && gdt > 0){ const c9 = s.mode === 'clear', nd = c9 ? Math.max(1, Math.round(VIEW.sawDrops * VIEW.dropK)) : VIEW.sawDrops, lk = c9 ? 0.6 : 1;   // v9 clear: меньше, крупнее, ближе к пиле
+      for (const id of F6.inside.keys()){ const b = s.bodies.find(q => q.id === id); if (!b) continue; const cj = pcol(KINDS[b.kind].juice), hex = juiceHex(b.kind), ux = F6.ux || 1, uy = F6.uy || 0;
+        for (let k = 0; k < nd; k++){ const side = R() < 0.5 ? -1 : 1, sp = 140 + R() * 340; spawnP(P_DROP, F6.x, F6.y, -ux * sp * 0.5 - uy * side * sp, -uy * sp * 0.5 + ux * side * sp - 90, (0.28 + R() * 0.34) * (c9 ? VIEW.dropLife : 1), (1.6 + R() * 2.6) * (c9 ? VIEW.dropSize : 1), cj); }
+        if (!c9 && R() < VIEW.sawPulp){ const side = R() < 0.5 ? -1 : 1, sp = 110 + R() * 220; spawnP(P_PULP, F6.x, F6.y, -ux * sp * 0.6 - uy * side * sp, -uy * sp * 0.6 + ux * side * sp - 120, 0.45 + R() * 0.3, 2.6 + R() * 3, pcol(KINDS[b.kind].flesh || KINDS[b.kind].juice)); }
+        if (LIQ.on) for (const side of [-1, 1]){ if (R() < (c9 ? 0.6 : VIEW.sawLiq)) liqSpawn(L_FREE, F6.x, F6.y, (-uy * side * (150 + R() * 90) - ux * 70) * lk, (ux * side * (150 + R() * 90) - uy * 70 - 70) * lk, c9 ? 0.35 : 0.55, 2.6 + R() * 2.2, hex); }
+        if (G.rt - (FX.w6.sawStampAt || 0) > (c9 ? 0.16 : VIEW.sawStampGap)){ FX.w6.sawStampAt = G.rt; const side = R() < 0.5 ? -1 : 1, d = 10 + R() * 26;   // пятна сока на стенке вдоль пропила
           FX.stamps.push({ x: F6.x - uy * side * d, y: F6.y + ux * side * d, r: 2.2 + R() * 3.2, col: KINDS[b.kind].juice, vx: -uy * side * 200, vy: ux * side * 200, drip: R() < 0.4 }); } }
       if (G.rt - FX.w6.sawShakeAt > 0.05){ FX.w6.sawShakeAt = G.rt; shake(R() - 0.5, R() - 0.5, W6.sawJit * VIEW.sawJitMul); }
       rumble(VIEW.sawRumble, 0.12); } }
@@ -6389,6 +7141,17 @@ window.PULP_DROP = {
         served: s.served, loseReason: s.loseReason, short: s.short } : {}) } : { screen: G.screen, blade: CFG.bladeMode, mode: CFG.goalMode };
   },
   play(n){ startLevel(n || 1); return this.state(); },
+  // v8: вид кусков 'slab' | 'band' (без аргумента — текущий); стенд #cutlab; крупно: zoom(k, x, y) — центр кадра в (x, y) поля, zoom() — снять;
+  // slab() — счётчики: долек, кувыркаются, капель висит, пятен, кромки по инструментам
+  pieces(m){ if (m) setPieces(m); return PIECES; },
+  cutlab(){ setGoalMode('clear'); startLab(); return this.bodies(); },
+  zoom(k, x, y){ G.zoom = k ? { k, x: x === undefined ? 200 : x, y: y === undefined ? 400 : y } : null; fit(); return G.zoom; },
+  slab(){ const s = G.s, out = { slabs: 0, tumbling: 0, back: 0, drips: FX.sdrips.length, stains: 0, tools: {} };
+    if (!s) return out;
+    for (const b of s.bodies){ if (!isSlab(b)) continue; out.slabs++; const e = FX.slab.get(b.id); if (e && e.air > V8.airT) out.tumbling++; if (e && Math.cos(e.ph) < 0) out.back++; }
+    for (const L of FX.stains.values()) out.stains += L.length;
+    for (const L of FX.etool.values()) for (const q of L) out.tools[q.w] = (out.tools[q.w] || 0) + 1;
+    return out; },
   mode(m){ if (m) setGoalMode(m); return CFG.goalMode; },                       // v3: 'order' | 'tank'
   know(){ return G.s ? botKnow(G.s) : null; },                                   // v3: линия знающего порядок (решение уровня); v6 — { w, pts }
   // v6: оружие. weapon(name) — выбрать (без аргумента — выбранное); loadout() — набор { ammo, weapon, flight };
@@ -6454,6 +7217,8 @@ window.PULP_DROP = {
   live(sec){ return liveBench(sec || 2); },
   // v6: живая автоигра знающим уровней from…to на своём цикле rAF (как телефон): интервалы кадров и работа главного потока.
   liveAuto(from, to, maxSec){ return liveAuto(from || 1, to || from || 1, maxSec || 110); },
+  // v9: проверка «прищуром» — весь экран (холсты и DOM) в сером и с размытием px css-пикселей; squint() — снять
+  squint(px){ document.body.style.filter = px ? 'grayscale(1) blur(' + px + 'px)' : ''; return px || 0; },
 };
 
 // --- замер кадра (DESIGN «Кадр»): тяжёлый уровень ≈ 150 кусков, медиана отрисовки и кадр реза ---
@@ -6564,15 +7329,19 @@ if (!G.save.v7){ G.save.v7 = 1; G.save.goal = 'clear'; save(); }   // v7: ста
 if (G.save.goal === 'tank' || G.save.goal === 'order' || G.save.goal === 'clear') CFG.goalMode = G.save.goal;
 if (G.save.oset === 'v3' || G.save.oset === 'v4' || G.save.oset === 'v5') CFG.orderSet = G.save.oset;   // набор уровней заказа из сейва (меню «Levels»), по умолчанию — v5
 if (STYLES.includes(G.save.style)) ART_STYLE = G.save.style;                    // v5: набор арта из сейва (меню «Art»)
+if (PIECE_MODES.includes(G.save.pieces)) PIECES = G.save.pieces;                // v8: вид кусков из сейва (#pieces=)
 let startHash = location.hash.slice(1) === 'unlock' ? (setUnlockAll(true), 'menu') : location.hash.slice(1);
 if (startHash === 'aim' || startHash === 'direct'){ setBlade(startHash); if (CFG.orderSet === 'v6') setOrderSet('v5'); startHash = 'game'; }   // v6: #direct — прежний взмах (уровни v5)
 if (startHash === 'tank' || startHash === 'order'){ setGoalMode(startHash); startHash = 'game'; }
 if (startHash === 'v3' || startHash === 'v4' || startHash === 'v5' || startHash === 'v6'){ setGoalMode('order'); setOrderSet(startHash); startHash = 'game'; }
 if (startHash === 'v7'){ setGoalMode('clear'); startHash = 'game'; }
+if (startHash.startsWith('pieces=')){ setPieces(startHash.slice(7)); startHash = 'game'; }   // v8: #pieces=slab|band
+let labBoot = false; if (startHash === 'cutlab'){ setGoalMode('clear'); labBoot = true; startHash = 'game'; }
 if (startHash.startsWith('style=')){ ART_STYLE = STYLES.includes(startHash.slice(6)) ? startHash.slice(6) : 'toy'; G.save.style = ART_STYLE; save(); if (CFG.goalMode !== 'order') setGoalMode('order'); startHash = 'game'; }
 if (startHash === 'game') startLevel(curLevel());
 else if (startHash === 'win' || startHash === 'lose'){ startLevel(curLevel()); goto(startHash); }
 else goto(startHash || 'menu');
+if (labBoot) startLab();
 loadAssets(); ASSETS.onReady.push(() => { resetSprites(); woodPat = null; buildBackground(); });   // v4: спрайты GPT и фон
 requestAnimationFrame(frame);
 log('event', 'boot', 'levels=' + LEVELS.length + '+gen planck=1.4.2');
