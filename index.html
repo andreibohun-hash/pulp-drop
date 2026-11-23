@@ -83,17 +83,20 @@ button{font:inherit;cursor:pointer}
 .short-drop{position:absolute;right:-18px;bottom:-4px;width:40px;height:40px}
 /* v10: лоток инструментов — кремовая подставка под жёлобом; плитка на инструмент: силуэт (у каждого свой поворот — различимы в сером),
    крупный счётчик; выбранный — приподнят, зелёное кольцо и губа; пустой — утоплен, серый, счётчик серый. */
-#tray{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom) + 6px);display:flex;justify-content:center;gap:16px;z-index:2;
-  pointer-events:none;padding:11px 14px 8px;border-radius:24px;background:linear-gradient(#5aa6ea,#2f74bf);
+#tray{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom) + 4px);display:flex;justify-content:center;gap:16px;z-index:2;
+  pointer-events:none;padding:7px 12px 6px;border-radius:21px;background:linear-gradient(#5aa6ea,#2f74bf);
   box-shadow:inset 0 2px 0 rgba(255,255,255,.5),inset 0 -3px 0 rgba(10,40,90,.18),0 5px 0 #1d5592,0 11px 18px rgba(20,40,80,.3)}
 /* v11: подставка — синий пластик, как опоры кучи (кремовые кнопки на кремовом сливались); между кнопками 16 px; на узком экране кнопка
    ужимается, чтобы четыре влезали в 360 */
 #tray.hide,.hide6{display:none!important}
-.wpn{pointer-events:auto;position:relative;width:min(74px,calc((100vw - 96px) / 4));height:54px;border-radius:16px;border:0;background:linear-gradient(#ffffff,#f3ebdf);
+.wpn{pointer-events:auto;position:relative;width:min(74px,calc((100vw - 96px) / 4));height:50px;border-radius:16px;border:0;background:linear-gradient(#ffffff,#f3ebdf);
   box-shadow:inset 0 2px 0 #fff,0 4px 0 #d3bf9f,0 6px 10px rgba(50,35,20,.14);padding:0;display:flex;align-items:center;justify-content:center;transition:transform .12s}
-.wpn b{position:absolute;right:-7px;top:-9px;min-width:30px;height:30px;border-radius:15px;background:var(--ui-ink);color:#fff;font-size:19px;line-height:30px;
+/* v12 круг 5: касание — вся ячейка подставки (поля и половина промежутка), скруглённые углы кнопки не проваливаются в поле */
+.wpn::after{content:'';position:absolute;inset:-8px -9px -7px -9px;border-radius:18px}
+.wpn.sel::after{inset:-3px -9px -12px -9px}
+.wpn b{position:absolute;right:-7px;top:-8px;min-width:30px;height:30px;border-radius:15px;background:var(--ui-ink);color:#fff;font-size:19px;line-height:30px;
   padding:0 6px;font-weight:700;box-shadow:0 2px 0 rgba(0,0,0,.18)}
-.wpn.sel{background:linear-gradient(#f4fff1,#d5f6ca);transform:translateY(-6px);box-shadow:0 0 0 3px var(--good),0 7px 0 var(--good-lip),0 12px 16px rgba(30,100,50,.26)}
+.wpn.sel{background:linear-gradient(#f4fff1,#d5f6ca);transform:translateY(-5px);box-shadow:0 0 0 3px var(--good),0 7px 0 var(--good-lip),0 12px 16px rgba(30,100,50,.26)}
 .wpn.sel b{background:var(--good)}
 .wpn.empty{background:#a9c3dd;box-shadow:inset 0 2px 5px rgba(10,40,90,.25);transform:translateY(2px)}
 .wpn.empty img{filter:grayscale(1);opacity:.32}
@@ -4902,7 +4905,7 @@ const V9 = {
   // жёлоб: верх и низ от grindY, скругление; уровень от доли кучи; волна, ед.; потолок пузырей. v10 — единственный показатель прогресса:
   // кромка видна под валиками (верх 37 > низ зубьев 34), выше (38 ед. вместо 25), уровень от lvl[0] до метки «полный» full у кромки,
   // на победе (spill) — до верха и через край: потёки по стеклу spillDrips, искры sparks (за spillT с), метка зеленеет
-  trough: { y0: 37, y1: 75, r: 10, lvl: [0.08, 0.86], full: 0.86, wave: 3.4, bubbles: 26, spillDrips: 8, sparks: 56, spillT: 1.3, tag: [38, 15] },
+  trough: { y0: 36, y1: 58, r: 9, lvl: [0.08, 0.86], full: 0.86, wave: 2.6, bubbles: 22, spillDrips: 8, sparks: 56, spillT: 1.3, tag: [34, 13] },   // v12 круг 5: 22 ед. вместо 38 — поле во всю ширину
   chainSpin: 0.14,           // цепочка: валики быстрее на 14% за кусок (до 6)
   vignette: 0.14,            // фон: затемнение краёв
   wash: 0.2,                 // фон: светлая дымка за полем
@@ -4981,7 +4984,7 @@ function drawBgCalm9(c){
 }
 // Корпус жерновов (печётся в фон): тёмная ниша во всю ширину за валиками.
 function drawHousing9(c){
-  const gy = CFG.grindY, H = V9.housing, y0 = gy - 8, y1 = gy + 41;   // v10: до кромки жёлоба (жёлоб — на столе целиком)
+  const gy = CFG.grindY, H = V9.housing, y0 = gy - 8, y1 = gy + 40;   // v10: до кромки жёлоба (жёлоб — на столе целиком)
   const g = c.createLinearGradient(0, y0, 0, y1); g.addColorStop(0, H[0]); g.addColorStop(1, H[1]);
   c.beginPath(); roundRect(c, -12, y0, CFG.W + 24, y1 - y0, 8); c.fillStyle = g; c.fill();
   c.fillStyle = 'rgba(255,255,255,0.18)'; c.fillRect(-12, y0 + 1.5, CFG.W + 24, 1.6);
@@ -5040,7 +5043,7 @@ function drawSpark(c, x, y, r, al){ const k = r * 0.22; c.globalAlpha = al; c.be
 function drawTrough9(c, s, front){
   const gy = CFG.grindY, Q = V9.trough, x0 = 3, x1 = CFG.W - 3, top = gy + Q.y0, bot = gy + Q.y1, T = trough9();
   if (!front){
-    c.fillStyle = 'rgba(40,30,20,0.18)'; c.beginPath(); roundRect(c, x0 + 2, bot - 4, x1 - x0 - 4, 8, 4); c.fill();   // тень жёлоба на столе
+    c.fillStyle = 'rgba(40,30,20,0.18)'; c.beginPath(); roundRect(c, x0 + 2, bot - 4, x1 - x0 - 4, 7, 3.5); c.fill();   // тень жёлоба на столе
     c.beginPath(); roundRect(c, x0, top, x1 - x0, bot - top, Q.r); c.fillStyle = 'rgba(206,234,247,0.92)'; c.fill();   // заднее стекло
     c.save(); c.beginPath(); roundRect(c, x0, top, x1 - x0, bot - top, Q.r); c.clip();
     const lv = troughLv(), col = T.col;
@@ -5082,7 +5085,7 @@ function drawTrough9(c, s, front){
   c.save(); c.translate(tx + tw / 2, fy); c.scale(pk, pk);
   c.fillStyle = 'rgba(40,30,20,0.18)'; c.beginPath(); roundRect(c, -tw / 2, -th / 2 + 1.5, tw, th, th / 2); c.fill();
   c.fillStyle = ok ? '#3cc65a' : '#fffaf0'; c.beginPath(); roundRect(c, -tw / 2, -th / 2, tw, th, th / 2); c.fill();
-  c.fillStyle = ok ? '#ffffff' : '#4b3b60'; c.font = '700 10.5px Fredoka, system-ui, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('FULL', 0, 0.7);
+  c.fillStyle = ok ? '#ffffff' : '#4b3b60'; c.font = '700 9.5px Fredoka, system-ui, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('FULL', 0, 0.7);
   c.restore();
 }
 // Жернова toy (clear): корпус в фоне; здесь — жёлоб (задняя стенка и сок), валики, плёнка и капли, переднее стекло жёлоба.
@@ -6480,7 +6483,7 @@ function applyTheme(){
 }
 const VIEW_TANK = { top: VIEW.top, bottom: VIEW.bottom };   // кадр v2 (бак); v3 (заказ) — BAR.top…BAR.bottom
 const BAR5 = { top: 236, bottom: BAR.bottom };             // v5: кадр ниже — куча в чаше крупнее (верх кадра над ободом чаши)
-const VIEW7 = { top: 64, bottom: CFG.grindY + 77 };         // v7: стойки нет — низ экрана отдан куче, зоне полёта и жерновам; v10: + жёлоб целиком (низ grindY + 75, тень + 77) над лотком
+const VIEW7 = { top: 64, bottom: CFG.grindY + 61 };         // v7: стойки нет — низ экрана отдан куче, зоне полёта и жерновам; v10: + жёлоб целиком над лотком; v12 круг 5: жёлоб ниже (низ grindY + 58, тень + 61) — поле во всю ширину
 function setLayout(mode){ const L = mode === 'clear' ? VIEW7 : mode === 'order' ? (G.s && heapSet(G.s.level.set) ? BAR5 : BAR) : VIEW_TANK; if (VIEW.top !== L.top || VIEW.bottom !== L.bottom){ VIEW.top = L.top; VIEW.bottom = L.bottom; fit(); } }
 // v6: следующий уровень готовится заранее по частям (досадка кучи — CFG.prepSteps шагов физики за кадр), пока идёт праздник
 // победы или висит карточка проигрыша: смена уровня не даёт кадра длиннее 33 мс (createState целиком — до 40 мс).
@@ -6674,7 +6677,7 @@ function fit(){
   const r = $('game').getBoundingClientRect(); if (!r.width || !r.height) return;
   DPR = Math.min(window.devicePixelRatio || 1, 2);
   const hudB = $('hud').getBoundingClientRect().bottom - r.top, padB = parseFloat(getComputedStyle($('frame')).paddingBottom) || 0;
-  const trayH = $('tray').classList.contains('hide') ? 0 : $('tray').offsetHeight + 8;    // v6: лоток оружия снизу — кадр над ним (v10: у подставки свои поля)
+  const trayH = $('tray').classList.contains('hide') ? 0 : $('tray').offsetHeight + 6;    // v6: лоток оружия снизу — кадр над ним (v10: у подставки свои поля)
   const top = hudB + VIEW.hudGap, avail = r.height - top - padB - 2 - trayH, span = VIEW.bottom - VIEW.top;
   const k = Math.min(r.width / CFG.W, avail / span);
   const nv = { k, ox: (r.width - CFG.W * k) / 2, oy: top + (avail - span * k) / 2 - VIEW.top * k, w: r.width, h: r.height };
@@ -8109,7 +8112,7 @@ function r3Level(){                                             // новый у
 // =====================================================================================================
 const V12T = {
   models: ['melon', 'plum', 'lime', 'orange', 'berry', 'grape', 'cherry', 'apple', 'lemon', 'coco', 'pepper', 'banana', 'cuke'],   // этап 2: 13 видов линейки v11; инструменты — спрайты 2D (модели ножа, топора, пилы и булавы лежат в assets/models, не грузятся)
-  ver: 10,                  // версия файлов моделей в адресе (кэш браузера и Pages): круг 4 — перекраска tools/repaint-model.mjs
+  ver: 11,                  // версия файлов моделей в адресе (кэш браузера и Pages): круг 4 — перекраска tools/repaint-model.mjs; круг 5 — фактура tools/texture-model.mjs
   rmap: [128, 64],          // карта радиуса тела: долгота × широта
   slope: 1.5,               // наклон передней стенки к прежней фаске (1 — тот же угол, полоса мякоти в покое — половина прежней; 1,5 — купол и мякоть поровну)
   look: { melon: [1, 1], orange: [1, 1], berry: [1, 1], tool: [1, 1] },   // насыщенность и яркость текстуры по виду (круг 4: палитра спрайтов уже в текстуре — tools/repaint-model.mjs)
@@ -8118,6 +8121,10 @@ const V12T = {
   nrm: [-1, 1],             // знаки карты нормалей (x, y): сетка отражена по y (у нас y вниз), glTF — свой знак y
   nrmK: 1.0,                // сила карты нормалей
   inner: { melon: '#dff5c4', orange: '#fff4e2', berry: '#ffb3bb' },   // изнанка кожуры (видна только в щёлке и у тонких хвостиков)
+  // круг 5: фактура кожуры — bump: сила рельефа карты высот (ед. мира на всю шкалу карты), spec: отсвет (сила, степень), rim: кромочный свет (налёт сливы и винограда)
+  tex: { melon: { bump: 1.2, spec: [0.1, 5] }, orange: { bump: 1.0 }, lemon: { bump: 1.0 }, lime: { bump: 0.8 }, berry: { bump: 1.2 }, apple: { bump: 0.8, spec: [0.07, 10] },
+         plum: { bump: 0.8, rim: 0.3, spec: [0.02, 8] }, grape: { bump: 0.6, rim: 0.3, spec: [0.02, 8] }, cherry: { spec: [0.3, 26] }, coco: { bump: 1.2, spec: [0.02, 8] },
+         banana: { bump: 3.5 }, cuke: { bump: 1.2, spec: [0.06, 10] }, pepper: { spec: [0.22, 20] } },
 };
 const R3T = { fr: {}, tool: {}, marks: {} };
 async function r3GLB(buf){
@@ -8146,7 +8153,8 @@ async function r3GLB(buf){
     return { bmp: await createImageBitmap(blob, { premultiplyAlpha: 'none', colorSpaceConversion: 'none' }), name: im.name || '' }; };
   const pbr = (mat && mat.pbrMetallicRoughness) || {};
   const base = await img(pbr.baseColorTexture ? pbr.baseColorTexture.index : undefined), nrm = await img(mat && mat.normalTexture ? mat.normalTexture.index : undefined);
-  return { pos: new Float32Array(P), nrm: new Float32Array(N), uv: new Float32Array(U), idx: nv > 65535 ? new Uint32Array(I) : new Uint16Array(I), base, normal: nrm };
+  const hgt = await img(mat && mat.occlusionTexture ? mat.occlusionTexture.index : undefined);   // круг 5: карта высот кожуры (tools/texture-model.mjs)
+  return { pos: new Float32Array(P), nrm: new Float32Array(N), uv: new Float32Array(U), idx: nv > 65535 ? new Uint32Array(I) : new Uint16Array(I), base, normal: nrm, height: hgt };
 }
 function r3TTex(im){ if (!im) return null; const t = new THREE.Texture(im.bmp); t.flipY = false; t.colorSpace = THREE.NoColorSpace; t.anisotropy = 4; t.needsUpdate = true; return t; }
 function r3TGeo(pos, nrm, uv, idx){ const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.BufferAttribute(nrm, 3));
@@ -8179,7 +8187,7 @@ function r3FitFruit(kind, g, noMap){
   const [s, a, ox, oy] = p, sx = s * a, sy = s / a, sz = s, zc = (z0 + z1) / 2, pos = new Float32Array(n * 3), nrm = new Float32Array(n * 3); let zmax = 0;
   for (let i = 0; i < n; i++){ pos[3 * i] = (P[3 * i] - ox) * sx; pos[3 * i + 1] = (-P[3 * i + 1] - oy) * sy; pos[3 * i + 2] = (P[3 * i + 2] - zc) * sz; zmax = Math.max(zmax, Math.abs(pos[3 * i + 2]));
     const nx = g.nrm[3 * i] / sx, ny = -g.nrm[3 * i + 1] / sy, nz = g.nrm[3 * i + 2] / sz, L = Math.hypot(nx, ny, nz) || 1; nrm[3 * i] = nx / L; nrm[3 * i + 1] = ny / L; nrm[3 * i + 2] = nz / L; }
-  const T = { geo: r3TGeo(pos, nrm, g.uv, g.idx), posA: pos, idxA: g.idx, tris: g.idx.length / 3, map: r3TTex(g.base), nmap: null, tex: g.base ? g.base.name : '', rmap: null, zmax,   // круг 4: карта нормалей не нужна
+  const T = { geo: r3TGeo(pos, nrm, g.uv, g.idx), posA: pos, idxA: g.idx, tris: g.idx.length / 3, map: r3TTex(g.base), nmap: null, hmap: r3TTex(g.height), tex: g.base ? g.base.name : '', rmap: null, zmax,   // круг 4: карта нормалей не нужна
     fit: { s: +s.toFixed(4), a: +a.toFixed(3), iou: +best.toFixed(3), holes: 0, rmMs: 0 } };
   if (!noMap) r3TMap(T);
   return T;
@@ -8271,10 +8279,14 @@ uniform vec4 uP[12]; uniform int uNP; uniform vec3 uFC; uniform vec3 uInv; unifo
 varying vec3 vPa; varying vec3 vN; varying vec2 vUv; varying vec3 vW; varying float vSy; uniform float uClipY;
 ${R3NOISE}
 uniform vec2 uWrap; uniform vec2 uShade; uniform vec3 uVin;   // круг 4: винил — переход света, тень (степень, доля), (яркость света, кромка, отсвет)
+uniform vec2 uSpec;   // круг 5: мягкий отсвет вида — сила и степень (вишня и перец — глянцевее, арбуз — восковой широкий, остальные — едва)
+#ifdef BUMP
+uniform sampler2D tH; uniform float uBump;   // круг 5: карта высот кожуры (поры, ямки, пупырышки, волокна, рёбра) и её сила, ед. мира
+#endif
 vec3 vinyl(vec3 col, vec3 N, float fr){ float w = smoothstep(uWrap.x, uWrap.y, dot(N, uL));
   vec3 c = mix(pow(col, vec3(uShade.x)) * uShade.y, col * uVin.x, w);                       // тень — тот же цвет темнее и насыщеннее
   c += col * uVin.y * smoothstep(0.55, 0.95, fr) * (1.0 - 0.6 * w);                          // слабый цветной кромочный свет
-  vec3 H = normalize(uL + uV); c += vec3(1.0, 0.98, 0.95) * uVin.z * pow(max(dot(N, H), 0.0), 8.0);   // один широкий едва заметный отсвет
+  vec3 H = normalize(uL + uV); c += vec3(1.0, 0.98, 0.95) * uSpec.x * pow(max(dot(N, H), 0.0), uSpec.y);   // один мягкий отсвет (круг 5: сила и ширина — по виду)
   return c; }
 vec3 perturb(vec3 N, vec3 pos, vec2 uv, vec3 mapN){ vec3 q0 = dFdx(pos), q1 = dFdy(pos); vec2 st0 = dFdx(uv), st1 = dFdy(uv);
   vec3 q1p = cross(q1, N), q0p = cross(N, q0); vec3 T = q1p * st0.x + q0p * st1.x, B = q1p * st0.y + q0p * st1.y;
@@ -8295,6 +8307,12 @@ void main(){
   if (!gl_FrontFacing){ gl_FragColor = vec4(mix(col, cIn, 0.7) * 0.86, 1.0); return; }   // изнанка: щёлка у края среза, срез хвостика
   vec3 N = N0;
   if (uHasN > 0.5){ vec3 mn = texture2D(tNrm, vUv).xyz * 2.0 - 1.0; mn.xy *= uNS; N = perturb(N0, vW, vUv, mn); }
+#ifdef BUMP
+  { vec2 dx = dFdx(vUv), dy = dFdy(vUv); float h0 = texture2D(tH, vUv).r;   // круг 5: рельеф по карте высот — нормаль по производным (как bumpMap three.js)
+    vec2 dH = uBump * vec2(texture2D(tH, vUv + dx).r - h0, texture2D(tH, vUv + dy).r - h0);
+    vec3 sx = dFdx(vW), sy = dFdy(vW), R1 = cross(sy, N), R2 = cross(N, sx); float det = dot(sx, R1);
+    N = normalize(abs(det) * N - sign(det) * (dH.x * R1 + dH.y * R2)); }
+#endif
 #ifdef PORES
   { vec3 q = vPa * uInv.x * uPore; float e = 0.12, h0 = vn3(q), hx = vn3(q + vec3(e, 0.0, 0.0)), hy = vn3(q + vec3(0.0, e, 0.0)), hz = vn3(q + vec3(0.0, 0.0, e));   // поры апельсина: ямки по месту на теле
     vec3 g = vec3(hx - h0, hy - h0, hz - h0) / e, gw = mat3(modelMatrix) * g; N = normalize(N + (gw - dot(gw, N) * N) * 0.05);
@@ -8336,7 +8354,8 @@ async function r3TInit(){
     const L = R3.L, Vv = R3.Vv, tg = Math.tan(V12.tilt * Math.PI / 180), P12 = () => ({ value: Array.from({ length: 12 }, () => new THREE.Vector4()) });
     const skinU = (T, dark, inn) => ({ tMap: { value: T.map }, tNrm: { value: T.nmap || null }, uHasN: { value: T.nmap ? 1 : 0 }, uNS: { value: new THREE.Vector2(V12T.nrm[0] * V12T.nrmK, V12T.nrm[1] * V12T.nrmK) }, uSat: { value: 1 }, uGain: { value: 1 },
       uL: { value: L }, uV: { value: Vv }, uTg: { value: tg }, uDark: { value: r3c(dark) }, cIn: { value: r3c(inn) }, uArt: { value: new THREE.Vector2() }, uSc: { value: 1 }, uClipY: { value: 1e9 },
-      uWrap: { value: new THREE.Vector2(...V12T.vinyl.wrap) }, uShade: { value: new THREE.Vector2(...V12T.vinyl.shade) }, uVin: { value: new THREE.Vector3(V12T.vinyl.lit, V12T.vinyl.rim, V12T.vinyl.sheen[0]) }, uPore: { value: 0 } });
+      uWrap: { value: new THREE.Vector2(...V12T.vinyl.wrap) }, uShade: { value: new THREE.Vector2(...V12T.vinyl.shade) }, uVin: { value: new THREE.Vector3(V12T.vinyl.lit, V12T.vinyl.rim, V12T.vinyl.sheen[0]) }, uPore: { value: 0 },
+      uSpec: { value: new THREE.Vector2(V12T.vinyl.sheen[0], V12T.vinyl.sheen[1]) }, tH: { value: T.hmap || null }, uBump: { value: 0 } });
     R3.tmats = R3.tmats || {}; R3.kready = R3.kready || {}; R3T.miss = R3T.miss || {};
     R3.toolScene = new THREE.Scene();                                        // этап 2: инструменты — спрайты (сцена пустая)
     { const Q = V12T.shelf, m = new THREE.Mesh(r3ShelfGeo(Q), new THREE.ShaderMaterial({ vertexShader: R3T_VS, fragmentShader: R3T_FS, uniforms: skinU({}, '#143a62', Q.col), defines: { FLAT: 1 } }));
@@ -8350,7 +8369,8 @@ async function r3TInit(){
       await r3Yield(); let t1 = performance.now(); r3TMap(T); T.ms.push(+(performance.now() - t1).toFixed(1));
       const P = K3[k], su = Object.assign(skinU(T, P.dark, V12T.inner[k] || P.c.flesh1 || P.c.seg1 || '#ffffff'), { uP: P12(), uNP: { value: 0 }, uFC: { value: new THREE.Vector3() }, uInv: { value: new THREE.Vector3(1, 1, 1) }, uHit: { value: new THREE.Vector4() } });
       const lk = V12T.look[k] || [1, 1]; su.uSat.value = lk[0]; su.uGain.value = lk[1];
-      const skin = new THREE.ShaderMaterial({ vertexShader: R3T_VS, fragmentShader: R3T_FS, uniforms: su, defines: { FRUIT: 1 }, side: THREE.DoubleSide });
+      const tx = V12T.tex[k] || {}; su.uBump.value = T.hmap ? (tx.bump || 0) : 0; if (tx.spec) su.uSpec.value.set(tx.spec[0], tx.spec[1]); if (tx.rim !== undefined) su.uVin.value.y = tx.rim;   // круг 5: фактура вида
+      const skin = new THREE.ShaderMaterial({ vertexShader: R3T_VS, fragmentShader: R3T_FS, uniforms: su, defines: T.hmap && tx.bump ? { FRUIT: 1, BUMP: 1 } : { FRUIT: 1 }, side: THREE.DoubleSide });
       const cu = { uP: P12(), uNP: { value: 0 }, tR: { value: T.rmap }, uSc: { value: 1 }, uArt: { value: new THREE.Vector2() }, uFC: { value: new THREE.Vector3() }, uInv: { value: new THREE.Vector3(1, 1, 1) }, uClipY: { value: 1e9 },
         uL: { value: L }, uV: { value: Vv }, uTg: { value: tg }, uWet: { value: 0 }, uHit: { value: new THREE.Vector4() }, uAge: { value: 9 }, uDark: { value: r3c(P.dark) }, uPit: { value: P.pit || 0 }, uLong: { value: P.long || 0 } };
       for (const q in P.c) cu['c' + q[0].toUpperCase() + q.slice(1)] = { value: r3c(P.c[q]) };
