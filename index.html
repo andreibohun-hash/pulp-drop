@@ -3182,6 +3182,9 @@ const VIEW = {
   top: -14,             // верх кадра: обод короба над полем
   bottom: CFG.grindY + 122,   // низ кадра: бак под жерновами (v2: под бункерами — зона полёта 160 ед., жернова, бак)
   hudGap: 2,            // зазор под HUD, css px
+  swing: 90,            // v12 круг 6: «развали» — над верхом кучи на старте уровня столько ед. для замаха ниже кнопок верха (иначе масштаб меньше ширины)
+  swingFloor: true,     // …но не мельче круга 5 (короб 64…низ целиком под HUD): у 30 самых высоких куч запас тогда 28–88 ед., как в v9 на полном экране
+  swingSnap: 0.985,     // уменьшение меньше 1,5% не делается (по краям остались бы 1–3 px фона): поле во всю ширину, запас чуть меньше swing
   tank: [14, CFG.grindY + 50, 386, CFG.grindY + 118],   // бак (v2 — светлая стеклянная банка): x0, y0, x1, y1
   goalFrac: 0.78,       // отметка цели на такой доле высоты бака
   outline: 2.4,         // толщина контура фрукта
@@ -6484,7 +6487,10 @@ function applyTheme(){
 const VIEW_TANK = { top: VIEW.top, bottom: VIEW.bottom };   // кадр v2 (бак); v3 (заказ) — BAR.top…BAR.bottom
 const BAR5 = { top: 236, bottom: BAR.bottom };             // v5: кадр ниже — куча в чаше крупнее (верх кадра над ободом чаши)
 const VIEW7 = { top: 64, bottom: CFG.grindY + 61 };         // v7: стойки нет — низ экрана отдан куче, зоне полёта и жерновам; v10: + жёлоб целиком над лотком; v12 круг 5: жёлоб ниже (низ grindY + 58, тень + 61) — поле во всю ширину
-function setLayout(mode){ const L = mode === 'clear' ? VIEW7 : mode === 'order' ? (G.s && heapSet(G.s.level.set) ? BAR5 : BAR) : VIEW_TANK; if (VIEW.top !== L.top || VIEW.bottom !== L.bottom){ VIEW.top = L.top; VIEW.bottom = L.bottom; fit(); } }
+let LAY = null;                                              // v12 круг 6: текущий кадр; у VIEW7 верх (VIEW.top — обод) считает fit()
+function setLayout(mode){ const L = mode === 'clear' ? VIEW7 : mode === 'order' ? (G.s && heapSet(G.s.level.set) ? BAR5 : BAR) : VIEW_TANK; if (LAY !== L){ LAY = L; VIEW.top = L.top; VIEW.bottom = L.bottom; fit(); } }
+// v12 круг 6: верх кучи на старте уровня (fit оставляет над ним VIEW.swing ед. для замаха ниже кнопок верха)
+function heapTop(s){ let t = Infinity; for (const b of s.bodies) t = Math.min(t, b.y - (b.rad || 0)); return t; }
 // v6: следующий уровень готовится заранее по частям (досадка кучи — CFG.prepSteps шагов физики за кадр), пока идёт праздник
 // победы или висит карточка проигрыша: смена уровня не даёт кадра длиннее 33 мс (createState целиком — до 40 мс).
 const curSet = () => CFG.goalMode === 'clear' ? (is11() ? 'v11' : 'v7') : CFG.orderSet;   // v7: набор уровней «развали»
@@ -6503,6 +6509,7 @@ function startLevel(n, pre){                                  // pre — гот�
   drainEvents(G.s);
   fxr = mulberry32(n * 9973 + 17); resetFX(); resetSprites(); resetOrderFX();
   r3Level();                                                  // v12, этап 2: 3D Tripo в линейке v11
+  G.heapTop = heapTop(G.s);                                   // v12 круг 6: масштаб «развали» — от кучи этого уровня
   setLayout(G.s.mode); applyTheme(); buildBackground();
   G.s.world.on('begin-contact', onContact);
   const order = G.s.bodies.slice().sort((p, q) => q.y - p.y), N = order.length;      // въезд: нижние предметы первыми
@@ -6673,14 +6680,30 @@ $('btn-menu').onclick = () => { Sound.init(); Sound.play('click'); log('input', 
 $('btn-mute').onclick = () => { Sound.init(); G.save.muted = !G.save.muted; save(); Sound.setMuted(G.save.muted); hud(); log('input', 'button', 'mute=' + G.save.muted); if (!G.save.muted) Sound.play('click'); };
 
 // --- размер: resize + orientationchange + периодический пересчёт (§2). Кадр VIEW.top…VIEW.bottom вписывается под HUD. ---
+// v12 круг 6: «развали» (VIEW7) — поле во всю ширину на любом портретном экране, низ кадра (жернова, жёлоб) прижат к лотку.
+// Нехватку высоты отдаёт пустой верх короба: он уходит под строку «Level n» и за верх экрана, обод тогда не рисуется (VIEW.top
+// выше экрана, стенки до края). Масштаб меньше ширины — только если над кучей уровня не остаётся VIEW.swing ед. ниже кнопок верха,
+// ровно настолько, насколько нужно, и не меньше круга 5 (короб 64…низ целиком под HUD).
 function fit(){
   const r = $('game').getBoundingClientRect(); if (!r.width || !r.height) return;
   DPR = Math.min(window.devicePixelRatio || 1, 2);
   const hudB = $('hud').getBoundingClientRect().bottom - r.top, padB = parseFloat(getComputedStyle($('frame')).paddingBottom) || 0;
   const trayH = $('tray').classList.contains('hide') ? 0 : $('tray').offsetHeight + 6;    // v6: лоток оружия снизу — кадр над ним (v10: у подставки свои поля)
-  const top = hudB + VIEW.hudGap, avail = r.height - top - padB - 2 - trayH, span = VIEW.bottom - VIEW.top;
-  const k = Math.min(r.width / CFG.W, avail / span);
-  const nv = { k, ox: (r.width - CFG.W * k) / 2, oy: top + (avail - span * k) / 2 - VIEW.top * k, w: r.width, h: r.height };
+  const top = hudB + VIEW.hudGap, bot = r.height - padB - 2 - trayH, avail = bot - top;
+  let nv;
+  if (LAY === VIEW7){
+    const k0 = r.width / CFG.W, kc5 = Math.min(k0, avail / (VIEW.bottom - VIEW7.top));
+    const need = G.heapTop > -1e9 && G.heapTop < 1e9 ? G.heapTop - VIEW.swing : VIEW7.top;
+    let k = Math.max(VIEW.swingFloor ? kc5 : 0.2, Math.min(k0, avail / Math.max(100, VIEW.bottom - need)));
+    if (k >= k0 * VIEW.swingSnap) k = k0;
+    nv = { k, ox: (r.width - CFG.W * k) / 2, oy: bot - VIEW.bottom * k, w: r.width, h: r.height, k0, kc5 };
+    const yH = (top - nv.oy) / k;                             // мир у низа HUD
+    VIEW.top = yH <= VIEW7.top + 6 ? VIEW7.top : -nv.oy / k - 30;   // короб целиком под HUD — обод на месте; иначе — за верхом экрана
+  } else {
+    const span = VIEW.bottom - VIEW.top, k = Math.min(r.width / CFG.W, avail / span);
+    nv = { k, ox: (r.width - CFG.W * k) / 2, oy: top + (avail - span * k) / 2 - VIEW.top * k, w: r.width, h: r.height };
+  }
+  const k = nv.k;
   if (G.zoom){ const z = G.zoom, k2 = k * z.k; nv.k = k2; nv.ox = r.width / 2 - z.x * k2; nv.oy = top + avail / 2 - z.y * k2; }   // v8: стенд — крупно
   const cw = Math.round(r.width * DPR), ch = Math.round(r.height * DPR);
   const changed = cv.width !== cw || cv.height !== ch || Math.abs(nv.k - view.k) > 1e-6 || Math.abs(nv.ox - view.ox) > 0.01 || Math.abs(nv.oy - view.oy) > 0.01;
@@ -6936,6 +6959,19 @@ function hintText(s){
 // 4,5 с ничего не делает. Пропадает, как только начат жест (G.aim). Линия: первый бросок — из решения (мир ещё как записан); потом —
 // живая: самая низкая пробка в щели (шире щели или твёрдая), верёвка ляды, перец; инструмент — тот, что её берёт.
 const HINT11 = { idle: 4.5, max: 8 };
+// v12 круг 6: рука начинает бросок на экране. Путь знающего бывает начат за стенкой (x 409) или выше низа HUD — при поле во всю ширину
+// это за краем экрана. Показ (только вид) начинается с первой точки того же пути на экране (у самого края) — так палец и может.
+function hintVisible(P){
+  if (!P || P.length < 2) return P;
+  const r = $('game').getBoundingClientRect(), hb = $('hud').getBoundingClientRect().bottom - r.top + 6, m = 0.5;
+  const ok = (q) => { const sx = q[0] * view.k + view.ox, sy = q[1] * view.k + view.oy; return sx >= m && sx <= r.width - m && sy >= hb && sy <= r.height; };   // до самого края: путь от края экрана берёт те же куски
+  if (ok(P[0])) return P;
+  const tot = pathLen(P);
+  for (let i = 1; i < P.length; i++){ const a = P[i - 1], b = P[i], n = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / 2));
+    for (let j = 1; j <= n; j++){ const q = [a[0] + (b[0] - a[0]) * j / n, a[1] + (b[1] - a[1]) * j / n]; if (!ok(q)) continue;
+      const out = [q].concat(P.slice(j === n ? i + 1 : i)); return pathLen(out) >= tot * 0.55 && out.length >= 2 ? out : P; } }
+  return P;
+}
 function hintWant11(s){ const L = s.level; return (L.idx <= 10 || !!L.hint) && !s.flight && FX.tut.n < HINT11.max && s.moves > 0; }
 function liveHint11(s){
   if (!s.used && !s.thrown.length){ const t = sol7Peek(s); if (t) return t; }
@@ -6965,7 +7001,7 @@ function updateHint(){
     if (!can){ hideHint(); return; }
     const wait = s.level.hint && !s.used && !s.thrown.length ? 0.35 : HINT11.idle;
     if (!T.on && isSettled(s) && G.rt - Math.max(G.lastInput, G.introUntil + 1) > wait){   // простой — с конца названия уровня или с последнего касания
-      const t = liveHint11(s); if (t){ T.w = t.w; T.line = weaponPath(t.w, t.pts, s); if (T.line){ T.on = true; T.t0 = G.rt; T.n++; log('fx.start', 'hand', t.w + ' ' + (s.used + 1)); } } }
+      const t = liveHint11(s); if (t){ T.w = t.w; T.line = hintVisible(weaponPath(t.w, t.pts, s)); if (T.line){ T.on = true; T.t0 = G.rt; T.n++; log('fx.start', 'hand', t.w + ' ' + (s.used + 1)); } } }
     return;
   }
   const want = s && (s.level.set === 'v7' ? !!s.level.hint && s.used < s.level.hint.length && T.n < 4 && !s.flight && !!sol7Peek(s)
@@ -6975,7 +7011,7 @@ function updateHint(){
   if (!can){ hideHint(); return; }
   if (!T.on && isSettled(s) && G.rt - G.lastInput > (s.used ? 1.4 : 0.35)){
     T.w = null; T.line = s.mode === 'clear' ? sol7Peek(s) : s.mode === 'order' ? orderHintLine(s) : hintLine(s, introLine(s));
-    if (T.line && T.line.w){ T.w = T.line.w; T.line = weaponPath(T.w, T.line.pts, s); }   // v6: { w, pts } знающего → траектория
+    if (T.line && T.line.w){ T.w = T.line.w; T.line = hintVisible(weaponPath(T.w, T.line.pts, s)); }   // v6: { w, pts } знающего → траектория
     if (T.line){ T.on = true; T.t0 = G.rt; T.n++; log('fx.start', 'hand', (intro || 'cut') + ' ' + (s.used + 1)); }
   }
 }
