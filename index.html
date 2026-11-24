@@ -4931,7 +4931,7 @@ const toy9 = () => ART_STYLE === 'toy' && clear9();
 // Фонтан из жерновов: скорость вверх урезается так, чтобы капля взлетала не выше VIEW.fountH (выше при длинной цепочке).
 function fountClamp(vx, vy){
   if (!clear9()) return [vx, vy];
-  const h = VIEW.fountH[0] + (VIEW.fountH[1] - VIEW.fountH[0]) * Math.min(1, FX.chain / 8), vm = Math.sqrt(2 * VIEW.pg * h);
+  const h = Math.min(F13.live ? V13.bite.fxH : 1e9, VIEW.fountH[0] + (VIEW.fountH[1] - VIEW.fountH[0]) * Math.min(1, FX.chain / 8)), vm = Math.sqrt(2 * VIEW.pg * h);   // v13 круг 3: в лесу — у пил
   if (vy < -vm){ const k = vm / -vy; vx *= k; vy = -vm; }
   if (Math.abs(vx) > vm * 0.7) vx = Math.sign(vx) * vm * 0.7;
   return [vx, vy];
@@ -5518,7 +5518,8 @@ function liqTear(e, k, w){
   if (k > 0.3 || FX.chain > 3) glassDrop(hex, e.x);
 }
 // Лопнул в жерновах: клякса в обе стороны и вверх, сок вниз в сборник.
-function liqPop(g){
+function liqPop(g, own){
+  if (own){ const m = Math.sqrt(g.area); if (toy9()) filmAdd(g.x, 0.45, hexRgb(juiceHex(g.kind)), 42); if (clear9()) troughFeed(g.x, g.kind, 0.35, clamp(m / 60, 0, 1)); return; }   // v13 круг 3: только сок в корыто
   if (!LIQ.on) return;
   const c9 = clear9(), lk = F13.live ? V13.liqK : [1, 1], hex = juiceHex(g.kind), m = Math.sqrt(g.area), n = Math.round(clamp(m * 0.28, 5, 14) * (c9 ? VIEW.fountLiq[0] : 1) * lk[0]), boost = chainBoost(), rz = (c9 ? VIEW.fountLiq[1] : 1) * lk[1];
   for (let i = 0; i < n; i++){ const side = i % 2 ? 1 : -1, a = -Math.PI / 2 + side * (0.35 + R() * 0.9), sp = (180 + R() * 380) * boost, f = fountClamp(Math.cos(a) * sp, Math.sin(a) * sp);
@@ -5862,6 +5863,7 @@ function juiceFX(e){
   }
   if (s.mode === 'clear'){                                    // v9: бака нет — приток, звук и фонтан из щели (как в заказе)
     FX.inflow += share; Sound.playRL('pour', 0.07, +(s.juice / s.goal).toFixed(2)); if (e.crumb) return;
+    if (F13.live && (F13.frags.some(f => f.kind === e.kind) || s.grinding.some(g => g.kind === e.kind && F13.split.has(g.id)))) return;   // v13 круг 3: кусок ест пила — сок с обреза, не фонтан из щели
     const y = CFG.grindY - 2, cj = pcol(K0.juice);
     if (FX.fountain > 0){ FX.fountain--; spawnP(P_FOUNT, e.x + (R() - 0.5) * 16, y, (R() - 0.5) * 170, -(170 + R() * 250), (0.35 + R() * 0.35) * VIEW.dropLife, (1.3 + R() * 2) * VIEW.dropSize, cj); }
     return;
@@ -5940,20 +5942,21 @@ function sliceFX(e){
 // валики под ним подпрыгивают и мокнут соком.
 function tearFX(e){
   const K0 = KINDS[e.kind], A = ART[e.kind], m = Math.sqrt(e.area), k = clamp((m - 25) / 105, 0, 1), sz = clamp(m / 40, 0.7, 2.4);
-  const n = Math.round(VIEW.tearBits[0] + (VIEW.tearBits[1] - VIEW.tearBits[0]) * k), cj = pcol(K0.juice), cf = pcol(A.col.flesh), w = Math.min(70, m * 0.6), c9 = clear9();
+  const own = F13.split.has(e.id), pk = own ? V13.bite.tearK : 1;   // v13 круг 3: кусок ест пила (вид) — брызги удара реже, поток — с обреза
+  const n = Math.round((VIEW.tearBits[0] + (VIEW.tearBits[1] - VIEW.tearBits[0]) * k) * pk), cj = pcol(K0.juice), cf = pcol(A.col.flesh), w = Math.min(70, m * 0.6) * (own ? 0.5 : 1), c9 = clear9();
   for (let i = 0; i < Math.round((LIQ.on && isOrder() ? n * 0.3 : n) * (c9 ? VIEW.dropK : 1)); i++){ const a = -Math.PI / 2 + (R() - 0.5) * 1.9, sp = 240 + R() * 520;
-    spawnP(P_DROP, e.x + (R() - 0.5) * w, CFG.grindY - 4, Math.cos(a) * sp, Math.sin(a) * sp, 0.3 + R() * 0.45, (1.6 + R() * 2.6) * sz * (c9 ? VIEW.dropSize : 1), cj); }
-  for (let i = 0; i < Math.ceil(n / 3 * (c9 ? VIEW.pulpGrind : 1)); i++){ const a = -Math.PI / 2 + (R() - 0.5) * 1.5, sp = 200 + R() * 380;
+    spawnP(P_DROP, e.x + (R() - 0.5) * w, CFG.grindY - 4, Math.cos(a) * sp * (own ? 0.6 : 1), Math.sin(a) * sp * (own ? 0.6 : 1), 0.3 + R() * 0.45, (own ? 0.6 + R() * 0.6 : (1.6 + R() * 2.6) * sz * (c9 ? VIEW.dropSize : 1)), cj); }
+  for (let i = 0; i < (own ? 0 : Math.ceil(n / 3 * (c9 ? VIEW.pulpGrind : 1))); i++){ const a = -Math.PI / 2 + (R() - 0.5) * 1.5, sp = 200 + R() * 380;
     spawnP(P_PULP, e.x + (R() - 0.5) * w, CFG.grindY - 4, Math.cos(a) * sp, Math.sin(a) * sp, 0.45 + R() * 0.35, (2.6 + R() * 3.4) * sz, i % 3 ? cf : pcol(A.col.skin || K0.skin)); }
   if (A.col.seed && (e.kind === 'melon' || e.kind === 'apple' || e.kind === 'dragon' || e.kind === 'passion' || e.kind === 'kiwi')){ const cs = pcol(A.col.seed);
-    for (let i = 0; i < (c9 ? 1 + Math.round(2 * k) : 2 + Math.round(4 * k)); i++) spawnP(P_SEED, e.x + (R() - 0.5) * w, CFG.grindY - 4, (R() - 0.5) * 300, -250 - R() * 300, 0.7, 2.6, cs); }
+    for (let i = 0; i < (own ? 0 : c9 ? 1 + Math.round(2 * k) : 2 + Math.round(4 * k)); i++) spawnP(P_SEED, e.x + (R() - 0.5) * w, CFG.grindY - 4, (R() - 0.5) * 300, -250 - R() * 300, 0.7, 2.6, cs); }
   shake(0, 1, VIEW.tearShake[0] + (VIEW.tearShake[1] - VIEW.tearShake[0]) * k);
   const step = CFG.W / VIEW.rollers;
   for (let i = 0; i < VIEW.rollers; i++){ const d = Math.abs((i + 0.5) * step - e.x); if (d < w / 2 + step) FX.rollKick[i] = Math.max(FX.rollKick[i] || 0, (2 + 5 * k) * (1 - d / (w / 2 + step + 1))); }
   FX.wet = 1; FX.wetCol = K0.juice;
   if (k > 0.55 && G.rt - (FX.tearStopAt || 0) > 0.3){ FX.tearStopAt = G.rt; G.hitstopUntil = Math.max(G.hitstopUntil, G.rt + 0.04); FX.hitstopOn = true; }
   if (isOrder()){                                            // v5: цепочка перемола, фонтан жидким соком, валики под куском мокнут его соком
-    FX.chain += 1; liqTear(e, k, w); const jc = juiceHex(e.kind);
+    FX.chain += 1; if (!own) liqTear(e, k, w); const jc = juiceHex(e.kind);
     for (let i = 0; i < VIEW.rollers; i++){ const d = Math.abs((i + 0.5) * step - e.x); if (d < w / 2 + step * 1.2) FX.rwet[i] = { a: Math.min(1, ((FX.rwet[i] && FX.rwet[i].col === jc ? FX.rwet[i].a : 0)) + 0.6), col: jc }; }
     if (toy9()) filmAdd(e.x, V9.tear[0] * (1 + k), hexRgb(jc), V9.tear[1] + V9.tear[2] * k); if (clear9()) troughFeed(e.x, e.kind, 0.25 + 0.5 * k, k);   // v9: плёнка вдоль ряда и волна в жёлобе
   }
@@ -5963,6 +5966,7 @@ function tearFX(e){
 }
 // Кусок исчез в жерновах: последний хлюп.
 function groundFX(e){
+  if (F13.split.has(e.id)) return;                           // v13 круг 3: кусок доедает вид — последний хлюп там, где доели
   const m = Math.sqrt(e.area || 400), cj = pcol(KINDS[e.kind].juice);
   for (let i = 0; i < Math.min(14, 3 + m / 10) * (clear9() ? VIEW.dropK : 1); i++){ const a = -Math.PI / 2 + (R() - 0.5) * 1.2, sp = 150 + R() * 300; spawnP(P_FOUNT, e.x + (R() - 0.5) * 20, CFG.grindY, Math.cos(a) * sp, Math.sin(a) * sp, 0.35, 1.5 + R() * 2, cj); }
   Sound.playRL('ground', 0.1, Math.round(e.area || 0));
@@ -5971,13 +5975,15 @@ function groundFX(e){
 function updateGrindFX(gdt){
   const s = G.s; if (!s) return;
   if (isOrder()){ FX.chain *= Math.exp(-gdt * 1.3); for (const w of FX.rwet) if (w) w.a *= Math.exp(-gdt * 0.18);
-    for (const g of s.grinding){ if (g.p >= LQV.pop && !FX.gpop.has(g.id)){ FX.gpop.set(g.id, G.rt); liqPop(g); Sound.playRL('squish', 0.04, Math.round(g.area) + Math.min(8, Math.round(FX.chain)) * 10000);
+    for (const g of s.grinding){ if (g.p >= LQV.pop && !FX.gpop.has(g.id) && F13.split.has(g.id)){ FX.gpop.set(g.id, G.rt); liqPop(g, true); }   // v13 круг 3: вид ест — без кляксы ядра
+      if (g.p >= LQV.pop && !FX.gpop.has(g.id)){ FX.gpop.set(g.id, G.rt); liqPop(g); Sound.playRL('squish', 0.04, Math.round(g.area) + Math.min(8, Math.round(FX.chain)) * 10000);
         const cf = pcol(ART[g.kind].col.flesh); for (let i = 0; i < (4 + Math.round(Math.sqrt(g.area) / 12)) * (clear9() ? VIEW.pulpGrind : 1); i++){ const a = -Math.PI / 2 + (R() - 0.5) * 2.4, sp = 160 + R() * 300;
           spawnP(P_PULP, g.x, CFG.grindY, Math.cos(a) * sp, Math.sin(a) * sp, 0.5 + R() * 0.3, 3 + R() * 3.5, cf); } }
       if (toy9()) filmAdd(g.x, gdt * 1.4, hexRgb(juiceHex(g.kind)), 26);                     // v9: жуёт — плёнка не сохнет
       else if (LIQ.on && R() < gdt * 18 * Math.sqrt(g.area) / 40) liqSpawn(L_FLOW, g.x + (R() - 0.5) * 24, CFG.grindY + 30, (R() - 0.5) * 50, 50, 2, 2 + R() * 1.4, juiceHex(g.kind)); }
     if (FX.gpop.size > 60) for (const [id, t] of FX.gpop) if (G.rt - t > 3) FX.gpop.delete(id); }
   for (const g of s.grinding){
+    if (F13.split.has(g.id)) continue;                       // v13 круг 3: брызги — с обреза куска на пилах, не с места ядра
     const m = Math.sqrt(g.area), rate = m * 2.4 / g.dur * (1 - g.p) * (clear9() ? 0.5 : 1);
     g.fxAcc = (g.fxAcc || 0) + rate * gdt;
     const cj = pcol(KINDS[g.kind].juice), cf = pcol(ART[g.kind].col.flesh), w = Math.min(70, m * 0.6), sz = clamp(m / 45, 0.7, 2);
@@ -6088,7 +6094,7 @@ function onEvent(e){
     case 'served': servedFX(e); break;
     case 'split': splitFX(e); if (PIECES === 'slab') slabBorn(e, e.w || FX.sliceW || 'knife'); FX.sliceW = 'knife'; break;
     case 'crumb': burst(e.kind, e.x, e.y, 10, false); break;
-    case 'grind': tearFX(e); if (F13.live) frag13Grind(e); break;   // v2: кусок долетел до жерновов; v13: разлетается частями, искры, сок веером
+    case 'grind': if (F13.live) bite13Grind(e); tearFX(e); break;   // v2: кусок долетел до жерновов; v13 круг 3: его ест пила (вид), брызги удара — меньше
     case 'juice': juiceFX(e); break;
     case 'ground': groundFX(e); F13.split.delete(e.id); break;
     case 'refund': avalancheFX(e); break;
@@ -8071,7 +8077,7 @@ function r3Draw(c, s, sh){
   const res = G.lab3 ? 1 : r3Res(t0), W = Math.max(1, Math.round(cv.width * res)), H = Math.max(1, Math.round(cv.height * res));
   if (R3.cv.width !== W || R3.cv.height !== H){ R3.cv.width = W; R3.cv.height = H; R3.ren.setSize(W, H, false); }
   r3SetCam(sh);
-  saw13Update(); if (F13.live || F13.gates.length) gate13Sync(s); if (F13.frags.length) frag13Update(R3.dt);   // v13: пилы, ляды, части от пил
+  const tu = performance.now(); saw13Update(); if (F13.live || F13.gates.length) gate13Sync(s); if (F13.frags.length) bite13Update(R3.dt); shard13Update(R3.dt); wet13Update(R3.dt); R3.stats.updMs = +(performance.now() - tu).toFixed(2);   // v13: пилы, ляды; круг 3: пила ест куски, осколки, сок на дисках
   const live = new Set(), flat = []; let built = 0, tris = 0, nb = 0; const tv = R3.mode === 'tripo' && !!R3.tready;
   if (tv !== R3.lastTv){ for (const e of R3.ents.values()) r3Drop(e); R3.ents.clear(); R3.lastTv = tv; }
   const tgv = Math.tan(V12.tilt * Math.PI / 180), tbv = Math.tan(V12.bevel * Math.PI / 180);
@@ -8105,10 +8111,9 @@ function r3Draw(c, s, sh){
   for (const b of s.bodies){ if (!K3[b.kind] || (tv && !R3T.fr[b.kind]) || (!tv && !K3PROC.includes(b.kind))){ flat.push(b); continue; } if (!put(b, null)) flat.push(b); }
   R3.ghosts = 0;
   if (tv) for (const gr of s.grinding){ if (!R3T.fr[gr.kind]) continue; if (F13.split.has(gr.id)){ R3.ghosts++; continue; } if (put(gr, gr)) R3.ghosts++; }
-  if (tv && F13.frags.length){ let nn = 0; for (const f of F13.frags){ const fresh = !R3.ents.has(f.id); if (fresh && nn >= V13.frag.perFrame) continue; if (fresh) nn++;   // v13: части от пил (новых сеток — не больше perFrame за кадр)
-    if (put(f, null)){ const e = R3.ents.get(f.id); if (e && e.mesh && e.mesh.ud){ const E = e.mesh.matrix.elements;   // круг 2: в щели — меньше и за дисками (их «доедают» зубья)
-      if (f.ph === 'sink'){ const k = 1 - 0.6 * Math.min(1, f.pt / V13.chew.sink); for (const j of [0, 1, 2, 4, 5, 6, 8, 9, 10]) E[j] *= k; E[14] = -(f.rad * k + 6); e.mesh.ud.clip = CFG.grindY + 14; }
-      else e.mesh.ud.clip = 1e9; } } } }
+  if (tv && F13.frags.length){ let nn = 0; for (const f of F13.frags){ const e0 = R3.ents.get(f.id), fresh = !e0 || e0.verts !== f.verts; if (fresh && nn >= V13.frag.perFrame) continue; if (fresh) nn++;   // v13: куски на пилах (новых сеток — не больше perFrame за кадр)
+    if (put(f, null)){ const e = R3.ents.get(f.id); if (e && e.mesh && e.mesh.ud){ const E = e.mesh.matrix.elements;   // круг 3: за дисками (зубья — перед обрезом), дрожь, рывок; обрез — на линии зубьев
+      E[12] = f.x + f.jx; E[13] = f.y + f.jy + f.ky; E[14] = -(f.rad + V13.bite.z) * f.zk; e.mesh.ud.clip = f.clip; } } } }
   for (const [id, e] of R3.ents) if (!live.has(id)){ r3Drop(e); R3.ents.delete(id); }
   for (const b of flat) drawBody(c, b, sh);                                 // вид без модели — спрайтом под 3D
   const t1 = performance.now();
@@ -8340,11 +8345,12 @@ precision highp float;
 uniform sampler2D tMap; uniform sampler2D tNrm; uniform float uHasN; uniform vec2 uNS; uniform float uSat; uniform float uGain;
 uniform vec3 uL; uniform vec3 uV; uniform vec3 uDark; uniform vec3 cIn; uniform float uPore; uniform mat4 modelMatrix; uniform vec3 uTint;
 #ifdef FRUIT
-uniform vec4 uP[12]; uniform int uNP; uniform vec3 uFC; uniform vec3 uInv; uniform vec4 uHit;
+uniform vec4 uP[12]; uniform int uNP; uniform vec3 uFC; uniform vec3 uInv; uniform vec4 uHit; uniform vec3 uCut;
 #endif
 varying vec3 vPa; varying vec3 vN; varying vec2 vUv; varying vec3 vW; varying float vSy; uniform float uClipY;
 ${R3NOISE}
 uniform vec2 uWrap; uniform vec2 uShade; uniform vec3 uVin;   // круг 4: винил — переход света, тень (степень, доля), (яркость света, кромка, отсвет)
+uniform float uBand;   // v13 круг 3: полоса мякоти на обрезе пилой (ед.)
 uniform vec4 uRimC; uniform vec4 uOcc[3];   // v13 круг 2: кромочный свет фона по состоянию (rgb, сила); тени соседей сверху (x, y, r, сила)
 uniform vec2 uSpec;   // круг 5: мягкий отсвет вида — сила и степень (вишня и перец — глянцевее, арбуз — восковой широкий, остальные — едва)
 #ifdef BUMP
@@ -8396,6 +8402,8 @@ void main(){
     vec3 cr = vor2(p * 7.5 + 3.0); float ln = 1.0 - smoothstep(0.0, 0.045, cr.y);
     float an = atan(p.y - uHit.y, p.x - uHit.x); float ray = (1.0 - smoothstep(0.004, 0.02, abs(sin(an * 3.5 + vn2(p * 5.0) * 1.5)) * dd)) * smoothstep(0.03, 0.08, dd);
     c = mix(c, uDark * 0.55, max(ln * step(dd, uHit.z * 0.55), ray) * m * 0.9); }
+  if (uClipY < 1e8){ float cb = smoothstep(uClipY - uBand, uClipY - uBand * 0.3, vSy);           // v13 круг 3: пила срезает снизу — свежая грань мякоти, у кромки сок
+    c = mix(c, uCut * 1.05, cb * 0.92); c = mix(c, uCut * 0.62, smoothstep(uClipY - 0.9, uClipY, vSy) * 0.6); }
 #endif
   gl_FragColor = vec4(clamp(c * uTint, 0.0, 1.0), 1.0);
 }`;
@@ -8426,7 +8434,7 @@ async function r3TInit(){
     const skinU = (T, dark, inn) => ({ tMap: { value: T.map }, tNrm: { value: T.nmap || null }, uHasN: { value: T.nmap ? 1 : 0 }, uNS: { value: new THREE.Vector2(V12T.nrm[0] * V12T.nrmK, V12T.nrm[1] * V12T.nrmK) }, uSat: { value: 1 }, uGain: { value: 1 },
       uL: { value: L }, uV: { value: Vv }, uTg: { value: tg }, uDark: { value: r3c(dark) }, cIn: { value: r3c(inn) }, uArt: { value: new THREE.Vector2() }, uSc: { value: 1 }, uClipY: { value: 1e9 },
       uWrap: { value: new THREE.Vector2(...V12T.vinyl.wrap) }, uShade: { value: new THREE.Vector2(...V12T.vinyl.shade) }, uVin: { value: new THREE.Vector3(V12T.vinyl.lit, V12T.vinyl.rim, V12T.vinyl.sheen[0]) }, uPore: { value: 0 },
-      uSpec: { value: new THREE.Vector2(V12T.vinyl.sheen[0], V12T.vinyl.sheen[1]) }, tH: { value: T.hmap || null }, uBump: { value: 0 }, uTint: R3.tint, uRimC: R3.rimC, uOcc: { value: Array.from({ length: 3 }, () => new THREE.Vector4()) } });
+      uSpec: { value: new THREE.Vector2(V12T.vinyl.sheen[0], V12T.vinyl.sheen[1]) }, tH: { value: T.hmap || null }, uBump: { value: 0 }, uTint: R3.tint, uRimC: R3.rimC, uBand: { value: V13.bite.band }, uOcc: { value: Array.from({ length: 3 }, () => new THREE.Vector4()) } });
     R3.tmats = R3.tmats || {}; R3.kready = R3.kready || {}; R3T.miss = R3T.miss || {};
     R3.toolScene = new THREE.Scene();                                        // этап 2: инструменты — спрайты (сцена пустая)
     { const Q = V12T.shelf, m = new THREE.Mesh(r3ShelfGeo(Q), new THREE.ShaderMaterial({ vertexShader: R3T_VS, fragmentShader: R3T_FS, uniforms: skinU({}, '#143a62', Q.col), defines: { FLAT: 1 } }));
@@ -8438,7 +8446,7 @@ async function r3TInit(){
       const kl = [k, +tq.toFixed(0), +performance.now().toFixed(0)]; (R3.klog = R3.klog || []).push(kl);
       const t0 = performance.now(), g = await r3GLB(buf), T = r3FitFruit(k, g, true); T.ms = [+(performance.now() - t0).toFixed(1)];
       await r3Yield(); let t1 = performance.now(); r3TMap(T); T.ms.push(+(performance.now() - t1).toFixed(1));
-      const P = K3[k], su = Object.assign(skinU(T, P.dark, V12T.inner[k] || P.c.flesh1 || P.c.seg1 || '#ffffff'), { uP: P12(), uNP: { value: 0 }, uFC: { value: new THREE.Vector3() }, uInv: { value: new THREE.Vector3(1, 1, 1) }, uHit: { value: new THREE.Vector4() } });
+      const P = K3[k], su = Object.assign(skinU(T, P.dark, V12T.inner[k] || P.c.flesh1 || P.c.seg1 || '#ffffff'), { uP: P12(), uNP: { value: 0 }, uFC: { value: new THREE.Vector3() }, uInv: { value: new THREE.Vector3(1, 1, 1) }, uHit: { value: new THREE.Vector4() }, uCut: { value: r3c(P.c.flesh0 || P.c.seg0 || P.c.flesh1 || '#ffffff') } });   // круг 3: uCut — мякоть на обрезе пилой
       const lk = V12T.look[k] || [1, 1]; su.uSat.value = lk[0]; su.uGain.value = lk[1];
       const tx = V12T.tex[k] || {}; su.uBump.value = T.hmap ? (tx.bump || 0) : 0; if (tx.spec) su.uSpec.value.set(tx.spec[0], tx.spec[1]); if (tx.rim !== undefined) su.uVin.value.y = tx.rim;   // круг 5: фактура вида
       const skin = new THREE.ShaderMaterial({ vertexShader: R3T_VS, fragmentShader: R3T_FS, uniforms: su, defines: T.hmap && tx.bump ? { FRUIT: 1, BUMP: 1 } : { FRUIT: 1 }, side: THREE.DoubleSide });
@@ -8621,18 +8629,29 @@ const V13 = {
   // корыто (ед. ниже grindY): задняя кромка, дно у задней стенки (пусто) и сок у неё же (полно), передняя кромка (верх), её толщина,
   // низ передней доски, низ ножек; торцы, ножки — ширина
   trough: { back: 31, floor: 53.5, full: 35, rim: 54, lip: 2.4, face: 63, leg: 72, cap: 7, legW: 11 },
-  // куски от пил: потолок частей в кадре, новых сеток за кадр, меньше такой площади — без кусков; взлёт (ед.), вбок (ед./с), g, кувырок
-  frag: { max: 28, soft: 14, perFrame: 4, small: 170, up: [50, 70], upBig: [0.8, 220], side: [60, 140], g: 2300, spin: [6, 12], trisCap: 120000 },   // soft: столько частей — дальше без новых резов (части уходят в щели)   // upBig: крупные ниже (множитель не меньше [0], −√площади/[1])
-  // круг 2: распил на пилах — поколений (0 — части от ядра), меньше такой площади — в сок, высота подскока следующего поколения (доля),
-  // укус (с: лежит на зубьях), уход в щель (с), веер сока и стружка на укус
-  chew: { gens: 3, minA: 60, hK: 0.55, sideK: 0.75, bite: 0.06, wait: 0.08, sink: 0.22, fan: [2, 4], fanS: [0.8, 1.6], chips: [3, 6], n0: [2, 3, 1400], drop: 1 },   // drop: с этого поколения меньшая половина реза сразу уходит в щель
-  fx: { motes: 14, flies: 8, sparks: [3, 6], sparkMax: 40, fan: [5, 9] },
+  // куски на пилах: потолок кусков в кадре, новых сеток за кадр (раскол), треугольников
+  frag: { max: 28, perFrame: 4, trisCap: 120000 },
+  // круг 3: пила ест кусок. eat — время съедания от мелочи до половины арбуза (с) по √площади [от, до]; drag — тянет по вращению к щели
+  // (ед./с, доля пути за с); jit — дрожь (ед.) и доворот (рад); kick — подброс зубом: доля кусков, высота (ед., ≤ 10), когда (с);
+  // clip — обрез под вершинами зубьев (ед.), band — полоса мякоти на обрезе (ед.); imp — гашение удара (с); split — раскол крупного:
+  // площадь, на какой доле съедания, на 3 части — от площади; z — кусок за дисками (ед. сверх радиуса)
+  bite: { eat: [0.18, 0.85], eatA: [13, 60], drag: [38, 1.8], jit: [0.9, 0.05], kick: [0.4, 8, 0.03, 0.12], clip: 4.5, band: 6, imp: 0.03,
+    split: [1500, 0.22, 3200], z: 4, slow: 0.55, tick: 0.075, tearK: 0.35, fxH: 60,
+    // поток с обреза: осколков в с на (ширина обреза × скорость съедания), потолок в с; соку и стружки — во столько раз больше осколков
+    rate: [0.0085, 8, 42], juiceK: 0.8, chipK: 1.0, rindEnd: 0.32, juiceSec: 80,
+    // осколки (3D, одна сетка на всех): потолок, скорость вдоль вращения и вверх (ед./с), тяжесть, размер (ед.), кувырок (рад/с);
+    // на зубьях: доля прилипающих, держатся (с), не больше на диск; в прорезях — доля на укус в с
+    shard: { max: 72, vx: [60, 190], vy: [150, 330], g: 2000, size: [2.2, 4.8], spin: [9, 22], stick: 0.22, hold: [1.0, 2.6], perDisc: 4, slot: 3, ride: [0.16, 0.32], perSec: 55 },
+    // сок на диске (карта по углу диска): бинов, намокание кромки в с, перетекание к ступице в с, высыхание кромки и размаза (с),
+    // капли с зубьев (в с на мокрый диск), потёки вниз на медленном диске (ед.)
+    wet: { nb: 64, rate: 9, flow: 2.2, dry: [0.9, 1.5], drops: 7, run: 9 } },
+  fx: { motes: 14, flies: 8, sparks: [3, 6], sparkMax: 40 },
   occ: [3, 7, 0.93, 0.42],
   liqK: [0.35, 0.7],                                         // круг 2: фонтан жидкого сока v9 на перемоле — доля числа капель и размер                                   // круг 2: тень соседа сверху на фрукте: сдвиг от света (x, y), доля радиуса, сила
   contact: [0.55, 4.6],                                       // круг 2: тень-контакт фрукта на дереве: сила, полувысота, ед.
 };
 const F13 = { st: -1, from: -1, at: -9, force: -1, img: {}, cv: null, cvKey: '', prev: null, tint0: [1, 1, 1], tint1: [1, 1, 1], live: false, vst: [], vcol: [],
-  baked: false, front: null, frontY: 0, sawG: null, saws: [], gates: [], frags: [], split: new Set(), sparks: [], ang: 0, nid: 0, ray: null, glow: null, fog: null, css: false, stats: {} };
+  baked: false, front: null, frontY: 0, sawG: null, saws: [], gates: [], frags: [], split: new Set(), sparks: [], nid: 0, shd: null, shM: null, wm: null, da: null, dw: null, om: null, dl: null, tickAt: 0, ray: null, glow: null, fog: null, css: false, stats: {} };
 const forest13 = () => V13.on && ART_STYLE === 'toy' && r3Game();
 const state13 = (n) => F13.force >= 0 ? F13.force : Math.floor((Math.max(1, n) - 1) / V13.block) % V13.states.length;
 function img13(k){
@@ -8753,12 +8772,13 @@ void main(){
   gl_FragColor = vec4(clamp(c * uTint, 0.0, 1.0), 1.0);
 }`;
 // Сталь пил: круговая шлифовка по радиусу, полоса отсвета через центр к свету (стоит на месте, пока диск крутится), зубья темнее,
-// холодная кромка; мокрая от сока снизу (плёнка ряда, V9.film).
+// холодная кромка. Круг 3: сок — карта по углу диска (tWet: строка 2i — кромка, 2i+1 — размаз), крутится с диском: кромка цветом фрукта,
+// размаз спиралью к ступице, на медленном диске — потёки вниз (uRot.z, ед.); контур не мокнет.
 const S13_VS = `uniform float uTg; attribute vec3 aCol; varying vec3 vW; varying vec3 vN; varying vec3 vP; varying vec2 vC; varying vec3 vCol;
 void main(){ vN = mat3(modelMatrix) * normal; vP = position; vCol = aCol; vC = (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xy;
   vec4 wp = modelMatrix * vec4(position, 1.0); vW = wp.xyz; wp.y += uTg * max(wp.z, 0.0); gl_Position = projectionMatrix * viewMatrix * wp; }`;
 const S13_FS = `precision highp float;
-uniform vec3 uL; uniform vec3 uV; uniform vec2 uWrap; uniform vec3 uTint; uniform vec4 uWet; uniform float uR0; uniform float uDim;
+uniform vec3 uL; uniform vec3 uV; uniform vec2 uWrap; uniform vec3 uTint; uniform float uR0; uniform float uDim; uniform sampler2D tWet; uniform float uRow; uniform float uRows; uniform vec3 uRot;
 varying vec3 vW; varying vec3 vN; varying vec3 vP; varying vec2 vC; varying vec3 vCol;
 ${R3NOISE}
 void main(){
@@ -8774,7 +8794,19 @@ void main(){
   c += vec3(0.95, 0.97, 1.0) * an * 0.2;
   c = mix(c, c * 0.78 + vec3(0.05, 0.07, 0.1), smoothstep(0.55, 0.95, fr));
   c *= mix(0.5, 1.0, smoothstep(0.62, 0.93, abs(N.z)));                                     // фаска и бок диска — тёмная кромка по зубьям и прорезям
-  if (uWet.a > 0.0){ float m = uWet.a * smoothstep(-3.0, 9.0, q.y + 3.0 * vn2(vec2(th * 2.5, r * 0.25))); c = mix(c, uWet.rgb * (0.62 + 0.45 * w), m * 0.38); c += vec3(1.0) * m * 0.25 * pow(max(dot(N, H), 0.0), 30.0); }
+  { float dry = step(-1.4, vP.z), ua = atan(vP.y, vP.x) / 6.2831853 + 0.5, y0 = (uRow * 2.0 + 0.5) / uRows, y1 = (uRow * 2.0 + 1.5) / uRows, hub = uR0 * 0.36;
+    float sp = (uR0 - r) * 0.05;                                                                                              // спираль: размаз отстаёт от кромки к ступице
+    float stk = smoothstep(0.5, 0.78, vn2(vec2(ua * 26.0 + sp * 6.0, r * 0.1)));                                             // полосы сока по ходу вращения
+    vec4 A = texture2D(tWet, vec2(ua, y0)); float mR = A.a * smoothstep(uR0 - 4.5, uR0 - 1.0, r) * (0.7 + 0.3 * stk) * dry;   // кромка: зубья в месте реза
+    vec4 B = texture2D(tWet, vec2(ua + sp * 0.6, y1)); float mS = B.a * smoothstep(hub, hub + 3.0, r) * (0.16 + 0.84 * stk) * (0.35 + 0.65 * smoothstep(hub, uR0, r)) * dry;
+    float mD = 0.0; vec3 cD = B.rgb;
+    float cx = q.x * 0.36, cid = floor(cx), L = uRot.z * (0.4 + 0.6 * vn2(vec2(cid * 1.37, 4.1))) * step(0.5, vn2(vec2(cid * 1.91, 2.7)));
+    if (L > 0.5){ vec2 q2 = q - vec2(0.0, L);                                                                                // потёки: редкие дорожки — сок сверху стекает вниз
+      float a2 = atan(q2.y, q2.x) - uRot.x; a2 = uRot.y > 0.0 ? a2 : 3.14159265 - a2; vec4 B2 = texture2D(tWet, vec2(a2 / 6.2831853 + 0.5, y1)); float r2 = length(q2);
+      mD = B2.a * smoothstep(hub, hub + 4.0, r2) * step(r2, uR0) * (1.0 - smoothstep(0.06, 0.16, abs(fract(cx) - 0.5))) * 0.85 * dry; cD = B2.rgb; }
+    float m = max(max(mR, mS), mD); vec3 jc = mR >= max(mS, mD) ? A.rgb : (mD > mS ? cD : B.rgb);
+    vec3 wc = pow(jc, vec3(1.35)) * (0.42 + 0.55 * w);                                                                      // сок на стали: темнее и гуще цвета брызг
+    c = mix(c, wc, clamp(m * 1.15, 0.0, 0.92)); c += vec3(1.0) * m * 0.5 * pow(max(dot(N, H), 0.0), 40.0) + vec3(1.0) * m * 0.12 * an; }
   gl_FragColor = vec4(clamp(c * uTint * uDim, 0.0, 1.0), 1.0);
 }`;
 function u13(){                                               // общие униформы света (ссылки — меняются разом)
@@ -8908,7 +8940,7 @@ function woodCss13(){                                         // фактура 
   g.putImageData(im, 0, 0); document.documentElement.style.setProperty('--wood13', 'url(' + c.toDataURL('image/jpeg', 0.86) + ')');
 }
 // --- пилы: диск с крючковатыми зубьями и тремя прорезями, ступица, болт со шлицем; одна сетка на диск (цвет — в вершинах) ---
-function saw13Mat(){ const U = u13(); return new THREE.ShaderMaterial({ vertexShader: S13_VS, fragmentShader: S13_FS, uniforms: Object.assign({}, U, { uWet: { value: new THREE.Vector4() }, uR0: { value: V13.saw.r0 }, uDim: { value: 1 } }), side: THREE.BackSide }); }
+function saw13Mat(row){ const U = u13(); return new THREE.ShaderMaterial({ vertexShader: S13_VS, fragmentShader: S13_FS, uniforms: Object.assign({}, U, { uR0: { value: V13.saw.r0 }, uDim: { value: 1 }, tWet: { value: wet13().tex }, uRow: { value: row || 0 }, uRows: { value: 2 * V13.saw.n }, uRot: { value: new THREE.Vector3(0, 1, 0) } }), side: THREE.BackSide }); }
 function col13(geo, hex){ const c = hexRgb(hex), n = geo.attributes.position.count, A = new Float32Array(n * 3); for (let i = 0; i < n; i++){ A[3 * i] = c[0] / 255; A[3 * i + 1] = c[1] / 255; A[3 * i + 2] = c[2] / 255; } geo.setAttribute('aCol', new THREE.BufferAttribute(A, 3)); return geo; }
 function merge13(list){                                       // [{ geo, col }] → одна неиндексированная сетка (позиция, нормаль, цвет)
   const gs = list.map(q => ({ g: q.geo.index ? q.geo.toNonIndexed() : q.geo, c: hexRgb(q.col) })); let n = 0; for (const q of gs) n += q.g.attributes.position.count;
@@ -8938,18 +8970,19 @@ function saw13Geo(){
 function saw13Init(){
   if (F13.sawG) return;
   const Q = V13.saw, geo = saw13Geo(), G0 = new THREE.Group(); F13.saws = [];
-  for (let i = 0; i < Q.n; i++){ const m = new THREE.Mesh(geo, saw13Mat()); m.frustumCulled = false; G0.add(m); F13.saws.push(m); }
-  F13.sawTris = geo.attributes.position.count / 3 * Q.n; F13.sawG = G0; R3.scene.add(G0);
+  for (let i = 0; i < Q.n; i++){ const m = new THREE.Mesh(geo, saw13Mat(i)); m.frustumCulled = false; G0.add(m); F13.saws.push(m); }
+  F13.sawTris = geo.attributes.position.count / 3 * Q.n; F13.sawG = G0; R3.scene.add(G0); shard13Init();   // круг 3: осколки — с пилами (шейдер прогревается первым кадром)
 }
-function saw13Update(){
+function saw13Update(){                                       // круг 3: у каждого диска своя скорость — под куском садится, потом набирает
   const Q = V13.saw, on = F13.live; if (on) saw13Init(); if (!F13.sawG) return; F13.sawG.visible = on; if (!on) return;
-  const sp = (Q.spin[0] + (Q.spin[1] - Q.spin[0]) * FX.load) * (1 + V9.chainSpin * Math.min(6, FX.chain));
-  F13.ang += (REDUCED ? 0.3 : 1) * sp * (R3.dt || 0);
-  const step = CFG.W / Q.n, Fm = FX.film, nf = V9.film.n;
-  F13.saws.forEach((m, i) => { const cx = step * (i + 0.5), mir = i % 2 ? -1 : 1;
-    m.position.set(cx, CFG.grindY + Q.cy + (FX.rollKick[i * VIEW.rollers / Q.n | 0] || 0) * 0.6, mir > 0 ? 1.6 : -1.6); m.scale.set(mir, 1, 1); m.rotation.z = -mir * F13.ang + i * 0.9;
-    m.material.uniforms.uDim.value = mir > 0 ? 1 : Q.dim;
-    const u = m.material.uniforms.uWet.value; if (Fm){ const j = clamp(Math.floor(cx / CFG.W * nf), 0, nf - 1), w = Math.min(1, Fm.w[j] * 1.2); u.set(Fm.r[j] / 255, Fm.g[j] / 255, Fm.b[j] / 255, w); } else u.w = 0; });
+  const base = (Q.spin[0] + (Q.spin[1] - Q.spin[0]) * FX.load) * (1 + V9.chainSpin * Math.min(6, FX.chain)), dt = R3.dt || 0, C = V13.bite;
+  const DW = F13.dw || (F13.dw = new Float32Array(Q.n).fill(1)), DA = F13.da || (F13.da = new Float32Array(Q.n)), OM = F13.om || (F13.om = new Float32Array(Q.n)), DL = F13.dl, M = F13.wm;
+  const step = CFG.W / Q.n;
+  F13.saws.forEach((m, i) => { const cx = step * (i + 0.5), mir = i % 2 ? -1 : 1, tg = 1 - C.slow * Math.min(1, DL ? DL[i] : 0);
+    DW[i] += (tg - DW[i]) * Math.min(1, dt * (tg < DW[i] ? 14 : 3.5)); OM[i] = (REDUCED ? 0.3 : 1) * base * DW[i]; DA[i] += OM[i] * dt;
+    m.position.set(cx, CFG.grindY + Q.cy + (FX.rollKick[i * VIEW.rollers / Q.n | 0] || 0) * 0.6, mir > 0 ? 1.6 : -1.6); m.scale.set(mir, 1, 1); m.rotation.z = -mir * DA[i] + i * 0.9;
+    const U = m.material.uniforms; U.uDim.value = mir > 0 ? 1 : Q.dim; U.uRot.value.set(m.rotation.z, mir, M ? C.wet.run * Math.min(1, M.avg[i] * 2.5) * clamp(1.4 - OM[i] / 5, 0, 1) : 0); });
+  if (DL) DL.fill(0);
 }
 // Круг 2: корыто — предмет, без шкалы. Сок виден сверху между задней стенкой и передней кромкой; уровень — на глаз (доля кучи из ядра,
 // как прежде), на победе — перелив через кромку. Струйки — в щелях между дисками (с мокрых пил и от догрызенных кусков).
@@ -9049,7 +9082,7 @@ function grass13(k){
 // Искры — редкие и только в момент перемола; сок веером.
 function sparks13(x){
   const Q = V13.fx, n = Q.sparks[0] + Math.floor(r3Hash(x * 3.31 + G.rt * 1.7) * (Q.sparks[1] - Q.sparks[0] + 1));
-  for (let i = 0; i < n && F13.sparks.length < Q.sparkMax; i++){ const h = r3Hash(x * 0.71 + i * 17.13 + G.rt * 7.3), h2 = r3Hash(h * 91.7 + i), a = -Math.PI / 2 + (h - 0.5) * 2.6, sp = 240 + 360 * h2;
+  for (let i = 0; i < n && F13.sparks.length < Q.sparkMax; i++){ const h = r3Hash(x * 0.71 + i * 17.13 + G.rt * 7.3), h2 = r3Hash(h * 91.7 + i), a = -Math.PI / 2 + (h - 0.5) * 2.6, sp = 150 + 170 * h2;   // круг 3: у пил, не выше ~60 ед.
     F13.sparks.push({ x: x + (h2 - 0.5) * 34, y: CFG.grindY - 5, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, t: 0, life: 0.12 + 0.16 * h }); }
 }
 function sparks13Draw(c, dt){
@@ -9060,15 +9093,12 @@ function sparks13Draw(c, dt){
     c.globalAlpha = a * 0.9; c.fillStyle = '#ffffff'; c.beginPath(); c.arc(q.x, q.y, 0.8, 0, 6.29); c.fill(); }
   c.restore();
 }
-function fan13(g){
-  const Q = V13.fx, cj = pcol(KINDS[g.kind].juice), n = Q.fan[0] + Math.round((Q.fan[1] - Q.fan[0]) * Math.min(1, Math.sqrt(g.area) / 70));
-  for (let i = 0; i < n; i++){ const a = -Math.PI * (0.12 + 0.76 * (i + 0.5) / n) + (R() - 0.5) * 0.2, sp = 210 + R() * 230;
-    spawnP(P_FOUNT, g.x + (R() - 0.5) * 16, CFG.grindY - 6, Math.cos(a) * sp, Math.sin(a) * sp, 0.4 + R() * 0.25, 1.6 + R() * 2.2, cj); }
-}
-// Куски на пилах (только вид: событий и тел ядра нет). Кусок дошёл до пил — режем ту же сетку на 2–3 части, они подлетают; упавшая
-// часть ложится на зубья (укус: дрожь, сок веером по вращению диска, стружка мякоти), режется на две поменьше и подскакивает ниже —
-// так до V13.chew.gens поколений; мелочь и последнее поколение уходят в щель между дисками струйкой сока в корыто.
-// Потолки: частей в кадре (frag.max), новых сеток за кадр (frag.perFrame — рез ждёт на зубьях, пока есть место), треугольников (trisCap).
+// Круг 3: пила ест кусок (только вид: событий и тел ядра нет). Кусок дошёл до пил — та же сетка гасит удар о зубья и остаётся на дисках
+// (у части — короткий рывок зубом, не выше kick ед.): её тащит по вращению к щели между встречными дисками, она дрожит и доворачивается,
+// а снизу её срезает — кусок оседает в зубья, обрез сетки (uClipY) стоит на линии зубьев, на нём полоса мякоти. Пока ест — поток с обреза:
+// 3D-осколки (одна сетка на всех) по касательной в сторону вращения низкой дугой — падают на диски и уходят в щели или налипают на зубья
+// и в прорези; стружка мякоти и короткие струи сока. Крупный кусок раскалывается на 2–3 — каждый доедается так же. Диск под куском
+// садится по скорости и мокнет соком этого фрукта (карта по углу диска — крутится вместе с ним).
 const sawTop13 = (x) => { const Q = V13.saw, st = CFG.W / Q.n; let y = 1e9;   // верх дисков над x (самый высокий из соседних), ед.
   for (let i = Math.max(0, Math.floor(x / st) - 1); i <= Math.min(Q.n - 1, Math.floor(x / st) + 1); i++){ const dx = x - st * (i + 0.5); if (Math.abs(dx) < Q.R) y = Math.min(y, CFG.grindY + Q.cy - Math.sqrt(Q.R * Q.R - dx * dx)); }
   return y; };
@@ -9084,76 +9114,210 @@ function frag13Parts(src, n, seed, dirW){                      // src (verts, cu
   }
   return parts;
 }
-function frag13Kids(src, parts, gen, o){                       // части → куски-сетки (координаты, кромки инструмента, кувырок)
-  const Q = V13.frag, par = R3.etool.get(src.id), cs = Math.cos(src.a), sn = Math.sin(src.a);
+const discAt13 = (x) => { const Q = V13.saw, st = CFG.W / Q.n, i0 = Math.floor(x / st); let y = 1e9, k = clamp(i0, 0, Q.n - 1);   // диск, чей верх выше всех над x
+  for (let i = Math.max(0, i0 - 1); i <= Math.min(Q.n - 1, i0 + 1); i++){ const dx = x - st * (i + 0.5); if (Math.abs(dx) < Q.R){ const yy = CFG.grindY + Q.cy - Math.sqrt(Q.R * Q.R - dx * dx); if (yy < y){ y = yy; k = i; } } }
+  return k; };
+function bite13Ext(f){                                        // мировой контур куска: верх и низ (ед.)
+  const cs = Math.cos(f.a), sn = Math.sin(f.a); let t = 1e9, b = -1e9;
+  for (const v of f.verts){ const y = f.y + sn * v[0] + cs * v[1]; if (y < t) t = y; if (y > b) b = y; }
+  f.top = t; f.bot = b;
+}
+function bite13Chord(f, y){                                   // где горизонталь y режет контур: [xL, xR] или null
+  const cs = Math.cos(f.a), sn = Math.sin(f.a), V = f.verts, n = V.length; let L = 1e9, R = -1e9;
+  for (let i = 0; i < n; i++){ const p = V[i], q = V[(i + 1) % n], py = f.y + sn * p[0] + cs * p[1], qy = f.y + sn * q[0] + cs * q[1];
+    if ((py - y) * (qy - y) > 0 || py === qy) continue; const px = f.x + cs * p[0] - sn * p[1], qx = f.x + cs * q[0] - sn * q[1], x = px + (qx - px) * (y - py) / (qy - py);
+    if (x < L) L = x; if (x > R) R = x; }
+  return R > L ? [L, R] : null;
+}
+const floor13 = (L, R) => { let y = 1e9; for (let k = 0; k <= 4; k++) y = Math.min(y, sawTop13(L + (R - L) * k / 4)); return y; };   // верх самых высоких зубьев под обрезом
+function bite13Target(f){                                     // щель, куда тянет диск под куском (у стенки — к стенке)
+  const st = CFG.W / V13.saw.n, i = discAt13(f.x), d = i % 2 ? 1 : -1;
+  f.tx = clamp(st * (d > 0 ? i + 1 : i), f.rad * 0.35, CFG.W - f.rad * 0.35);
+}
+const eatT13 = (area) => { const C = V13.bite; return C.eat[0] + (C.eat[1] - C.eat[0]) * clamp((Math.sqrt(area) - C.eatA[0]) / (C.eatA[1] - C.eatA[0]), 0, 1); };
+function bite13Grind(e){                                      // кусок ядра дошёл до пил — дальше его ест вид (та же сетка, без пересборки)
+  const s = G.s, g = s.grinding.find(q => q.id === e.id); if (!g) return;
+  if (!R3T.fr[g.kind] || F13.frags.length >= V13.frag.max) return;     // нет модели или потолок — прежний перемол ядра (сетка сминается)
+  const C = V13.bite, h = r3Hash(g.id * 0.37 + 0.11), h2 = r3Hash(h * 71.3 + 0.5);
+  const f = { id: g.id, kind: g.kind, root: g.root, sc: g.sc, verts: g.verts, cutEdges: g.cutEdges, artFrame: g.artFrame, a: g.a, flags: g.flags, rad: g.rad, area: g.area,
+    x: g.x, y: g.y, gen: 0, ph: 'eat', t: 0, imp: clamp(g.vy || 0, 0, 160), w: clamp(g.w || 0, -3, 3), zk: 0, jx: 0, jy: 0, ky: 0, sx: 0 };
+  bite13Ext(f); f.y1 = f.top; const ch = bite13Chord(f, f.bot - 1.5) || [f.x - 3, f.x + 3], fl = floor13(ch[0], ch[1]) + C.clip;   // y1 — верх куска при касании (замер подскока)
+  f.clip = Math.max(f.bot, fl); f.H0 = Math.max(4, fl - f.top); f.vs = Math.max(18, f.H0 / eatT13(f.area));
+  if (h < C.kick[0] && f.area > 300) f.kick = { t0: C.kick[2] + h2 * (C.kick[3] - C.kick[2]), H: C.kick[1] * (0.55 + 0.45 * r3Hash(h2 * 9.1)), d: 0.11 };
+  bite13Target(f); F13.frags.push(f); F13.split.add(g.id); F13.stats.split = (F13.stats.split || 0) + 1;
+  sparks13(g.x); F13.stats.eaten = (F13.stats.eaten || 0) + 1;
+}
+function bite13Kids(src, parts){                              // раскол: части той же сетки — без подброса, расходятся и доедаются дальше
+  const par = R3.etool.get(src.id), cs = Math.cos(src.a), sn = Math.sin(src.a), sr = R3.st.get(src.id), out = [];
   parts.forEach((P, j) => {
     const c = polyCentroid(P.V), id = -(1e6 + (++F13.nid)), V = P.V.map(v => [v[0] - c[0], v[1] - c[1]]);
     const b = { id, kind: src.kind, root: src.root, sc: src.sc, verts: V, cutEdges: P.F, artFrame: [src.artFrame[0] + c[0], src.artFrame[1] + c[1]], a: src.a, flags: {}, rad: polyRadius(V), area: Math.abs(polyArea(V)),
-      x: src.x + cs * c[0] - sn * c[1], y: src.y + sn * c[0] + cs * c[1], t: 0, gen, ph: 'air', pt: 0 };
+      x: src.x + cs * c[0] - sn * c[1], y: src.y + sn * c[0] + cs * c[1], gen: src.gen + 1, ph: 'eat', t: src.t, imp: 0, w: 0, vs: src.vs, clip: src.clip, H0: src.H0, zk: 1, jx: 0, jy: 0, ky: 0, y1: src.y1 };
+    const dx = b.x - src.x; b.sx = (Math.abs(dx) < 0.5 ? (j % 2 ? 1 : -1) : Math.sign(dx)) * (24 + 18 * r3Hash(F13.nid * 0.731)); b.w = -b.sx * 0.008;
     R3.etool.set(id, pieceEdges(b).map(([a, q]) => { const m = edgeMatch(par, a, q, 1.2); return { a, b: q, w: m ? m.w : 'saw' }; }));
-    const h1 = r3Hash(F13.nid * 0.731 + 0.1), h2 = r3Hash(F13.nid * 1.913 + 0.4), dx = b.x - src.x, side = Math.abs(dx) < 0.5 ? (j % 2 ? 1 : -1) : Math.sign(dx);
-    b.h0 = o.up * (0.82 + 0.36 * h1); b.vy = -Math.sqrt(2 * Q.g * b.h0); b.vx = side * o.side * (0.6 + 0.8 * h2) + (o.push || 0); b.w = (h2 - 0.5) * 8;
-    let ax = [1, 0], best = 0; for (let i = 0; i < V.length; i++){ if (!P.F[i]) continue; const p = V[i], q = V[(i + 1) % V.length], L = Math.hypot(q[0] - p[0], q[1] - p[1]); if (L > best){ best = L; ax = [(q[0] - p[0]) / L, (q[1] - p[1]) / L]; } }
-    R3.st.set(id, { born: G.rt - V12.openT, w: 'saw', ph: 0, dir: j % 2 ? 1 : -1, air: 0, axis: ax, kick: 1, wet: 0, tum: Q.spin[0] + (Q.spin[1] - Q.spin[0]) * h1 });
-    F13.frags.push(b);
+    R3.st.set(id, { born: G.rt - V12.openT, w: 'saw', ph: sr ? sr.ph : 0, dir: 1, air: 0, axis: sr ? sr.axis : [1, 0], kick: 0, wet: 0, tum: 0 });
+    bite13Target(b); out.push(b);
   });
-  F13.stats.parts = (F13.stats.parts || 0) + parts.length; F13.stats.maxGen = Math.max(F13.stats.maxGen || 0, gen);
+  F13.stats.parts = (F13.stats.parts || 0) + parts.length; F13.stats.maxGen = Math.max(F13.stats.maxGen || 0, src.gen + 1);
+  return out;
 }
-function frag13Grind(e){
-  const s = G.s, g = s.grinding.find(q => q.id === e.id); if (!g) return;
-  sparks13(g.x); fan13(g);
-  if (!R3T.fr[g.kind]) return;
-  const Q = V13.frag, C = V13.chew;
-  if (g.kind === 'cherry' || g.kind === 'grape' || g.area < Q.small){ chew13Gap(g.x, g.kind, 0.6); return; }   // мелочь — сразу в сок (кусок тонет в пилах, как прежде)
-  let n = g.area > C.n0[2] && F13.frags.length < Q.soft ? C.n0[1] : C.n0[0]; n = Math.min(n, Q.max - F13.frags.length); if (n < 2 || (R3.stats.tris || 0) > Q.trisCap) return;
-  const parts = frag13Parts(g, n, g.id, null); if (parts.length < 2) return;
-  const upK = clamp(1.15 - Math.sqrt(g.area) / Q.upBig[1], Q.upBig[0], 1);
-  frag13Kids(g, parts, 0, { up: (Q.up[0] + Q.up[1]) / 2 * upK, side: (Q.side[0] + Q.side[1]) / 2, push: g.vx * 0.15 });
-  F13.split.add(g.id); F13.stats.split = (F13.stats.split || 0) + 1;
+function bite13Emit(f, L, Rx, y, rate, dt){                    // поток с обреза: осколки, сок, стружка; налипает на зубья; диск мокнет
+  const C = V13.bite, Q = C.shard, P3 = K3[f.kind], cc = P3 ? P3.c : {}, fl = cc.flesh0 || cc.seg0 || cc.flesh1 || KINDS[f.kind].flesh, rd = cc.rindDk || cc.peel || cc.skin || cc.rim || cc.shell || fl;
+  const cj = pcol(KINDS[f.kind].juice), W = Rx - L;
+  f.acS = (f.acS || 0) + rate * dt; f.acJ = (f.acJ || 0) + rate * C.juiceK * dt; f.acC = (f.acC || 0) + rate * C.chipK * dt; f.acL = (f.acL || 0) + Q.slot * dt;
+  while (f.acS >= 1){ f.acS--; const u = R(), x0 = L + W * u, di = discAt13(x0), d = di % 2 ? 1 : -1, xe = x0 + ((d > 0 ? Rx : L) - x0) * 0.55;
+    const end = Math.abs(u - 0.5) * 2 > 1 - 2 * C.rindEnd, rind = R() < (end ? 0.7 : 0.12);
+    if (R() < 0.2) shard13Stick(di, xe, y, fl, rind ? rd : fl, false); else shard13Fly(xe, y - 1, d, fl, rind ? rd : fl, Math.min(1, W / 40)); }
+  while (f.acJ >= 1){ f.acJ--; if (F13.juB < 1) continue; F13.juB--; const x = L + W * R(), d = discAt13(x) % 2 ? 1 : -1, a = -Math.PI / 2 + d * (0.55 + 0.6 * R()), sp = 110 + 150 * R();
+    spawnP(P_FOUNT, x, y - 1, Math.cos(a) * sp, Math.sin(a) * sp, 0.2 + 0.14 * R(), (0.4 + 0.45 * R()) * clamp(Math.sqrt(f.area) / 34, 0.6, 1.15), cj); }
+  while (f.acC >= 1){ f.acC--; if (R3.chips.length >= V12.chips) { f.acC = 0; break; } const x = L + W * R(), d = discAt13(x) % 2 ? 1 : -1, a = -Math.PI / 2 + d * (0.35 + 0.8 * R()), sp = 90 + 150 * R();
+    R3.chips.push({ x, y: y - 1, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, t: 0, life: 0.25 + 0.2 * R(), r: 0.7 + 1.0 * R(), col: fl, a: R() * 6.28 }); }
+  if (f.acL >= 1){ f.acL = 0; shard13Stick(discAt13(L + W * R()), 0, 0, fl, fl, true); }
 }
-function chew13Touch(f){                                       // укус: сок веером по вращению диска, стружка мякоти, пилы мокнут
-  const C = V13.chew, d = sawDir13(f.x), y = f.y + f.rad * 0.6, jh = juiceHex(f.kind), cj = pcol(KINDS[f.kind].juice), k = clamp(Math.sqrt(f.area) / 30, 0.4, 1.2), P3 = K3[f.kind];
-  const nf = Math.round(C.fan[0] + (C.fan[1] - C.fan[0]) * Math.min(1, k)), fl = P3 ? P3.c.flesh0 || P3.c.seg0 || KINDS[f.kind].flesh : KINDS[f.kind].flesh;
-  for (let i = 0; i < nf; i++){ const h = r3Hash(f.id * 0.37 + i * 3.1 + f.gen), h2 = r3Hash(h * 77.7 + i), a = -Math.PI / 2 + d * (0.5 + 0.7 * h), sp = (140 + 170 * h2) * (0.7 + 0.3 * k);
-    spawnP(P_FOUNT, f.x + d * f.rad * 0.4, y, Math.cos(a) * sp, Math.sin(a) * sp, 0.26 + 0.14 * h2, (C.fanS[0] + (C.fanS[1] - C.fanS[0]) * h) * k, cj); }
-  const nc = Math.round(C.chips[0] + (C.chips[1] - C.chips[0]) * Math.min(1, k));
-  for (let i = 0; i < nc && R3.chips.length < V12.chips; i++){ const h = r3Hash(f.id * 1.91 + i * 7.3 + f.gen * 3), h2 = r3Hash(h * 51.3 + i), a = -Math.PI / 2 + d * (0.2 + 1.0 * h) + (h2 - 0.5) * 0.5, sp = 90 + 160 * h2;
-    R3.chips.push({ x: f.x + (h - 0.5) * f.rad, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, t: 0, life: 0.32 + 0.2 * h, r: (0.9 + 1.3 * h2) * k, col: fl, a: h * 6.28 }); }
-  filmAdd(f.x, 0.1 * k, hexRgb(jh), 14); F13.stats.bites = (F13.stats.bites || 0) + 1;
+// --- осколки: одна instanced-сетка (клин: грань корки — своим цветом), полёт → на зубьях едут к щели и пропадают или налипают ---
+const SH13_VS = `uniform float uTg; attribute float aRind; attribute vec3 iFl; attribute vec3 iRd; varying vec3 vN; varying vec3 vCol;
+void main(){ mat4 m = modelMatrix * instanceMatrix; vN = normalize(mat3(m) * normal); vCol = mix(iFl, iRd, aRind);
+  vec4 wp = m * vec4(position, 1.0); wp.y += uTg * max(wp.z, 0.0); gl_Position = projectionMatrix * viewMatrix * wp; }`;
+const SH13_FS = `precision highp float;
+uniform vec3 uL; uniform vec3 uV; uniform vec2 uWrap; uniform vec3 uTint; varying vec3 vN; varying vec3 vCol;
+void main(){ vec3 N = normalize(vN); float w = smoothstep(uWrap.x, uWrap.y, dot(N, uL));
+  vec3 c = mix(pow(vCol, vec3(1.3)) * 0.62, vCol * 1.06, w); vec3 H = normalize(uL + uV); c += vec3(1.0) * 0.3 * pow(max(dot(N, H), 0.0), 22.0);
+  gl_FragColor = vec4(clamp(c * uTint, 0.0, 1.0), 1.0); }`;
+function shard13Init(){
+  if (F13.shM) return; const Q = V13.bite.shard, T = [[-1, 0.55], [1, 0.4], [-0.15, -0.85]], P = [], N = [], K = [];
+  const tri = (a, b, c, rind) => { const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], v = [c[0] - a[0], c[1] - a[1], c[2] - a[2]]; let n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+    const m = [(a[0] + b[0] + c[0]) / 3 + 0.05, (a[1] + b[1] + c[1]) / 3 - 0.03, (a[2] + b[2] + c[2]) / 3]; if (n[0] * m[0] + n[1] * m[1] + n[2] * m[2] < 0){ const t = b; b = c; c = t; n = n.map(q => -q); }
+    const l = Math.hypot(n[0], n[1], n[2]) || 1; for (const p of [a, b, c]){ P.push(p[0], p[1], p[2]); N.push(n[0] / l, n[1] / l, n[2] / l); K.push(rind); } };
+  const up = T.map(t => [t[0], t[1], 0.5]), dn = T.map(t => [t[0], t[1], -0.5]);
+  tri(up[0], up[1], up[2], 0); tri(dn[0], dn[2], dn[1], 0);
+  for (let i = 0; i < 3; i++){ const j = (i + 1) % 3, r = i === 0 ? 1 : 0; tri(up[i], dn[i], dn[j], r); tri(up[i], dn[j], up[j], r); }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3)); g.setAttribute('aRind', new THREE.Float32BufferAttribute(K, 1));
+  const iF = new THREE.InstancedBufferAttribute(new Float32Array(Q.max * 3), 3), iR = new THREE.InstancedBufferAttribute(new Float32Array(Q.max * 3), 3); iF.setUsage(THREE.DynamicDrawUsage); iR.setUsage(THREE.DynamicDrawUsage);
+  g.setAttribute('iFl', iF); g.setAttribute('iRd', iR);
+  const U = u13(), mat = new THREE.ShaderMaterial({ vertexShader: SH13_VS, fragmentShader: SH13_FS, uniforms: { uL: U.uL, uV: U.uV, uWrap: U.uWrap, uTint: U.uTint, uTg: { value: Math.tan(V12.tilt * Math.PI / 180) } }, side: THREE.DoubleSide });
+  const m = new THREE.InstancedMesh(g, mat, Q.max); m.count = 0; m.frustumCulled = false; m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); R3.scene.add(m);
+  F13.shM = m; F13.shd = []; F13.shT = { M: new THREE.Matrix4(), q: new THREE.Quaternion(), p: new THREE.Vector3(), s: new THREE.Vector3(), ax: new THREE.Vector3() };
+  F13.shT.M.makeScale(1e-4, 1e-4, 1e-4).setPosition(-50, -50, 0); F13.shT.M.toArray(m.instanceMatrix.array, 0); m.count = 1; F13.shWarm = true;   // прогрев: один кадр — невидимый осколок
+}
+const rgb13 = (hex) => { const c = hexRgb(hex); return [c[0] / 255, c[1] / 255, c[2] / 255]; };
+function shard13New(fl, rd){
+  shard13Init(); const Q = V13.bite.shard; if (F13.shd.length >= Q.max){ const i = F13.shd.findIndex(q => q.ph === 1); if (i < 0) return null; F13.shd.splice(i, 1); }
+  const a = R() * 6.28, b = R() * 3.14, q = { x: 0, y: 0, z: 5, vx: 0, vy: 0, ax: Math.sin(b) * Math.cos(a), ay: Math.sin(b) * Math.sin(a), az: Math.cos(b), ang: R() * 6.28, w: 0,
+    s: Q.size[0] + (Q.size[1] - Q.size[0]) * Math.pow(R(), 1.6), sx: 0.7 + 0.6 * R(), sy: 0.6 + 0.6 * R(), sz: 0.6 + 0.7 * R(), fl: rgb13(fl), rd: rgb13(rd), ph: 0, t: 0, T: 0, k: 1 };
+  F13.shd.push(q); F13.stats.shards = (F13.stats.shards || 0) + 1; return q;
+}
+function shard13Fly(x, y, d, fl, rd, k){                      // осколок с обреза: вдоль вращения диска и вверх — низкой дугой
+  const Q = V13.bite.shard; if (F13.shB < 1) return; F13.shB--; const q = shard13New(fl, rd); if (!q) return; const h = R();
+  q.x = x; q.y = y; q.vx = d * (Q.vx[0] + (Q.vx[1] - Q.vx[0]) * h) + (R() - 0.5) * 30; q.vy = -(Q.vy[0] + (Q.vy[1] - Q.vy[0]) * R() * (0.6 + 0.4 * k)); q.w = (Q.spin[0] + (Q.spin[1] - Q.spin[0]) * R()) * (R() < 0.5 ? -1 : 1);
+}
+function shard13Stick(di, x, y, fl, rd, slot){                // налип: на зубья в месте укуса или крошкой в прорезь — крутится с диском
+  const Q = V13.bite.shard, m = F13.saws[di]; if (!m) return; let n = 0; for (const q of (F13.shd || [])) if (q.ph === 2 && q.disc === di) n++; if (n >= Q.perDisc + (slot ? 2 : 0)) return;
+  const q = shard13New(fl, rd); if (!q) return; q.ph = 2; q.disc = di; q.t = 0; q.T = Q.hold[0] + (Q.hold[1] - Q.hold[0]) * R(); q.slot = slot; q.ax = 0; q.ay = 0; q.az = 1; q.a0 = R() * 6.28;
+  if (slot){ const k = Math.floor(R() * 3), a = k * 2 * Math.PI / 3 + 0.35 + 0.8 * R(); q.la = m.scale.x > 0 ? a : Math.PI - a; q.lr = 12.2 * V13.saw.R / 23.5; q.s *= 0.7; }
+  else { q.la = Math.atan2(y - m.position.y, x - m.position.x) - m.rotation.z; q.lr = V13.saw.R - 1.2; q.s *= 0.75; }
+}
+function shard13Update(dt){
+  const S = F13.shd; if (!S || !F13.shM) return; F13.shM.visible = F13.live; if (dt <= 0 && S.length) { shard13Write(); return; }
+  const Q = V13.bite.shard, Rr = V13.saw.R, st = CFG.W / V13.saw.n, OM = F13.om;
+  for (let i = S.length - 1; i >= 0; i--){ const q = S[i]; q.t += dt;
+    if (q.ph === 0){ q.vy += Q.g * dt; q.x += q.vx * dt; q.y += q.vy * dt; q.ang += q.w * dt; q.z = 5;
+      if (q.x < 2 && q.vx < 0 || q.x > CFG.W - 2 && q.vx > 0) q.vx *= -0.3;
+      if (q.vy > 0 && q.y + q.s * 0.4 >= sawTop13(q.x)){ const di = discAt13(q.x); q.t = 0; q.vx = q.vy = 0;
+        if (!q.flown && R() < Q.stick){ q.ph = 2; q.disc = di; q.T = Q.hold[0] + (Q.hold[1] - Q.hold[0]) * R(); q.ax = 0; q.ay = 0; q.az = 1; q.a0 = q.ang; const m = F13.saws[di];
+          q.la = Math.atan2(q.y - m.position.y, q.x - m.position.x) - m.rotation.z; q.lr = Rr - 1.2; q.s *= 0.85; }
+        else { q.ph = 1; q.T = Q.ride[0] + (Q.ride[1] - Q.ride[0]) * R(); } }
+      if (q.t > 1.6 || q.y > CFG.grindY + 80) S.splice(i, 1); }
+    else if (q.ph === 1){ const di = discAt13(q.x), d = di % 2 ? 1 : -1, v = Math.min(95, (OM ? OM[di] : 6) * Rr * 0.5), vx = Math.abs(q.x - st * Math.round(q.x / st)) < 3.5;   // едет к щели по верху диска
+      q.x += d * v * dt; const e = Math.max(0, q.t / q.T - 0.55) / 0.45; q.y = sawTop13(q.x) - q.s * 0.35 + e * e * 10; q.k = 1 - e * 0.85; q.z = 5 - 9 * e; q.ang += q.w * 0.25 * dt;
+      if (vx && q.t < q.T * 0.55) q.t = q.T * 0.55; if (q.t >= q.T) S.splice(i, 1); }
+    else { const m = F13.saws[q.disc], ph = q.la + m.rotation.z; q.x = m.position.x + Math.cos(ph) * q.lr; q.y = m.position.y + Math.sin(ph) * q.lr; q.z = m.position.z + (q.slot ? 0 : 1.7); q.ang = q.a0 + m.rotation.z;
+      q.k = Math.min(1, q.t / 0.08) * (q.slot ? 1 - clamp((q.t - q.T + 0.3) / 0.3, 0, 1) : 1);
+      if (q.t >= q.T){ if (q.slot){ S.splice(i, 1); continue; }   // в прорези — смыло; с зубьев — срывается по касательной
+        const w = (OM ? OM[q.disc] : 6) * -m.scale.x, sp = Math.min(200, Math.abs(w) * q.lr) * 0.8, sg = Math.sign(w) || 1;
+        q.ph = 0; q.t = 0; q.flown = true; q.vx = -Math.sin(ph) * sp * sg; q.vy = Math.cos(ph) * sp * sg - 40; q.w = 12; const b = R() * 6.28; q.ax = Math.cos(b); q.ay = Math.sin(b); q.az = 0.3; } } }
+  shard13Write();
+}
+function shard13Write(){
+  if (F13.shWarm){ F13.shWarm = false; return; }
+  const m = F13.shM, S = F13.shd, T = F13.shT, A = m.instanceMatrix.array, iF = m.geometry.attributes.iFl, iR = m.geometry.attributes.iRd; let n = 0;
+  for (const q of S){ if (q.k <= 0.01) continue; T.q.setFromAxisAngle(T.ax.set(q.ax, q.ay, q.az).normalize(), q.ang); T.s.set(q.s * q.sx * q.k, q.s * q.sy * q.k, q.s * q.sz * q.k); T.p.set(q.x, q.y, q.z);
+    T.M.compose(T.p, T.q, T.s); T.M.toArray(A, n * 16); iF.array.set(q.fl, n * 3); iR.array.set(q.rd, n * 3); n++; }
+  m.count = n; m.instanceMatrix.needsUpdate = true; iF.needsUpdate = true; iR.needsUpdate = true;
+}
+// --- сок на дисках: карта по углу диска (кромка и размаз к ступице; цвет и влага), крутится с диском; капли с зубьев, потёки вниз ---
+function wet13(){
+  if (F13.wm) return F13.wm; const W = V13.bite.wet, nb = W.nb, n = V13.saw.n, data = new Uint8Array(nb * n * 2 * 4), tex = new THREE.DataTexture(data, nb, n * 2, THREE.RGBAFormat);
+  tex.minFilter = tex.magFilter = THREE.LinearFilter; tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.ClampToEdgeWrapping; tex.generateMipmaps = false; tex.needsUpdate = true;
+  return F13.wm = { nb, rim: new Float32Array(nb * n * 4), sm: new Float32Array(nb * n * 4), data, tex, on: new Uint8Array(n), kind: new Array(n).fill(''), cj: new Array(n).fill(0), acc: new Float32Array(n), avg: new Float32Array(n) };
+}
+function wet13Stamp(di, x, y, wa, kind, k){                   // кромка диска di мокнет там, где режет (мир x, y), на ширину wa (рад) — цвет сока этого фрукта
+  const M = wet13(), m = F13.saws[di]; if (!m) return; const nb = M.nb, rgb = rgb13(juiceHex(kind));
+  let la = Math.atan2(y - m.position.y, x - m.position.x) - m.rotation.z; if (m.scale.x < 0) la = Math.PI - la;
+  if (M.kind[di] !== kind){ M.kind[di] = kind; M.cj[di] = pcol(KINDS[kind].juice); for (const q of (F13.shd || [])) if (q.ph === 2 && q.disc === di && q.t > 0.4) q.T = Math.min(q.T, q.t + 0.05 + 0.2 * R()); }   // новый сок смывает прежние крошки
+  const b0 = Math.floor((la - wa / 2 + Math.PI) / (2 * Math.PI) * nb), b1 = Math.ceil((la + wa / 2 + Math.PI) / (2 * Math.PI) * nb);
+  for (let b = b0; b <= b1; b++){ const j = (di * nb + ((b % nb) + nb) % nb) * 4, w = M.rim[j + 3], s = k / (k + 0.25 * w + 1e-4);
+    M.rim[j] += (rgb[0] - M.rim[j]) * s; M.rim[j + 1] += (rgb[1] - M.rim[j + 1]) * s; M.rim[j + 2] += (rgb[2] - M.rim[j + 2]) * s; M.rim[j + 3] = Math.min(1, w + k); }
+  M.on[di] = 1;
+}
+function wet13Update(dt){
+  const M = F13.wm; if (!M || dt <= 0) return; const W = V13.bite.wet, nb = M.nb, n = V13.saw.n, kr = Math.exp(-dt / W.dry[0]), ks = Math.exp(-dt / W.dry[1]), fl = Math.min(1, dt * W.flow), D = M.data, OM = F13.om;
+  let up = false;
+  for (let i = 0; i < n; i++){ if (!M.on[i]) continue; up = true; let mx = 0, sr = 0, ss = 0;
+    for (let b = 0; b < nb; b++){ const j = (i * nb + b) * 4, wr = M.rim[j + 3], ws = M.sm[j + 3];
+      if (wr > ws){ const s = (wr * fl) / (wr * fl + ws * 0.4 + 1e-4); M.sm[j] += (M.rim[j] - M.sm[j]) * s; M.sm[j + 1] += (M.rim[j + 1] - M.sm[j + 1]) * s; M.sm[j + 2] += (M.rim[j + 2] - M.sm[j + 2]) * s; M.sm[j + 3] = ws + (wr - ws) * fl; }
+      M.rim[j + 3] = wr * kr; M.sm[j + 3] *= ks; mx = Math.max(mx, M.rim[j + 3], M.sm[j + 3]); sr += M.rim[j + 3]; ss += M.sm[j + 3];
+      const o = (2 * i * nb + b) * 4, o2 = ((2 * i + 1) * nb + b) * 4;
+      D[o] = M.rim[j] * 255; D[o + 1] = M.rim[j + 1] * 255; D[o + 2] = M.rim[j + 2] * 255; D[o + 3] = M.rim[j + 3] * 255;
+      D[o2] = M.sm[j] * 255; D[o2 + 1] = M.sm[j + 1] * 255; D[o2 + 2] = M.sm[j + 2] * 255; D[o2 + 3] = M.sm[j + 3] * 255; }
+    M.avg[i] = ss / nb; if (mx < 0.004){ M.on[i] = 0; M.avg[i] = 0; for (let b = 0; b < nb; b++){ M.rim[(i * nb + b) * 4 + 3] = 0; M.sm[(i * nb + b) * 4 + 3] = 0; } }
+    const m = F13.saws[i], om = OM ? OM[i] : 3; M.acc[i] += W.drops * (sr / nb) * Math.min(1, om / 6) * dt;   // капли срываются с мокрых зубьев по касательной
+    while (M.acc[i] >= 1){ M.acc[i]--; const b = Math.floor(R() * nb), j = (i * nb + b) * 4; if (M.rim[j + 3] < 0.12) continue;
+      let la = (b + 0.5) / nb * 2 * Math.PI - Math.PI; if (m.scale.x < 0) la = Math.PI - la; const ph = la + m.rotation.z, R0 = V13.saw.R, w = om * -m.scale.x, sp = Math.min(220, Math.abs(w) * R0) * 0.7, sg = Math.sign(w) || 1;
+      spawnP(P_FOUNT, m.position.x + Math.cos(ph) * R0, m.position.y + Math.sin(ph) * R0, -Math.sin(ph) * sp * sg + Math.cos(ph) * 25, Math.cos(ph) * sp * sg + Math.sin(ph) * 25, 0.25 + 0.15 * R(), 0.55 + 0.6 * R(), M.cj[i]); } }
+  if (up) M.tex.needsUpdate = true;
+}
+function bite13Update(dt){
+  const Q = V13.frag, C = V13.bite, n = V13.saw.n; if (dt <= 0) return;
+  let pend = 0; for (const f of F13.frags) if (!R3.ents.has(f.id)) pend++;
+  let bud = Q.perFrame - pend, eating = 0, kmax = 0; F13.shB = Math.min(C.shard.perSec * 0.1, (F13.shB || 0) + C.shard.perSec * dt); F13.juB = Math.min(C.juiceSec * 0.1, (F13.juB || 0) + C.juiceSec * dt);   // общий бюджет осколков в с — на цепочке поток не гуще
+  const DL = F13.dl || (F13.dl = new Float32Array(n)), st = CFG.W / n, Rr = V13.saw.R, cy = CFG.grindY + V13.saw.cy;
+  for (let i = F13.frags.length - 1; i >= 0; i--){ const f = F13.frags[i], sr = R3.st.get(f.id); f.t += dt;
+    if (sr && sr.ph){ const T = Math.round(sr.ph / (2 * Math.PI)) * 2 * Math.PI; sr.ph += (T - sr.ph) * (1 - Math.exp(-16 * dt)); if (Math.abs(T - sr.ph) < 0.02) sr.ph = T; }   // кувырок — в позу: доворот
+    const v = f.vs + Math.max(0, f.imp - f.vs) * Math.exp(-f.t / C.imp); f.y += v * dt;                        // удар гаснет о зубья, дальше оседает со скоростью съедания
+    const di = discAt13(f.x), sp = F13.dw ? F13.dw[di] : 1;
+    if (f.sx){ f.x += f.sx * dt; f.sx *= Math.exp(-dt * 7); if (Math.abs(f.sx) < 1) f.sx = 0; }
+    const ddx = f.tx - f.x, mv = clamp(ddx * C.drag[1] * dt, -C.drag[0] * sp * dt, C.drag[0] * sp * dt); f.x += mv;
+    f.a += (f.w - Math.sign(ddx) * 0.5 * Math.min(1, Math.abs(ddx) / 10)) * dt; f.w *= Math.exp(-dt * 8); f.zk = Math.min(1, f.zk + dt / 0.08);
+    f.jx = REDUCED ? 0 : Math.sin(G.rt * 73 + f.id) * C.jit[0] * (0.5 + 0.5 * sp); f.jy = REDUCED ? 0 : Math.sin(G.rt * 91 + f.id * 1.7) * C.jit[0] * 0.5;
+    f.ky = 0; if (f.kick){ const u = (f.t - f.kick.t0) / f.kick.d; if (u > 0 && u < 1) f.ky = -f.kick.H * Math.sin(Math.PI * u); }
+    bite13Ext(f);
+    const ch = bite13Chord(f, Math.min(f.clip, f.bot) - 0.5), L = ch ? ch[0] : f.x - 2, R1 = ch ? ch[1] : f.x + 2, fl = floor13(L, R1) + C.clip;
+    if (fl < f.clip) f.clip = Math.max(fl, f.clip - (f.t < 0.12 ? 90 : 3 * f.vs) * dt); else f.clip = Math.min(fl, f.clip + 0.5 * v * dt);
+    if (f.top + 0.6 >= f.clip){                                // съеден: последний сок — струйкой в щель
+      F13.frags.splice(i, 1); R3.st.delete(f.id); R3.etool.delete(f.id); chew13Gap(clamp(f.x, 1, CFG.W - 1), f.kind, clamp(Math.sqrt(f.area) / 20, 0.3, 1));
+      if (!F13.frags.some(q => q.root === f.root)) Sound.playRL('ground', 0.08, Math.round(f.area)); continue; }
+    eating++; const k = clamp(Math.sqrt(f.area) / 50, 0.2, 1); kmax = Math.max(kmax, k);
+    const cc = bite13Chord(f, f.clip - 0.4); if (cc){ const cL = cc[0], cR = cc[1], wC = cR - cL;
+      bite13Emit(f, cL, cR, f.clip, clamp(C.rate[0] * wC * v, C.rate[1], C.rate[2]), dt);
+      for (let d = Math.max(0, Math.floor((cL - Rr) / st)); d <= Math.min(n - 1, Math.floor((cR + Rr) / st)); d++){ const cx = st * (d + 0.5), a = Math.max(cL, cx - Rr), b = Math.min(cR, cx + Rr); if (b <= a) continue;
+        DL[d] += (b - a) / (2 * Rr); const xm = (a + b) / 2, ym = cy - Math.sqrt(Math.max(0, Rr * Rr - (xm - cx) * (xm - cx)));
+        wet13Stamp(d, xm, ym, Math.max(0.25, (b - a) / Rr), f.kind, C.wet.rate * dt * Math.min(1, (b - a) / 20)); } }
+    const e = 1 - (f.clip - f.top) / f.H0;                     // раскол крупного: половинки расходятся, каждую доедают
+    if (f.gen === 0 && !f.splitDone && f.area >= C.split[0] && e >= C.split[1] && (!sr || !sr.ph || Math.abs(sr.ph - Math.round(sr.ph / (2 * Math.PI)) * 2 * Math.PI) < 0.03)){
+      const np = f.area >= C.split[2] ? 3 : 2;
+      if (bud >= np && F13.frags.length + np - 1 <= Q.max && (R3.stats.tris || 0) < Q.trisCap){ const parts = frag13Parts(f, np, f.id * 1.7 + 0.3, 0);
+        if (parts.length >= 2){ bud -= parts.length; f.splitDone = true; F13.frags.splice(i, 1, ...bite13Kids(f, parts)); R3.st.delete(f.id); R3.etool.delete(f.id); Sound.playRL('squish', 0.05, Math.round(f.area)); }
+        else f.splitDone = true; } }
+    F13.stats.rise = Math.max(F13.stats.rise || 0, f.y1 - (f.top + f.ky));   // подскок над касанием (ед.): только рывок зубом
+  }
+  if (eating && G.rt >= (F13.tickAt || 0)){ F13.tickAt = G.rt + C.tick * (0.85 + 0.3 * R()); Sound.play('grind'); rumble(0.2 + 0.5 * kmax, 0.1); }   // перемол — частыми тиками, пока ест
+  F13.stats.peakFrags = Math.max(F13.stats.peakFrags || 0, F13.frags.length);
 }
 function chew13Gap(x, kind, k){                                // сок уходит в щель между дисками: струйка в корыто, круги на соке
   const Q = V13.saw, st = CFG.W / Q.n, v = clamp(Math.round(x / st) - 1, 0, Q.n - 2), c = hexRgb(juiceHex(kind));
   F13.vst[v] = Math.max(F13.vst[v] || 0, G.rt + 0.35 + 0.3 * k); F13.vcol[v] = c; filmAdd(st * (v + 1), 0.08 * k, c, 10);
   const T = trough9(); T.waves.push({ x: st * (v + 1), t0: G.rt, a: 0.9 * k }); if (T.waves.length > 8) T.waves.shift();
   return st * (v + 1);
-}
-function frag13Update(dt){
-  const Q = V13.frag, C = V13.chew; if (dt <= 0) return;
-  let pend = 0; for (const f of F13.frags) if (!R3.ents.has(f.id)) pend++;
-  let bud = Q.perFrame - pend;                                // новых сеток в этом кадре (рез ждёт на зубьях, пока нет места)
-  for (let i = F13.frags.length - 1; i >= 0; i--){ const f = F13.frags[i], st = R3.st.get(f.id); f.t += dt; f.pt += dt;
-    if (f.ph === 'air'){
-      f.vy += Q.g * dt; f.x += f.vx * dt; f.y += f.vy * dt; f.a += f.w * dt; if (st) st.ph += st.dir * st.tum * dt;
-      if (f.x < f.rad * 0.5 && f.vx < 0 || f.x > CFG.W - f.rad * 0.5 && f.vx > 0) f.vx *= -0.5;   // стенки короба
-      if (f.vy > 0){ const top = Math.min(sawTop13(f.x - f.rad * 0.6), sawTop13(f.x), sawTop13(f.x + f.rad * 0.6)), rb = f.rad * 0.7;
-        if (f.y + rb >= top + 2){ f.y = f.y0 = top + 2 - rb; f.ph = 'bite'; f.pt = 0; chew13Touch(f); } }
-    } else if (f.ph === 'bite'){
-      const d = sawDir13(f.x), u = Math.min(1, f.pt / C.bite);
-      f.x += d * 34 * dt; f.y = f.y0 + 3 * u + (REDUCED ? 0 : Math.sin(G.rt * 95 + f.id) * 0.7); f.a += f.w * dt * 2; if (st) st.ph += st.dir * st.tum * dt * 1.6;
-      if (f.pt >= C.bite){
-        const can = f.gen < C.gens && f.area >= 2 * C.minA && F13.frags.length < Q.soft && (R3.stats.tris || 0) < Q.trisCap;
-        if (can && bud >= 2){ const parts = frag13Parts(f, 2, -f.id, 0);
-          if (parts.length >= 2){ bud -= 2; F13.frags.splice(i, 1); const n0 = F13.frags.length;
-            frag13Kids(f, parts, f.gen + 1, { up: f.h0 * C.hK, side: Q.side[0] * Math.pow(C.sideK, f.gen + 1), push: d * 26 });
-            if (f.gen + 1 >= C.drop){ const K = F13.frags.slice(n0).sort((a, b) => a.area - b.area), q = K[0];   // меньшая половина — в щель сразу (сок), большая подскакивает
-              q.ph = 'sink'; q.pt = 0; q.sy = q.y; q.tx = chew13Gap(q.x, q.kind, clamp(Math.sqrt(q.area) / 20, 0.3, 1)); }
-            R3.st.delete(f.id); R3.etool.delete(f.id); continue; } }
-        if (!can || f.pt > C.bite + C.wait){ f.ph = 'sink'; f.pt = 0; f.tx = chew13Gap(f.x, f.kind, clamp(Math.sqrt(f.area) / 20, 0.3, 1)); f.sy = f.y; } }
-    } else {                                                  // в щель: к ближней щели, вниз, меньше; за дисками
-      const u = Math.min(1, f.pt / C.sink); f.x += (f.tx - f.x) * Math.min(1, dt * 14); f.y = f.sy + 22 * u * u; f.a += f.w * dt * 2; if (st) st.ph += st.dir * st.tum * dt;
-      if (f.pt >= C.sink){ F13.frags.splice(i, 1); R3.st.delete(f.id); R3.etool.delete(f.id); } }
-  }
-  F13.stats.peakFrags = Math.max(F13.stats.peakFrags || 0, F13.frags.length);
 }
 // Ляда (доска на верёвке) — тот же брус, поза тела физики каждый кадр.
 function gate13Sync(s){
@@ -9167,6 +9331,8 @@ function gate13Sync(s){
 function reset13(){                                           // новый уровень: части и искры — долой, ляды — заново
   for (const m of F13.gates) if (m){ if (R3.scene) R3.scene.remove(m); dispose13(m); } F13.gates = [];
   for (const f of F13.frags){ R3.st.delete(f.id); R3.etool.delete(f.id); } F13.frags = []; F13.split.clear(); F13.sparks = []; F13.vst = []; F13.vcol = [];
+  if (F13.shd){ F13.shd.length = 0; if (F13.shM) F13.shM.count = 0; } if (F13.dw) F13.dw.fill(1); if (F13.dl) F13.dl.fill(0);   // круг 3: осколки, скорость дисков, сок на дисках — заново
+  const M = F13.wm; if (M){ M.rim.fill(0); M.sm.fill(0); M.data.fill(0); M.on.fill(0); M.avg.fill(0); M.acc.fill(0); M.kind.fill(''); M.tex.needsUpdate = true; }
 }
 function render(){
   frameNo++;
