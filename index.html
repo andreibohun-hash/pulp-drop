@@ -4188,13 +4188,13 @@ void main(){
   float a = smoothstep(TH - 0.05, TH + 0.03, m), thick = clamp((m - TH) / 0.7, 0.0, 1.0);
   vec3 n = normalize(vec3(-vec2(gx, gy) * 2.4, 1.0)), L = normalize(vec3(-0.55, 0.6, 0.58));
   float spec = pow(max(dot(reflect(-L, n), vec3(0.0, 0.0, 1.0)), 0.0), 28.0), rim = pow(1.0 - n.z, 1.4), ndl = clamp(dot(n, L), 0.0, 1.0);
-  vec3 col = mix(min(c * 1.2 + 0.1, vec3(1.0)), c * 0.82, thick * 0.55);
+  vec3 col = mix(min(c * 1.08 + 0.04, vec3(1.0)), c * 0.8, thick * 0.6);   // v19: сок насыщеннее (был белёсый)
   col *= 0.92 + 0.16 * ndl;
-  col += vec3(1.0) * spec * 1.1 + vec3(1.0, 0.97, 0.94) * rim * 0.3;
+  col += vec3(1.0) * spec * 1.1 + vec3(1.0, 0.97, 0.94) * rim * 0.18;
   vec2 Ld = normalize(vec2(-0.62, 0.78));
   float inA = smoothstep(TH - 0.04, TH + 0.12, fraw(v_uv + Ld * u_px * 2.0)), outB = 1.0 - smoothstep(TH - 0.12, TH + 0.06, fraw(v_uv + Ld * u_px * 7.0));
-  col = mix(col, vec3(1.0, 0.99, 0.97), a * inA * outB * 0.8);
-  col = mix(col, c * 0.7, (1.0 - smoothstep(TH, TH + 0.07, m)) * 0.3);
+  col = mix(col, vec3(1.0, 0.99, 0.97), a * inA * outB * 0.5);
+  col = mix(col, c * 0.6, (1.0 - smoothstep(TH, TH + 0.08, m)) * 0.5);   // v19: тёмный край жидкости
   float alpha = a * (0.74 + 0.2 * thick);
   gl_FragColor = vec4(col * alpha, alpha);
 }`;
@@ -4257,22 +4257,43 @@ function liqRender(sh){
   LIQ.dirty = true;
 }
 
+// v19 (отзыв Андрея: «пятна сока — однотонные графические фигуры»): капля — объём: тёмный край, тело, светлая сторона к свету, блик;
+// мелкие — круглые, крупные и быстрые — вытянуты каплей по ходу полёта (голова впереди). Цвета края и светлой стороны — по цвету частицы.
+const PCOLX = [];
+const cssRgb19 = (css) => { if (css[0] === '#') return hexRgb(css); const m = css.match(/[\d.]+/g); return m ? [+m[0], +m[1], +m[2]] : [255, 80, 100]; };
+function pcolX(ci){ let q = PCOLX[ci]; if (!q){ const c = cssRgb19(PCOL[ci]); q = PCOLX[ci] = { dk: rgbCss(shadeRgb(c, 0.62)), lt: rgbCss(mixRgb(c, [255, 250, 235], 0.38)) }; } return q; }
+function dropPath19(c, x, y, a, b, ca, sa, k){   // контур капли масштаба k около центра (x, y): a — полудлина по скорости, b — радиус головы
+  a *= k; b *= k;
+  if (a < b * 1.2){ c.moveTo(x + a, y); c.ellipse(x, y, a, b, Math.atan2(sa, ca), 0, 6.2832); return; }
+  const hx = x + ca * (a - b), hy = y + sa * (a - b), tx = x - ca * a, ty = y - sa * a, th = Math.atan2(sa, ca), nx = -sa, ny = ca, bx = hx - ca * b * 0.9, by = hy - sa * b * 0.9;
+  c.moveTo(hx + nx * b, hy + ny * b); c.arc(hx, hy, b, th + 1.5708, th - 1.5708, true);
+  c.quadraticCurveTo(bx - nx * b * 0.55, by - ny * b * 0.55, tx, ty); c.quadraticCurveTo(bx + nx * b * 0.55, by + ny * b * 0.55, hx + nx * b, hy + ny * b);
+}
 function drawParticles(c){
   if (!PT.n) return;
+  const Lx = -0.42, Ly = -0.56;                                   // к свету (сверху-слева)
   for (let ci = 0; ci < PCOL.length; ci++){
-    let any = false;
-    c.beginPath();
-    for (let i = 0; i < PT.n; i++){
-      if (PT.col[i] !== ci) continue;
-      const x = PT.x[i], y = PT.y[i], s = PT.size[i], tp = PT.type[i];
-      if (tp === P_DROP || tp === P_FOUNT){                 // v2: капля вытянута по скорости — летит, а не висит точкой
-        const vx = PT.vx[i], vy = PT.vy[i], v = Math.hypot(vx, vy), e = 1 + Math.min(1.8, v / 420), ca = v ? vx / v : 1, sa = v ? vy / v : 0, a = s * e, b = s / Math.sqrt(e);
-        c.moveTo(x + ca * a, y + sa * a); c.ellipse(x, y, a, b, Math.atan2(sa, ca), 0, 6.29); }
-      else { const cs = Math.cos(PT.rot[i]) * s, sn = Math.sin(PT.rot[i]) * s, w = tp === P_SEED ? 0.55 : 1;
-        c.moveTo(x + cs, y + sn); c.lineTo(x - sn * w, y + cs * w); c.lineTo(x - cs, y - sn); c.lineTo(x + sn * w, y - cs * w); c.closePath(); }
-      any = true;
+    let any = false; const X = pcolX(ci);
+    for (let pass = 0; pass < 4; pass++){
+      c.beginPath(); let n = 0;
+      for (let i = 0; i < PT.n; i++){
+        if (PT.col[i] !== ci) continue;
+        const x = PT.x[i], y = PT.y[i], s = PT.size[i], tp = PT.type[i];
+        if (tp === P_DROP || tp === P_FOUNT){                     // v2: капля вытянута по скорости; v19 — мелкие круглее, крупные — каплей
+          const vx = PT.vx[i], vy = PT.vy[i], v = Math.hypot(vx, vy), e = 1 + Math.min(1.8, v / 420) * clamp((s - 0.9) / 1.6, 0.15, 1), ca = v ? vx / v : 1, sa = v ? vy / v : 0, a = s * e, b = s / Math.sqrt(e);
+          if (pass === 0) dropPath19(c, x, y, a, b, ca, sa, 1);
+          else if (pass === 1) dropPath19(c, x + Lx * b * 0.16, y + Ly * b * 0.16, a, b, ca, sa, 0.8);
+          else if (pass === 2){ if (s < 1.3) continue; const r = b * 0.42; c.moveTo(x + Lx * b * 0.5 + r, y + Ly * b * 0.5); c.arc(x + Lx * b * 0.5, y + Ly * b * 0.5, r, 0, 6.2832); }
+          else { if (s < 1.0) continue; const r = Math.max(0.3, b * 0.2); c.moveTo(x + Lx * b * 0.62 + r, y + Ly * b * 0.62); c.arc(x + Lx * b * 0.62, y + Ly * b * 0.62, r, 0, 6.2832); }
+          n++; }
+        else if (pass < 2){ const k = pass ? 0.78 : 1, cs = Math.cos(PT.rot[i]) * s * k, sn = Math.sin(PT.rot[i]) * s * k, w = tp === P_SEED ? 0.55 : 1, ox = pass ? Lx * s * 0.12 : 0, oy = pass ? Ly * s * 0.12 : 0;
+          c.moveTo(x + ox + cs, y + oy + sn); c.lineTo(x + ox - sn * w, y + oy + cs * w); c.lineTo(x + ox - cs, y + oy - sn); c.lineTo(x + ox + sn * w, y + oy - cs * w); c.closePath(); n++; }
+      }
+      if (!n) break; any = true;
+      if (pass === 0) c.fillStyle = X.dk; else if (pass === 1) c.fillStyle = PCOL[ci]; else if (pass === 2) c.fillStyle = X.lt;
+      else { c.fillStyle = '#fffdf4'; c.globalAlpha = 0.85; }
+      c.fill(); c.globalAlpha = 1;
     }
-    if (any){ c.fillStyle = PCOL[ci]; c.fill(); }
   }
 }
 // Росчерк: нож проезжает по нити, за ним белая линза и мягкое свечение.
@@ -5338,7 +5359,7 @@ const V12 = {
 // Палитры (sRGB): цвета набора toy, срезы — как toy-slice-*.
 const K3 = {
   melon:  { def: 'K_MELON', dark: '#1d5e24', deco: 'stem',
-    c: { rindDk: '#1a8a30', rindLt: '#8ce852', rindIn: '#b8ee7a', white: '#f7feea', flesh0: '#ff2c42', flesh1: '#ff6f80', seed: '#2b130e', juiceDk: '#b80c28' } },
+    c: { rindDk: '#3d7a1e', rindLt: '#9cc84a', rindIn: '#c4dc7a', white: '#f2f4c4', flesh0: '#ea3a48', flesh1: '#ff7a7c', seed: '#2b130e', juiceDk: '#b80c28' } },   // v19: прослойка шире и кремовее, мякоть спокойнее (реф)
   orange: { def: 'K_ORANGE', dark: '#d2560a', deco: 'calyx',
     c: { peel: '#ffa21a', peelDk: '#ff6a0e', peelIn: '#ffb24a', albedo: '#fff7ec', seg0: '#ff8c0a', seg1: '#ffb53a', pith: '#fff8ec', juiceDk: '#d4580a' } },
   berry:  { def: 'K_BERRY', dark: '#a30f26', deco: 'calyx',     // круг 3: клубника — красная мякоть, светлая сердцевина с прожилками, семечки по краю
@@ -5346,11 +5367,11 @@ const K3 = {
     c: { skin: '#f02036', skinDk: '#c8102c', seed: '#f2bf36', rim: '#a50c22', flesh0: '#ec1832', flesh1: '#ff8a94', core: '#fff4f0', juiceDk: '#b00c24' } },
   // v12, этап 2: остальные виды линейки v11 — только в виде Tripo (нутро — шейдер грани R3FS по своему define; цвета — спрайты toy-slice-*)
   lime:   { def: 'K_ORANGE', dark: '#2f7a1c',                   // цитрусы — дольки, как у апельсина
-    c: { peel: '#59c101', peelDk: '#3f9a12', peelIn: '#e6f6c4', albedo: '#f6fbec', seg0: '#a6de3e', seg1: '#d2f27c', pith: '#f6fbec', juiceDk: '#4f9a1a' } },
+    c: { peel: '#98bc1c', peelDk: '#6c9014', peelIn: '#eef2c4', albedo: '#f8f9e8', seg0: '#bed64a', seg1: '#e0ec92', pith: '#f8f9e8', juiceDk: '#6a8a18' } },   // v19: жёлто-зелёный, как на рефе
   lemon:  { def: 'K_ORANGE', dark: '#c99400',
     c: { peel: '#f9c202', peelDk: '#e8a800', peelIn: '#fff1b0', albedo: '#fffbea', seg0: '#ffd51e', seg1: '#ffe873', pith: '#fffbea', juiceDk: '#d9a400' } },
   plum:   { def: 'K_STONE', dark: '#4e1f86', pit: 0.42,         // слива — янтарная мякоть, косточка
-    c: { rim: '#6e2a96', rimIn: '#ef4a5c', flesh0: '#e66a12', flesh1: '#ffa538', pit: '#b0682e', pitDk: '#6e3412', juiceDk: '#b8460a' } },
+    c: { rim: '#7a2a84', rimIn: '#ef4a5c', flesh0: '#ea7a1c', flesh1: '#ffb04a', pit: '#b0682e', pitDk: '#6e3412', juiceDk: '#b8460a' } },
   cherry: { def: 'K_STONE', dark: '#7a0618', pit: 0,            // вишня и виноград — простая мякоть
     c: { rim: '#86020f', rimIn: '#c40220', flesh0: '#c8061e', flesh1: '#ee3a46', pit: '#e8c9a0', pitDk: '#a0784a', juiceDk: '#8a0216' } },
   grape:  { def: 'K_STONE', dark: '#4a1050', pit: 0,
@@ -5362,7 +5383,7 @@ const K3 = {
   banana: { def: 'K_LONG', dark: '#c89400', long: 0,            // банан и огурец — круглое сечение со своей серединой
     c: { rim: '#f6be02', rimIn: '#ffe27a', flesh0: '#f8e08e', flesh1: '#fff4cc', core: '#f2d47a', seed: '#8a5a2a', juiceDk: '#d0a020' } },
   cuke:   { def: 'K_LONG', dark: '#1e6e30', long: 1,
-    c: { rim: '#176301', rimIn: '#4f9615', flesh0: '#c4ea72', flesh1: '#e4f7ae', core: '#dcf2a0', seed: '#f6ffe2', juiceDk: '#6a9a1a' } },
+    c: { rim: '#3f6a12', rimIn: '#7e9e2c', flesh0: '#cfe28a', flesh1: '#ebf4bc', core: '#e2eeb0', seed: '#f8fbe4', juiceDk: '#6a8a1a' } },   // v19: оливковее
   coco:   { def: 'K_COCO', dark: '#3a1a08',                     // кокос — скорлупа, белое кольцо, полость
     c: { shell: '#7a3410', shellDk: '#4e1e06', flesh1: '#f7f5f0', cav: '#cfe4f0', cavDk: '#8fb2c8', juiceDk: '#9a8a70' } },
 };
@@ -5529,20 +5550,22 @@ void main(){
     col = fl;
     // косточки: кольцо капель в плоскости реза, узким концом к центру
     float a = atan(uv.y, uv.x), Ns = max(3.0, floor(10.0 * rho0 + 0.5)), sec = 6.2831853 / Ns, k0 = floor(a / sec);
-    mat2 Js = scrJ(uv); float seed = 0.0, sx = 0.0, sy = 0.0;
+    mat2 Js = scrJ(uv); float seed = 0.0, sx = 0.0, sy = 0.0, halo = 0.0;
     for (int j = -1; j <= 1; j++){ float k = k0 + float(j), ac = (k + 0.5) * sec + 0.07 * (h21(vec2(mod(k, Ns), Ns)) - 0.5);
       vec2 c = vec2(cos(ac), sin(ac)) * 0.5 * rho0, ds = Js * (uv - c), es = Js * c; float le = length(es); if (le < 1e-6) continue; es /= le;
       float x = dot(ds, es) / 0.074, y = dot(ds, vec2(-es.y, es.x));
       float wid = 0.052 * sqrt(max(0.0, 1.0 - x * x)) * (0.42 + 0.58 * clamp(x * 0.5 + 0.5, 0.0, 1.0));
       float sd = abs(y) - wid, saa = min(fwidth(sd), 0.008) + 0.003, m = (1.0 - smoothstep(-saa, saa, sd)) * step(abs(x), 1.0);
+      halo = max(halo, (1.0 - smoothstep(0.0, 0.018, sd)) * (1.0 - smoothstep(0.95, 1.3, abs(x))));   // v19: ореол — косточка утоплена в мякоть
       if (m > seed){ seed = m; sx = x; sy = y; } }
-    seed *= step(0.3, rho0) * (1.0 - smoothstep(0.76, 0.82, s)) * smoothstep(0.12, 0.3, vLv);   // на грани «ребром» (глубина почти не видна на экране) косточек не видно — не лепим из них метки
+    float sg = step(0.3, rho0) * (1.0 - smoothstep(0.74, 0.8, s)) * smoothstep(0.12, 0.3, vLv); seed *= sg; col = mix(col, col * 0.6, halo * (1.0 - seed) * sg * 0.55);   // на грани «ребром» (глубина почти не видна на экране) косточек не видно — не лепим из них метки
     vec3 sc = mix(cSeed, vec3(0.7, 0.48, 0.4), smoothstep(0.05, 0.75, sx) * smoothstep(0.02, 0.0, abs(sy + 0.012)) * 0.8);   // блик на косточке
     col = mix(col, sc, seed);
-    col = mix(col, cWhite, lay(s, 0.83, aa));
-    col = mix(col, cRindIn, lay(s, 0.88, aa));
-    col = mix(col, rind, lay(s, 0.935, aa));
-    inner = 1.0 - lay(s, 0.83, aa); inner *= 1.0 - seed * 0.7;
+    col = mix(col, mix(cFlesh0, cWhite, 0.45), lay(s, 0.775, aa * 2.5));   // v19: мягкий переход мякоти в прослойку
+    col = mix(col, cWhite, lay(s, 0.80, aa));
+    col = mix(col, cRindIn, lay(s, 0.875, aa));
+    col = mix(col, rind, lay(s, 0.94, aa));
+    inner = 1.0 - lay(s, 0.80, aa); inner *= 1.0 - seed * 0.7;
   }
 #endif
 #ifdef K_ORANGE
@@ -5715,9 +5738,12 @@ void main(){
   // Срез светлее и ровнее кожуры (мякоть «светится»): ступени 0,82 / 0,92 / 1,0, а не 0,6 / 0,82 / 1,0.
   float ndl = dot(N, uL), nv0 = max(dot(N, uV), 0.0);
   vec3 c;
+  vec3 Nd = N;
+  if (!skin) Nd = normalize(N + (uv.x * T + uv.y * B) * 0.6);   // v19: срез чуть выпуклый для света — объём, а не плоский диск
   if (skin) c = toyLight(col, ndl, 1.0 - nv0);
-  else { float lv = 0.82 + 0.1 * smoothstep(-0.2, -0.1, ndl) + 0.1 * smoothstep(0.3, 0.4, ndl) + 0.05 * clamp(-N.y, 0.0, 1.0);
-    c = col * lv; float lum = dot(c, vec3(0.299, 0.587, 0.114)); c = mix(vec3(lum), c, 1.0 + 0.35 * (1.0 - lv)); }   // срез светлее кожуры, белое остаётся белым
+  else { float ndd = dot(Nd, uL), lv = 0.78 + 0.24 * smoothstep(-0.7, 0.75, ndd) + 0.05 * clamp(-N.y, 0.0, 1.0);
+    lv *= mix(0.88, 1.05, smoothstep(0.96, 0.15, s));                                       // v19: от края к середине светлее (мякоть светится)
+    c = col * lv; float lum = dot(c, vec3(0.299, 0.587, 0.114)); c = mix(vec3(lum), c, 1.0 + 0.3 * (1.0 - lv)); }   // срез светлее кожуры, белое остаётся белым
   vec3 H = normalize(uL + uV);
   if (skin){ float hv = max(dot(N0, H), 0.0);
     vec3 Hc = normalize(vec3(-0.5, -0.66, 0.56)), t1 = normalize(cross(Hc, vec3(0.0, 0.0, 1.0))), t2 = cross(Hc, t1);   // крупный мягкий блик-окно вдоль края, сверху-слева
@@ -5725,11 +5751,15 @@ void main(){
     c += vec3(1.0, 0.99, 0.97) * (1.0 - smoothstep(0.25, 1.0, e)) * step(0.0, dot(N0, Hc)) * 0.42;
     c += vec3(1.0, 0.99, 0.96) * smoothstep(0.55, 0.65, pow(hv, 70.0)) * 0.75; }           // маленький резкий блик
   else { float sp = pow(max(dot(N, H), 0.0), shin); c += vec3(1.0, 0.99, 0.97) * smoothstep(0.3, 0.55, sp) * gloss * 0.7;
+    c += vec3(1.0, 0.98, 0.93) * pow(max(dot(Nd, H), 0.0), 7.0) * 0.2 * min(gloss, 1.0) * inner;   // v19: мягкий мокрый блик по «выпуклой» мякоти
     float sh2 = pow(max(dot(N0, H), 0.0), 10.0); c += vec3(1.0) * smoothstep(0.45, 0.8, sh2) * 0.12 * gloss;   // широкий мокрый отсвет по всей грани
     if (uWet > 0.0) c += vec3(1.0) * uWet * (0.28 * smoothstep(0.25, 0.75, sh2) + 0.4 * smoothstep(0.5, 0.62, sp)); }
   float nv = max(dot(N, uV), 0.0), fr = 1.0 - nv;
   c += vec3(1.0, 0.97, 0.9) * smoothstep(0.62, 0.92, fr) * (skin ? 0.12 : 0.2) * clamp(dot(N, normalize(vec3(0.75, 0.25, 0.1))) + 0.2, 0.0, 1.0);
   if (skin) c = mix(c, uDark, smoothstep(0.16, 0.02, nv) * 0.8);                     // тонкая тёмная кромка цветом фрукта
+#ifdef TCAP
+  if (!skin){ float kw = clamp(fwidth(s) * 1.2, 0.006, 0.03); c = mix(c, vec3(1.0, 0.97, 0.88), smoothstep(0.972 - kw, 0.972 + kw, s) * 0.5); }   // v19: тонкий светлый кант по краю среза (сглажен по экрану)
+#endif
   c = clamp(c, 0.0, 1.0);
   gl_FragColor = vec4(c * uTint, 1.0);
 }`;
@@ -6082,6 +6112,7 @@ uniform vec2 uWrap; uniform vec2 uShade; uniform vec3 uVin;   // круг 4: в�
 uniform float uBand;   // v13 круг 3: полоса мякоти на обрезе пилой (ед.)
 uniform vec4 uRimC; uniform vec4 uOcc[3];   // v13 круг 2: кромочный свет фона по состоянию (rgb, сила); тени соседей сверху (x, y, r, сила)
 uniform float uLod; uniform vec4 uHi;   // v16: мельче фактура кожуры (смещение мип-уровня); крупный мягкий блик и его мягкое пятно (сила, ширина ×2)
+uniform float uGreen; uniform vec4 uBounce; uniform vec3 uTintK;   // v19: сдвиг неонового зелёного к оливковому; отражённый свет снизу (rgb-множитель, сила)
 uniform vec2 uSpec;   // круг 5: мягкий отсвет вида — сила и степень (вишня и перец — глянцевее, арбуз — восковой широкий, остальные — едва)
 #ifdef BUMP
 uniform sampler2D tH; uniform float uBump;   // круг 5: карта высот кожуры (поры, ямки, пупырышки, волокна, рёбра) и её сила, ед. мира
@@ -6091,6 +6122,7 @@ vec3 vinyl(vec3 col, vec3 N, float fr){ float w = smoothstep(uWrap.x, uWrap.y, d
   c += col * uVin.y * smoothstep(0.55, 0.95, fr) * (1.0 - 0.6 * w);                          // слабый цветной кромочный свет
   vec3 H = normalize(uL + uV); c += vec3(1.0, 0.98, 0.95) * uSpec.x * pow(max(dot(N, H), 0.0), uSpec.y);   // один мягкий отсвет (круг 5: сила и ширина — по виду)
   c += uRimC.rgb * uRimC.a * smoothstep(0.5, 0.95, fr) * (1.0 - 0.45 * w);                   // v13 круг 2: кромочный свет фона (тёплый вечером, холодный ночью)
+  c += col * uBounce.rgb * uBounce.a * smoothstep(0.05, 0.9, N.y) * (1.0 - w);               // v19: отражённый свет снизу — низ цветной, не провал в чёрный
   return c; }
 vec3 perturb(vec3 N, vec3 pos, vec2 uv, vec3 mapN){ vec3 q0 = dFdx(pos), q1 = dFdy(pos); vec2 st0 = dFdx(uv), st1 = dFdy(uv);
   vec3 q1p = cross(q1, N), q0p = cross(N, q0); vec3 T = q1p * st0.x + q0p * st1.x, B = q1p * st0.y + q0p * st1.y;
@@ -6107,6 +6139,10 @@ void main(){
   vec3 col = texture2D(tMap, vUv, uLod).rgb;
 #endif
   float lum = dot(col, vec3(0.299, 0.587, 0.114)); col = clamp(mix(vec3(lum), col, uSat) * uGain, 0.0, 1.0);
+  col = clamp(col * uTintK, 0.0, 1.0);   // v19: оттенок вида (слива и виноград — к пурпуру, как на рефе)
+  if (uGreen > 0.0){ float gx = col.g - max(col.r, col.b), gw = smoothstep(0.03, 0.22, gx) * uGreen;   // v19: неон → жёлто-зелёный и оливковый (как на рефе)
+    vec3 ol = vec3(col.r + (col.g - col.r) * 0.45, col.g * 0.92, col.b * 0.45); float l2 = dot(ol, vec3(0.299, 0.587, 0.114)); ol = mix(vec3(l2), ol, 0.94);
+    col = mix(col, ol, gw); }
   vec3 N0 = normalize(vN);
   if (!gl_FrontFacing){ gl_FragColor = vec4(mix(col, cIn, 0.7) * 0.86 * uTint, 1.0); return; }   // изнанка: щёлка у края среза, срез хвостика
   vec3 N = N0;
@@ -6166,7 +6202,7 @@ async function r3TInit(){
     const L = R3.L, Vv = R3.Vv, tg = Math.tan(V12.tilt * Math.PI / 180), P12 = () => ({ value: Array.from({ length: 12 }, () => new THREE.Vector4()) });
     const skinU = (T, dark, inn) => ({ tMap: { value: T.map }, tNrm: { value: T.nmap || null }, uHasN: { value: T.nmap ? 1 : 0 }, uNS: { value: new THREE.Vector2(V12T.nrm[0] * V12T.nrmK, V12T.nrm[1] * V12T.nrmK) }, uSat: { value: 1 }, uGain: { value: 1 },
       uL: { value: L }, uV: { value: Vv }, uTg: { value: tg }, uDark: { value: r3c(dark) }, cIn: { value: r3c(inn) }, uArt: { value: new THREE.Vector2() }, uSc: { value: 1 }, uClipY: { value: 1e9 },
-      uWrap: { value: new THREE.Vector2(...V16.fruit.wrap) }, uShade: { value: new THREE.Vector2(...V16.fruit.shade) }, uLod: { value: V16.fruit.lod }, uHi: { value: new THREE.Vector4(...V16.fruit.hi) }, uVin: { value: new THREE.Vector3(V12T.vinyl.lit, V12T.vinyl.rim, V12T.vinyl.sheen[0]) }, uPore: { value: 0 },
+      uWrap: { value: new THREE.Vector2(...V19.fruit.wrap) }, uShade: { value: new THREE.Vector2(...V19.fruit.shade) }, uLod: { value: V16.fruit.lod }, uHi: { value: new THREE.Vector4(...V19.fruit.hi) }, uGreen: { value: 0 }, uTintK: { value: new THREE.Vector3(1, 1, 1) }, uBounce: { value: new THREE.Vector4(...V19.fruit.bounce) }, uVin: { value: new THREE.Vector3(V12T.vinyl.lit, V12T.vinyl.rim, V12T.vinyl.sheen[0]) }, uPore: { value: 0 },
       uSpec: { value: new THREE.Vector2(V12T.vinyl.sheen[0], V12T.vinyl.sheen[1]) }, tH: { value: T.hmap || null }, uBump: { value: 0 }, uTint: R3.tint, uRimC: R3.rimC, uBand: { value: V13.bite.band }, uOcc: { value: Array.from({ length: 3 }, () => new THREE.Vector4()) } });
     R3.tmats = R3.tmats || {}; R3.kready = R3.kready || {}; R3T.miss = R3T.miss || {};
     R3.toolScene = new THREE.Scene();                                        // этап 2: инструменты — спрайты (сцена пустая)
@@ -6178,7 +6214,8 @@ async function r3TInit(){
       const t0 = performance.now(), g = await r3GLB(buf), T = r3FitFruit(k, g, true); T.ms = [+(performance.now() - t0).toFixed(1)];
       await r3Yield(); let t1 = performance.now(); r3TMap(T); T.ms.push(+(performance.now() - t1).toFixed(1));
       const P = K3[k], su = Object.assign(skinU(T, P.dark, V12T.inner[k] || P.c.flesh1 || P.c.seg1 || '#ffffff'), { uP: P12(), uNP: { value: 0 }, uFC: { value: new THREE.Vector3() }, uInv: { value: new THREE.Vector3(1, 1, 1) }, uHit: { value: new THREE.Vector4() }, uCut: { value: r3c(P.c.flesh0 || P.c.seg0 || P.c.flesh1 || '#ffffff') }, uRg: P12() });   // круг 3: uCut — мякоть на обрезе пилой; круг 4: uRg — рвань
-      const lk = V12T.look[k] || [1, 1]; su.uSat.value = lk[0] * V16.fruit.sat; su.uGain.value = lk[1]; su.uLod.value = V16.fruit.lodK[k] || V16.fruit.lod;   // v16: насыщеннее; фактура мягче (по виду)
+      const kv = V19.fruit.kind[k] || {}, lk = kv.look || V12T.look[k] || [1, 1]; su.uSat.value = lk[0] * V19.fruit.sat; su.uGain.value = lk[1]; su.uLod.value = V16.fruit.lodK[k] || V16.fruit.lod;   // v16: фактура мягче (по виду); v19: насыщенность спокойнее
+      su.uGreen.value = kv.green !== undefined ? kv.green : V19.fruit.green; if (kv.shade) su.uShade.value.set(kv.shade[0], kv.shade[1]); if (kv.bounce) su.uBounce.value.set(...kv.bounce); if (kv.tint) su.uTintK.value.set(...kv.tint);   // v19: оливковый зелёный, цветная тень фиолетовых
       const tx = V12T.tex[k] || {}; su.uBump.value = T.hmap ? (tx.bump || 0) * V16.fruit.bump : 0;   // v16: рельеф кожуры слабее (меньше «зерна»)
       if (tx.spec) su.uSpec.value.set(tx.spec[0], tx.spec[1]); if (tx.rim !== undefined) su.uVin.value.y = tx.rim;   // круг 5: фактура вида
       const skin = new THREE.ShaderMaterial({ vertexShader: R3T_VS, fragmentShader: R3T_FS, uniforms: su, defines: T.hmap && tx.bump ? { FRUIT: 1, BUMP: 1 } : { FRUIT: 1 }, side: THREE.DoubleSide });
@@ -6298,6 +6335,16 @@ const V16 = {
   // крупный мягкий блик (сила, ширина) и мягкое пятно блика (сила, ширина) — по гладкой нормали, без «окон»
   fruit: { lod: 1.4, lodK: { melon: 2.6, orange: 2.2, lemon: 2.0, lime: 1.8, coco: 1.8 }, bump: 0.3, sat: 1.12, shade: [1.9, 0.46], wrap: [-0.2, 0.95], hi: [0.2, 4, 0.13, 18] },   // wrap — переход света уже (тень глубже, объём крупнее)
   grass: { img: 'grass16.webp', h: 58, y: -3 },             // трава переднего плана — рисованные пучки GPT: высота полосы (ед.), сдвиг верха от кромки корыта (ед.)
+};
+// v19 (отзыв Андрея 24.11): «зелёные слишком яркие, почти неоновые, у фиолетовых очень тёмные нижние половины; на рефе зелёный уходит
+// в жёлтый и оливковый, переходы света и тени спокойнее» + «срез — плоский яркий диск, пятна сока — однотонные графические фигуры».
+// fruit: переход света шире (wrap), тень — тот же цвет чуть темнее и насыщеннее (степень, доля), отражённый свет снизу (множитель цвета rgb,
+// сила), крупный мягкий блик и второй, тоже мягкий (сила, степень ×2); green — доля сдвига неонового зелёного к жёлто-зелёному и оливковому;
+// sat — общая насыщенность (была 1,12); kind — по видам (look — насыщенность и яркость, как V12T.look).
+const V19 = {
+  fruit: { wrap: [-0.5, 0.96], shade: [1.35, 0.57], bounce: [1.06, 0.96, 0.86, 0.26], hi: [0.2, 2.6, 0.06, 9], green: 0.85, sat: 1.04,
+    kind: { plum: { shade: [1.2, 0.56], bounce: [1.12, 0.85, 1.0, 0.28], look: [0.96, 0.95], tint: [1.03, 1.04, 0.84] }, grape: { shade: [1.2, 0.56], bounce: [1.1, 0.88, 1.0, 0.26], look: [0.96, 0.96], tint: [1.0, 1.0, 0.88] },
+      lime: { green: 0.62, look: [1.22, 0.94] }, melon: { green: 0.95, look: [1.0, 0.84] }, cuke: { green: 0.9, look: [1.0, 0.92] }, berry: { look: [0.94, 1.0] }, cherry: { look: [0.94, 1.0] }, pepper: { look: [0.92, 1.0] } } },
 };
 const V13 = {
   on: true,
@@ -7196,17 +7243,32 @@ function splash15Draw(c){
   for (const q of L){ const t = now - q.t0, o = clamp(t / S.open, 0, 1), k = 0.55 + 0.45 * (1 - (1 - o) * (1 - o)), al = S.a * (t < S.hold ? 1 : clamp(1 - (t - S.hold) / (S.life - S.hold), 0, 1));
     if (al <= 0.01) continue; const r = q.r * k, n = q.lobes.length;
     c.globalAlpha = al; c.fillStyle = q.col;
-    c.beginPath();                                          // ядро: замкнутая кривая через середины лепестков; кромка темнее (сок впитался по краю)
+    const core = new Path2D();                              // ядро: замкнутая кривая через середины лепестков; кромка темнее (сок впитался по краю)
     const P = q.lobes.map((m, i) => { const a = i / n * 6.2832; return [q.x + Math.cos(a) * r * m, q.y + Math.sin(a) * r * m * 0.92]; });
-    for (let i = 0; i <= n; i++){ const a = P[i % n], b = P[(i + 1) % n], mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2; if (!i) c.moveTo(mx, my); else c.quadraticCurveTo(a[0], a[1], mx, my); }
-    c.fill(); c.lineWidth = 1.6; c.strokeStyle = q.dk; c.stroke();
-    for (const [dx, dy, rr, a] of q.spray){ const kx = q.x + dx * k, ky = q.y + dy * k, e = 1 + 0.9 * (1 - o);   // брызги: вытянуты вдоль разлёта
-      c.beginPath(); c.ellipse(kx, ky, rr * e, rr / Math.sqrt(e), a, 0, 6.29); c.fill(); }
+    for (let i = 0; i <= n; i++){ const a = P[i % n], b = P[(i + 1) % n], mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2; if (!i) core.moveTo(mx, my); else core.quadraticCurveTo(a[0], a[1], mx, my); }
+    c.globalAlpha = al * 0.34; c.lineWidth = 3.4; c.strokeStyle = q.col; c.stroke(core);   // v19: полупрозрачный край (сок растёкся и тоньше)
+    c.globalAlpha = al; c.fill(core);
     const g = Math.min(1, t / 0.9), run = 1 - Math.exp(-t / 0.45);   // потёки вниз по доскам
-    for (const [dx, len, wd, ph] of q.drips){ const x = q.x + dx * k, y0 = q.y + Math.sqrt(Math.max(0, 1 - (dx / (q.r * 1.05)) ** 2)) * r * 0.75, y1 = y0 + len * run * (0.7 + 0.3 * ph);
-      c.beginPath(); c.moveTo(x - wd, y0); c.quadraticCurveTo(x - wd * 0.55, (y0 + y1) / 2, x - wd * 0.5, y1); c.arc(x, y1, wd * (0.75 + 0.35 * g), 3.1416, 0, true); c.quadraticCurveTo(x + wd * 0.55, (y0 + y1) / 2, x + wd, y0); c.closePath(); c.fill(); }
+    const dp = new Path2D(), bulbs = [];
+    for (const [dx, len, wd, ph] of q.drips){ const x = q.x + dx * k, y0 = q.y + Math.sqrt(Math.max(0, 1 - (dx / (q.r * 1.05)) ** 2)) * r * 0.75, y1 = y0 + len * run * (0.7 + 0.3 * ph), rb = wd * (0.95 + 0.5 * g);   // v19: капля на конце толще
+      dp.moveTo(x - wd, y0); dp.quadraticCurveTo(x - wd * 0.5, (y0 + y1) / 2, x - wd * 0.42, y1 - rb * 0.6); dp.arc(x, y1, rb, 3.1416 + 0.55, -0.55, true); dp.quadraticCurveTo(x + wd * 0.5, (y0 + y1) / 2, x + wd, y0); dp.closePath(); bulbs.push([x, y1, rb, y0]); }
+    c.fill(dp);
+    c.lineWidth = 1.1; c.strokeStyle = q.dk; c.stroke(core);   // тёмный край ядра — тоньше (у потёков нет: иначе «рамки»)
+    { const gr = c.createRadialGradient(q.x - r * 0.3, q.y - r * 0.34, r * 0.05, q.x - r * 0.1, q.y - r * 0.1, r * 1.05);   // объём: к свету светлее, к краю — цвет
+      gr.addColorStop(0, q.hi); gr.addColorStop(1, 'rgba(255,255,255,0)'); c.globalAlpha = al * 0.55; c.fillStyle = gr; c.fill(core); }
+    c.globalAlpha = al; c.fillStyle = q.col;
+    for (const [dx, dy, rr, a] of q.spray){ const kx = q.x + dx * k, ky = q.y + dy * k, e = 1 + 0.9 * (1 - o) * clamp((rr - 0.8) / 1.6, 0.2, 1);   // брызги: мелкие круглые, крупные — вытянуты вдоль разлёта
+      c.beginPath(); dropPath19(c, kx, ky, rr * e, rr / Math.sqrt(e), Math.cos(a), Math.sin(a), 1); c.fill(); }
     c.globalAlpha = al * S.gloss; c.fillStyle = q.hi;       // влажный блик сверху-слева
-    c.beginPath(); c.ellipse(q.x - r * 0.28, q.y - r * 0.32, r * 0.36, r * 0.16, -0.5, 0, 6.29); c.fill(); }
+    c.beginPath(); c.ellipse(q.x - r * 0.28, q.y - r * 0.32, r * 0.36, r * 0.16, -0.5, 0, 6.29); c.fill();
+    c.globalAlpha = al * 0.9; c.fillStyle = '#fffdf4';      // v19: блики-точки — на ядре, на каплях потёков и на крупных брызгах
+    c.beginPath(); c.arc(q.x - r * 0.42, q.y - r * 0.3, Math.max(0.7, r * 0.07), 0, 6.29); c.arc(q.x - r * 0.12, q.y - r * 0.44, Math.max(0.5, r * 0.045), 0, 6.29);
+    for (const [x, y1, rb, y0] of bulbs){ c.moveTo(x - rb * 0.38 + rb * 0.24, y1 - rb * 0.3); c.arc(x - rb * 0.38, y1 - rb * 0.3, rb * 0.24, 0, 6.29); }
+    for (const [dx, dy, rr] of q.spray) if (rr > 1.6){ const kx = q.x + dx * k - rr * 0.3, ky = q.y + dy * k - rr * 0.35; c.moveTo(kx + rr * 0.24, ky); c.arc(kx, ky, rr * 0.24, 0, 6.29); }
+    c.fill();
+    c.globalAlpha = al * 0.28; c.strokeStyle = q.hi; c.lineWidth = 0.6; c.beginPath();   // светлая нитка по левому краю потёков
+    for (const [x, y1, rb, y0] of bulbs){ const w = rb * 0.55; c.moveTo(x - w, y0 + 2); c.lineTo(x - w * 0.8, y1 - rb); }
+    c.stroke(); }
   c.restore(); c.globalAlpha = 1;
 }
 function woodCss13(){                                         // фактура дерева для верха и лотка (DOM): 256×96; круг 3 — рисованная, как брус
