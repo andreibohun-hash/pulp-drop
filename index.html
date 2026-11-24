@@ -3095,36 +3095,36 @@ function build11(tpl){
 // v15: первые десять уровней — постройки из досок (бункер, жёлоб, короб, полка, лоток с двумя горлами), ручные: parts (сборщики W15)
 // и pile; решение бросками и запас — tools/lab15.mjs. Линейка игры — LINE11: эти десять, затем 100 уровней v11 (11–110).
 const CLEAR15 = [
-  { name: 'First Cut', role: 'i', hint: ['Cut the melon!'], loadout: { knife: 4 }, solution: [{"w":"knife","pts":[[125,336.2],[275,596]]}],
-    parts: [...W15.hopper(200, 575, 86, 70, 330, 293, { ch: 34, sh: 0 })],
-    pile: [P7('melon', 200, 1.3), ...fill15(['plum', 'lime'], 12, 80, 320)] },
+  { name: 'First Cut', role: 'i', hint: ['Cut the melon!'], loadout: { knife: 4 }, solution: [{"w":"knife","pts":[[124.8,366.9],[274.8,626.7]]}],
+    parts: [...W15.hopper(200, 540, 60, 102.7, 297.3, 385.2, { ch: 64, sh: 0, t: 28.1 })],   // v17: пропорции рефа — брус 28 (не тоньше требования «брус толстый»), борта по верху 64 % ширины, 23,5° от вертикали, горло 0,31W, щёчки 2,3T
+    pile: [P7('melon', 200, 0.8), ...fill15(['plum', 'lime'], 12, 107, 293, null, 0.72)] },
   { name: 'Slide', role: 'r', loadout: { knife: 3 }, solution: [{"w":"knife","pts":[[212.1,389.1],[471.9,539.1]]}],
     parts: [...W15.chute(0, 430, 300, 505, { wall: 120, brace: 50 })],
     pile: [P7('melon', 344, 1.05), ...fill15(['orange', 'apple'], 10, 8, 292)] },
-  { name: 'Two Bins', role: 'n', loadout: { knife: 6 }, solution: [{"w":"knife","pts":[[130.1,579.5],[430.1,579.5]]},{"w":"knife","pts":[[40,429.4],[340,429.4]]},{"w":"knife","pts":[[111,277.6],[261,537.4]]}],
-    parts: [...W15.hopper(190, 440, 80, 30, 330, 340, { ch: 24 }), ...W15.hopper(280, 590, 80, 120, 396, 480, { ch: 14 })],
-    pile: [P7('melon', 280, 0.95, 525), ...fill15(['plum'], 4, 140, 380, 500), P7('melon', 190, 0.95), ...fill15(['lime', 'plum'], 6, 50, 320)] },
+  { name: 'Two Bins', role: 'n', loadout: { knife: 6 }, solution: [{"w":"knife","pts":[[130.1,579.5],[430.1,579.5]]},{"w":"knife","pts":[[389.8,313.4],[130,463.4]]},{"w":"knife","pts":[[123.6,540.7],[423.6,540.7]]}],
+    parts: [...W15.hopper(190, 440, 80, 30, 330, 340, { ch: 38 }), ...W15.hopper(280, 590, 80, 120, 396, 480, { ch: 54 })],
+    pile: [P7('melon', 280, 0.95, 536), ...fill15(['plum'], 4, 140, 380, 500), P7('melon', 190, 0.95), ...fill15(['lime', 'plum'], 6, 50, 320)] },
   { name: 'Side Door', role: 'm', loadout: { knife: 6 }, solution: [{"w":"knife","pts":[[168.6,371.1],[318.6,630.9]]},{"w":"knife","pts":[[1.6,517.9],[301.6,517.9]]},{"w":"knife","pts":[[-56,515],[244,515]]}],
     parts: [...W15.box(70, 290, 400, 560, { slot: ['side', 'R', 84], drop: 26 })],
     pile: [P7('melon', 240, 0.95), ...fill15(['orange', 'apple'], 8, 76, 284)] },
-  { name: 'Ledge', role: 'n', loadout: { knife: 4 }, solution: [{"w":"knife","pts":[[99.6,574.7],[399.6,574.7]]},{"w":"knife","pts":[[236.9,233.5],[236.9,533.5]]}],
-    parts: [...W15.shelf(0, 390, 330, 450, { gap: [250, 78], lip: 72, wall: 90 }), ...W15.hopper(250, 590, 82, 150, 396, 470, { ch: 14, sh: 18 })],
-    pile: [P7('cuke', 250, 1.15, 512, 0, 2), ...fill15(['plum'], 4, 160, 380, 506), P7('melon', 250, 0.95), ...fill15(['plum', 'lemon'], 7, 8, 200)] },
+  { name: 'Ledge', role: 'n', loadout: { knife: 4 }, solution: [{"w":"knife","pts":[[283.2,349.3],[283.2,649.3]]},{"w":"knife","pts":[[242.1,237.4],[242.1,537.4]]}],
+    parts: [...W15.shelf(0, 390, 330, 450, { gap: [250, 78], lip: 72, wall: 90 }), ...W15.hopper(250, 548, 82, 150, 396, 470, { ch: 60, sh: 18 })],
+    pile: [P7('cuke', 250, 1.15, 512, 0, 2), ...fill15(['plum'], 4, 160, 380, 470), P7('melon', 250, 0.95), ...fill15(['plum', 'lemon'], 7, 8, 200)] },
   { name: 'Switchback', role: 'p', loadout: { knife: 8 }, solution: [{"w":"knife","pts":[[-14.9,519.6],[285.1,519.6]]},{"w":"knife","pts":[[109.9,392.4],[409.9,392.4]]},{"w":"knife","pts":[[411,330.7],[261,590.5]]},{"w":"knife","pts":[[265.3,355.3],[415.3,615.1]]}],
     parts: [...W15.chute(0, 354, 300, 412, { wall: 100, brace: 32 }), ...W15.chute(400, 492, 100, 556, { wall: 60, brace: 44 })],
     pile: [P7('melon', 59, 1.05, 492), ...fill15(['plum'], 5, 110, 390, 490), P7('melon', 344, 1.05), ...fill15(['apple', 'lemon'], 8, 8, 292)] },
   { name: 'Chop!', role: 'i', hint: ['Axe the coconut!'], pick: 'axe', loadout: { axe: 3, knife: 2 }, solution: [{"w":"axe","pts":[[149.8,654.8],[239.8,474.8]]}],
     parts: [...W15.box(90, 310, 420, 575, { slot: ['floor', 200, 70], drop: 28 })],
     pile: [P7('coco', 200, 1.3), ...fill15(['cherry', 'berry'], 14, 96, 304)] },
-  { name: 'Two Throats', role: 'n', loadout: { knife: 2, axe: 2 }, solution: [{"w":"knife","pts":[[120.9,346.3],[270.9,606.1]]},{"w":"axe","pts":[[126,650.6],[126,450.6]]}],
-    parts: [...W15.twin(132, 70, 240, 80, 580, 40, 362, 430, 496, { ch: 22 })],
+  { name: 'Two Throats', role: 'n', loadout: { knife: 3, axe: 2 }, solution: [{"w":"knife","pts":[[38.8,388.1],[298.6,538.1]]},{"w":"axe","pts":[[14.4,507.5],[214.4,507.5]]}],
+    parts: [...W15.twin(132, 70, 240, 80, 540, 40, 362, 430, 476, { ch: 64 })],
     pile: [P7('coco', 132, 1.3), P7('melon', 240, 0.95), ...fill15(['plum', 'lime'], 12, 50, 352)] },
-  { name: 'Long Way', role: 'r', loadout: { axe: 3, knife: 2 }, solution: [{"w":"axe","pts":[[223.4,639.7],[63.4,519.7]]},{"w":"axe","pts":[[138.9,301.4],[18.9,461.4]]}],
-    parts: [...W15.chute(400, 380, 110, 440, { wall: 90, brace: 40 }), ...W15.hopper(130, 590, 82, 0, 290, 480, { ch: 14 })],
-    pile: [P7('coco', 130, 1.46, 510), ...fill15(['cherry', 'berry'], 6, 20, 270, 490), P7('melon', 62, 1.1), ...fill15(['apple', 'orange'], 8, 120, 392)] },
-  { name: 'Workshop', role: 'p', loadout: { knife: 4, axe: 2 }, solution: [{"w":"knife","pts":[[110.2,537],[410.2,537]]},{"w":"knife","pts":[[182.1,264.6],[332.1,524.4]]},{"w":"axe","pts":[[20.8,509.8],[110.8,329.8]]}],
-    parts: [...W15.box(16, 126, 346, 430, { slot: ['floor', 71, 70], drop: 16, beam: false }), ...W15.hopper(250, 440, 80, 196, 352, 346, { ch: 14, sh: 0, bx0: 150 }), ...W15.chute(0, 512, 290, 562, { wall: 50, brace: 36 })],
-    pile: [P7('melon', 340, 1.1, 518), ...fill15(['plum'], 4, 10, 280, 482), P7('coco', 71, 1.3), ...fill15(['cherry', 'lime'], 5, 18, 124), P7('melon', 250, 0.95), ...fill15(['lime'], 3, 204, 346)] },
+  { name: 'Long Way', role: 'r', loadout: { axe: 3, knife: 2 }, solution: [{"w":"axe","pts":[[200.1,434.2],[80.1,594.2]]},{"w":"axe","pts":[[60,538.2],[60,338.2]]}],
+    parts: [...W15.chute(400, 380, 110, 440, { wall: 90, brace: 40 }), ...W15.hopper(130, 548, 82, 0, 290, 480, { ch: 60 })],
+    pile: [P7('coco', 130, 1.46, 510), ...fill15(['cherry', 'berry'], 6, 20, 270, 476), P7('melon', 62, 1.1), ...fill15(['apple', 'orange'], 8, 120, 392)] },
+  { name: 'Workshop', role: 'p', loadout: { knife: 4, axe: 2 }, solution: [{"w":"knife","pts":[[110.2,555],[410.2,555]]},{"w":"knife","pts":[[281.1,244.5],[281.1,544.5]]},{"w":"axe","pts":[[20.8,509.8],[110.8,329.8]]}],
+    parts: [...W15.box(16, 126, 346, 430, { slot: ['floor', 71, 70], drop: 16, beam: false }), ...W15.hopper(250, 440, 80, 196, 352, 346, { ch: 34, sh: 0, bx0: 150 }), ...W15.chute(0, 530, 290, 580, { wall: 50, brace: 36 })],
+    pile: [P7('melon', 340, 1.1, 537), ...fill15(['plum'], 4, 10, 280, 498), P7('coco', 71, 1.3), ...fill15(['cherry', 'lime'], 5, 18, 124), P7('melon', 250, 0.95), ...fill15(['lime'], 3, 204, 346)] },
 ];
 // v11: уровни (пишет tools/gen11.mjs; метки /*S11_n*/ … /*END*/ — решение бросками).
 const CLEAR11 = [
@@ -6675,6 +6675,247 @@ function wood16Mat(dir, P, o){
     uC1: { value: new THREE.Vector4(...C1) }, uC2: { value: new THREE.Vector4(...C2) }, uK: { value: new THREE.Vector3((o.shade || 1) * (V13.look[V13.states[Math.max(0, F13.st)]].wk || 1), 0, 0) } } });
   return m;
 }
+// v17 (отзыв Андрея на образец v16.1: «у нас всё ровное, как под линейку, а на рефе дороже за счёт скосов, выемок и сужений»; разбор
+// формы — GPT, числа сверены с вырезками рефа). Длинные брусья остаются прямыми; «рукотворность» — в сечении и соединениях:
+// sec — сечение бруса из трёх плоскостей (T — толщина детали поперёк): внутренняя фаска к полости или вверх (доля T [мин, макс],
+//   разброс ширины по длине, шаг шума ед.; яркость ×bevK + тёплая прибавка; яркость по длине — от bevAmt[0] до 1, шаг ед.), широкая
+//   лицевая плоскость, узкая наружная грань (доля T, мин, макс ед.; темнее ×sideK, светлая риска на ребре rim: сила, яркость);
+//   торец (доля T, мин, макс ед.; к свету ×endK[0], книзу ×endK[1]; волокно поперёк — шаг ед.); стык (ширина тёмного шва ед., сила,
+//   у щёчки под швом — светлая кромка её торца: яркость); ink — внутренний кант (ширина ед.; сила у фаски, у грани и торца, у шва)
+// tip — верхнее окончание бруса: косой торец от пика (над балкой на долю T, пик — у внутреннего ребра) вниз наружу под углом к горизонту
+//   (лево, право; у стенки короба — свой); подрезы углов: пик, плечо (доли T, у левого и правого — разные)
+// neck — стык бруса и щёчки у горла: косой шов, ° к горизонту (щёчка снаружи чуть уже: шов сходится к внутреннему углу)
+// width — ширина бруса по длине: вычет наружной кромки в четырёх точках (доли T) у левого и правого — свой; у длинного дна — floorW
+// notch — одна зарубка внутреннего ребра: [место — доля длины сверху, длина, глубина — доли T, ступень в начале (1) или в конце (−1)]
+//   у уровня — своя деталь и место (по номеру: какая по длине деталь, какое ребро); у правого бруса уровня 1 — меньший срез в другом месте
+// cham — подрез свободных углов (доля T: мин, макс), z — порядок деталей по глубине (балка — за брусом)
+// back — прогиб верхней кромки задника к середине (доля T бруса, не больше доли пролёта), кант кромки (доля T), сбой посередине (ширина, глубина — доли T)
+const V17 = {
+  sec: { bev: [0.17, 3.2, 6.2], bevVar: [0.22, 37], bevK: [1.42, 0.04, 0.022, 0.0], bevAmt: [0.82, 53], crease: 0.1,
+         nar: [0.08, 1.6, 3.0], sideK: [0.76, 0.72, 0.7], rim: [0.08, 1.12],
+         end: [0.2, 2.2, 6.0], endK: [1.16, 0.64], endStep: 11,
+         joint: [1.0, 0.5, 1.12], ink: [0.8, 0.3, 0.42, 0.55] },
+  tip: { up: 0.12, ang: [60, 64], angSide: 47, chL: [0.08, 0.05], chR: [0.1, 0.07] },
+  neck: { ang: 11 },
+  width: { L: [0, 0.03, 0.05, 0.006], R: [0, 0.022, 0.058, 0.012], floor: [0, 0.035, 0.05, 0.01] },
+  notch: { at: [0.45, 0.3, 0.1, 1], small: [0.68, 0.18, 0.06, -1] },
+  cham: [0.06, 0.1],
+  back: { sag: 0.6, sagMax: 0.1, rim: 0.065, glitch: [0.13, 0.11] },
+  z: { beam: -2.5, floor: -0.8, brace: -1.5, side: 0.3, board: 0.6, cheek: 0.2, lip: 0.4, post: 0 },
+};
+// Брус v17: те же текстуры v16.1 (атлас досок GPT), но сечение и форма — по ролям рёбер (uE.w): 0 — фаска, 1 — узкая грань, 2 — торец,
+// 3 — шов, 4 — скрытое (за краем поля). Рёбра — внутренняя нормаль и сдвиг; uG — начало и направление ребра (для профилей по длине):
+// вычет кромки (uCv: ребро, начало, длина; uCd — вычет в четырёх точках) и зарубки (uN1, uN2: ребро, начало, длина, глубина со знаком
+// ступени). Вычет режет контур (discard) — контур детали и кант идут за ним.
+const W17_FS = (() => { const Q = V16.wood, S = V17.sec, f = (x) => (+x).toFixed(4), v3 = (a) => 'vec3(' + a.map(f).join(', ') + ')'; return `precision highp float;
+uniform sampler2D tW; uniform vec3 uTint; uniform vec4 uP; uniform vec4 uT; uniform vec4 uE[10]; uniform vec4 uF[10]; uniform vec4 uG[10]; uniform int uNE;
+uniform vec4 uCv; uniform vec4 uCd; uniform vec4 uN1; uniform vec4 uN2; uniform vec4 uU; uniform vec4 uC1; uniform vec4 uC2; uniform vec3 uK;
+varying vec2 vL;
+float h1(float x){ return fract(sin(x * 12.9898 + 4.1) * 43758.5453); }
+float vn1(float x){ float i = floor(x), t = fract(x); t = t * t * (3.0 - 2.0 * t); return mix(h1(i), h1(i + 1.0), t); }
+float seg(vec2 p, vec2 a, vec2 b){ vec2 pa = p - a, ba = b - a; float h = clamp(dot(pa, ba) / max(dot(ba, ba), 1e-4), 0.0, 1.0); return length(pa - ba * h); }
+vec3 pl(float u, float row, float fv){ return texture2D(tW, vec2(u, (mod(row, ${f(Q.rows)}) * ${f(Q.rowH)} + 2.0 + clamp(fv, 0.0, 1.0) * ${f(Q.rowH - 4)}) / ${f(Q.atlasH)})).rgb; }
+float nd(vec4 N, float fi, float t){ if (abs(N.x - fi) > 0.5) return 0.0; float s = (t - N.y) / N.z; if (s < 0.0 || s > 1.0) return 0.0; return abs(N.w) * (N.w > 0.0 ? 1.0 - s : s); }
+float nwall(vec4 N, float fi, float t, float di){ if (abs(N.x - fi) > 0.5) return 1e3; float g = N.w > 0.0 ? N.y - t : t - N.y - N.z; return g < 0.0 ? 1e3 : g + max(di - abs(N.w), 0.0); }
+float cvd(float fi, float t){ if (abs(uCv.x - fi) > 0.5) return 0.0; float s = clamp((t - uCv.y) / uCv.z, 0.0, 1.0) * 3.0;
+  return s < 1.0 ? mix(uCd.x, uCd.y, s) : s < 2.0 ? mix(uCd.y, uCd.z, s - 1.0) : mix(uCd.z, uCd.w, s - 2.0); }
+void main(){
+  vec2 p = vL, d = uP.xy, e = vec2(-d.y, d.x);
+  float u = dot(p, d), v = dot(p, e) - uT.y, th = uT.x, bw = uP.w;
+  float bi = floor(clamp(v, 0.0, th - 1e-3) / bw), fv = (v - bi * bw) / bw;               // широкая деталь — склейка досок шириной bw
+  vec3 c = pl(u / ${f(Q.len)} + uT.z + bi * 0.37, uP.z + bi * 2.0, fv);                       // лицо: волокно вдоль детали (рисунок GPT)
+  c = mix(${v3(Q.mean)}, c, ${f(Q.con)}) * ${f(Q.gain)};
+  c *= 1.0 + ${f(Q.tone[0])} * (2.0 * vn1(u / ${f(Q.tone[1])} + uT.w * 17.0 + bi * 5.0) - 1.0);
+  if (bi > 0.5) c *= 1.0 - ${f(Q.glue)} * (1.0 - smoothstep(0.0, 0.8, v - bi * bw));
+  float D[10]; float T[10]; float dm = 1e4, wall = 1e3;
+  for (int i = 0; i < 10; i++){ if (i >= uNE) break; float fi = float(i);
+    float di = dot(p, uE[i].xy) - uE[i].z, t = dot(p - uG[i].xy, uG[i].zw);
+    wall = min(wall, min(nwall(uN1, fi, t, di), nwall(uN2, fi, t, di)));
+    di -= cvd(fi, t) + nd(uN1, fi, t) + nd(uN2, fi, t);                                        // вычет кромки и зарубки — контур внутрь
+    D[i] = di; T[i] = t; dm = min(dm, di); }
+  if (dm < 0.0) discard;
+  vec3 acc = vec3(0.0); float bm = 0.0, ink = 0.0, ws = 0.0;
+  for (int i = 0; i < 10; i++){ if (i >= uNE) break; float fi = float(i), di = D[i], t = T[i], role = uE[i].w; vec4 F = uF[i];
+    if (di - dm > ${f(Q.soft * 6)} || role > 3.5) continue;
+    float wi = exp(-(di - dm) / ${f(Q.soft)}), mk = 0.0, ik = 0.0; vec3 ce = c;
+    if (role < 0.5){                                                                          // внутренняя фаска — отдельная светлая плоскость
+      float w = F.x * (1.0 + F.y * (2.0 * vn1(t / F.z + fi * 3.1 + uT.w * 11.0) - 1.0));
+      float amt = mix(${f(S.bevAmt[0])}, 1.0, vn1(t / ${f(S.bevAmt[1])} + fi * 1.7 + uT.z * 7.0));
+      ce = mix(c, c * ${f(S.bevK[0])} + ${v3(S.bevK.slice(1))}, amt);
+      ce *= 1.0 - ${f(S.crease)} * exp(-pow((di - w + 0.25) / 0.4, 2.0));                       // ребро фаски и лица — тонкая тень
+      mk = 1.0 - smoothstep(w - 0.25, w + 0.25, di); ik = ${f(S.ink[1])}; }
+    else if (role < 1.5){                                                                     // узкая наружная грань — в тени, светлая риска на ребре
+      float w = F.x; vec3 cs = c * ${v3(S.sideK)};
+      cs *= 1.0 + ${f(S.rim[0])} * exp(-pow((di - w + 0.3) / 0.35, 2.0)) * (0.5 + vn1(t / 17.0 + fi));
+      ce = cs; mk = 1.0 - smoothstep(w - 0.2, w + 0.2, di); ik = ${f(S.ink[2])}; }
+    else if (role < 2.5){                                                                     // торец — волокно поперёк, к свету светлее
+      float w = F.x; vec3 ct = pl(di / ${f(S.endStep * 4)} + uT.z * 3.0, uP.z + 3.0, fract(t / ${f(S.endStep)} + uT.w));
+      ct = mix(${v3(Q.mean)}, ct, ${f(Q.con)}) * (F.y > 0.5 ? ${f(S.endK[0])} : ${f(S.endK[1])});
+      ce = ct; mk = 1.0 - smoothstep(w - 0.25, w + 0.25, di); ik = F.y > 0.5 ? ${f(S.ink[1])} : ${f(S.ink[2])}; }
+    else {                                                                                    // шов: тёмная щель; у щёчки под ней — светлая кромка торца
+      ce = c * (1.0 - ${f(S.joint[1])} * (1.0 - smoothstep(0.15, F.x, di)));
+      if (F.y > 0.5) ce = mix(ce, c * ${f(S.joint[2])}, exp(-pow((di - F.x - 0.6) / 0.45, 2.0)));
+      mk = 1.0 - smoothstep(F.x + 1.0, F.x + 1.6, di); ik = ${f(S.ink[3])}; }
+    acc += wi * ce; bm += wi * mk; ws += wi; ink += wi * ik * (1.0 - smoothstep(0.0, ${f(S.ink[0])}, di)); }
+  if (ws > 0.0) c = mix(c, acc / ws, clamp(bm / ws, 0.0, 1.0));
+  c *= 1.0 - 0.45 * (1.0 - smoothstep(0.25, 1.1, wall));                                     // стенка ступени зарубки — в тени
+  float cr = min(seg(vec2(u, v), uC1.xy, uC1.zw), seg(vec2(u, v), uC2.xy, uC2.zw)); c *= 1.0 - ${f(Q.crack)} * (1.0 - smoothstep(0.25, 0.85, cr));
+  float ej = min(uU.z > 0.5 ? u - uU.x : 1e3, uU.w > 0.5 ? uU.y - u : 1e3); c *= 1.0 - ${f(Q.joint[1])} * pow(1.0 - smoothstep(0.0, ${f(Q.joint[0])}, ej), 1.6);
+  if (ws > 0.0) c = mix(c, ${v3(Q.inkCol)}, clamp(ink / ws, 0.0, 1.0));
+  gl_FragColor = vec4(clamp(c * uK.x * uTint, 0.0, 1.0), 1.0);
+}`; })();
+// Рёбра контура: наружная нормаль (от центра), длина, направление.
+function edges17(P){ let cx = 0, cy = 0; for (const v of P){ cx += v[0] / P.length; cy += v[1] / P.length; }
+  return P.map((a, k) => { const b = P[(k + 1) % P.length], ex = b[0] - a[0], ey = b[1] - a[1], L = Math.hypot(ex, ey) || 1; let nx = ey / L, ny = -ex / L;
+    if ((cx - a[0]) * nx + (cy - a[1]) * ny > 0){ nx = -nx; ny = -ny; } return { a, b, L, tx: ex / L, ty: ey / L, nx, ny, mx: (a[0] + b[0]) / 2, my: (a[1] + b[1]) / 2 }; }); }
+// Роль ребра без знания постройки (уровни 11–110, корыто, стойки): вверх или к середине кадра — фаска, вниз и наружу — узкая грань,
+// короткий торец — торец (к свету светлее), за краем поля — скрытое.
+function role17(E, dir, th, o){
+  const S = V17.sec, W = CFG.W, lng = Math.abs(E.tx * dir[0] + E.ty * dir[1]) > 0.62, out = !o.local && (Math.max(E.a[0], E.b[0]) < -0.5 || Math.min(E.a[0], E.b[0]) > W + 0.5);
+  if (out) return { role: 4 };
+  const dc = o.local ? [0, -1] : [CFG.W / 2 - E.mx, VIEW.top + V16.wood.cy * (CFG.grindY - VIEW.top) - E.my], dl = Math.hypot(dc[0], dc[1]) || 1, toC = (E.nx * dc[0] + E.ny * dc[1]) / dl;
+  if (lng && (E.ny < -0.45 || (E.ny < 0.45 && toC > 0.2))) return bev17(th);
+  if (!lng) return end17(th, E.ny < -0.3);
+  return nar17(th);
+}
+const bev17 = (th) => { const S = V17.sec; return { role: 0, w: clamp(th * S.bev[0], S.bev[1], S.bev[2]), wv: S.bevVar[0], wl: S.bevVar[1] }; };
+const nar17 = (th) => { const S = V17.sec; return { role: 1, w: clamp(th * S.nar[0], S.nar[1], S.nar[2]) }; };
+const end17 = (th, up) => { const S = V17.sec; return { role: 2, w: clamp(th * S.end[0], S.end[1], S.end[2]), up: up ? 1 : 0 }; };
+// Материал бруса v17: рёбра контура P — роли из o.e17 (постройки из досок: vis17) или по умолчанию (role17).
+function wood17Mat(dir, P, o){
+  const Q = V16.wood, W = CFG.W, e = [-dir[1], dir[0]], pr = P.map(v => v[0] * e[0] + v[1] * e[1]), v0 = Math.min(...pr), th = Math.max(...pr) - v0;
+  const PH = o.e17 && o.e17.ph || P, pu = PH.map(v => v[0] * dir[0] + v[1] * dir[1]), u0 = Math.min(...pu), u1 = Math.max(...pu), L = u1 - u0, kind = o.kind || 'board', sd = o.seed || 0;
+  const inF = (uu) => PH.some((v, i) => Math.abs(pu[i] - uu) < 1 && v[0] > 2 && v[0] < W - 2), far = [-1e4, -1e4, -1e4, -1e4];
+  const pv = P.map(q => q[0] * dir[0] + q[1] * dir[1]), U0 = Math.min(...pv), U1 = Math.max(...pv), LL = U1 - U0;
+  let C1 = far, C2 = far;
+  if (kind === 'cheek' || kind === 'leg'){ C1 = [U1 - 0.3, th * 0.66, U1 - 0.4 * LL, th * 0.6]; if (LL > 20) C2 = [U1 - 0.3, th * 0.3, U1 - 0.2 * LL, th * 0.34]; }
+  if (kind === 'trough'){ C1 = [U0 + 0.22 * LL, th * 0.02, U0 + 0.22 * LL + 9, th * 0.3]; C2 = [U0 + 0.71 * LL, th * 0.02, U0 + 0.71 * LL - 7, th * 0.26]; }
+  const ES = edges17(P), spec = o.e17 ? o.e17.E : ES.map(E => role17(E, dir, th, o));
+  const UE = [], UF = [], UG = [];
+  for (let k = 0; k < 10; k++){ const E = ES[k], R = spec[k];
+    if (!E){ UE.push(new THREE.Vector4(0, 0, -1e4, 4)); UF.push(new THREE.Vector4(0, 0, 1, 0)); UG.push(new THREE.Vector4(0, 0, 1, 0)); continue; }
+    const fl = R.flip ? -1 : 1, a = R.flip ? E.b : E.a;
+    UE.push(new THREE.Vector4(-E.nx, -E.ny, -(E.a[0] * E.nx + E.a[1] * E.ny), R.role));
+    UF.push(new THREE.Vector4(R.w || 1, R.role === 0 ? R.wv || 0 : R.role === 2 || R.role === 3 ? R.up || 0 : 0, R.role === 0 ? R.wl || 37 : 1, 0));
+    UG.push(new THREE.Vector4(a[0], a[1], E.tx * fl, E.ty * fl)); }
+  const cv = o.e17 && o.e17.carve, n1 = o.e17 && o.e17.n1, n2 = o.e17 && o.e17.n2, NO = new THREE.Vector4(-9, 0, 1, 0);
+  const m = new THREE.ShaderMaterial({ vertexShader: W16_VS, fragmentShader: W17_FS, side: THREE.BackSide, uniforms: { uTint: u13().uTint, tW: { value: wood16Tex() },
+    uP: { value: new THREE.Vector4(dir[0], dir[1], Math.floor(r3Hash(sd * 3.7 + 0.2) * Q.rows) % Q.rows, th / Math.max(1, Math.round(th / Q.band))) }, uT: { value: new THREE.Vector4(th, v0, r3Hash(sd * 9.1), r3Hash(sd * 4.3)) },
+    uE: { value: UE }, uF: { value: UF }, uG: { value: UG }, uNE: { value: Math.min(10, P.length) },
+    uCv: { value: cv ? new THREE.Vector4(cv.k, cv.t0, cv.len, 0) : NO }, uCd: { value: cv ? new THREE.Vector4(...cv.d) : new THREE.Vector4(0, 0, 0, 0) },
+    uN1: { value: n1 ? new THREE.Vector4(n1.k, n1.t0, n1.len, n1.dep) : NO }, uN2: { value: n2 ? new THREE.Vector4(n2.k, n2.t0, n2.len, n2.dep) : NO },
+    uU: { value: new THREE.Vector4(u0, u1, kind === 'beam' && inF(u0) ? 1 : 0, kind === 'beam' && inF(u1) ? 1 : 0) },
+    uC1: { value: new THREE.Vector4(...C1) }, uC2: { value: new THREE.Vector4(...C2) }, uK: { value: new THREE.Vector3((o.shade || 1) * (V13.look[V13.states[Math.max(0, F13.st)]].wk || 1), 0, 0) } } });
+  return m;
+}
+// Постройки из досок (уровни 1–10): контур вида поверх тел физики (внутренняя граница прохода — прежняя) и роли рёбер.
+// 1) стык бруса и щёчки — косой шов к внутреннему углу; 2) верхнее окончание бруса (и стенки короба) — косой торец с пиком у внутреннего
+// ребра и подрезами; 3) балка уходит за брус (продлена под него); 4) подрез свободных углов; 5) роли рёбер (полость — фаска, вниз и
+// наружу — узкая грань, торцы, швы); 6) ширина бруса по длине и зарубка — профили для шейдера.
+function vis17(s, parts, vis){
+  const V = V17, W = CFG.W, lv = s.n || 1, backs = partBacks(s.level.parts || []), ids = [];
+  const R = parts.map((st, i) => { if (st.role !== 'wood') return null; ids.push(i); return { i, kind: st.kind, P: vis[i].map(v => v.slice()), ph: st.poly, tags: {} }; });
+  const phys = ids.map(i => parts[i].poly), inWood = (x, y, skip) => ids.some(j => j !== skip && polyDist(parts[j].poly, x, y) < 0.25);
+  const same = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1]) < 0.9, key = (v) => v[0].toFixed(1) + ',' + v[1].toFixed(1);
+  const gapX = (x, y) => { let best = null; for (const g of s.gaps){ const d = Math.hypot(g.x - x, g.y - y); if (!best || d < best.d) best = { d, g }; } return best ? best.g.x : W / 2; };
+  const longDir = (P) => { let b = null; for (const E of edges17(P)) if (!b || E.L > b.L) b = E; return b.ty < 0 ? [-b.tx, -b.ty] : [b.tx, b.ty]; };
+  const thick = (P, dir) => { const e = [-dir[1], dir[0]], pr = P.map(v => v[0] * e[0] + v[1] * e[1]); return Math.max(...pr) - Math.min(...pr); };
+  // 1) косой шов бруса и щёчки
+  for (const i of ids){ const B = R[i]; if (B.kind !== 'board') continue;
+    for (const j of ids){ const C = R[j]; if (C.kind !== 'cheek') continue;
+      let hit = null; for (let a = 0; a < B.P.length && !hit; a++) for (let b = 0; b < C.P.length && !hit; b++){ const p1 = B.P[a], p2 = B.P[(a + 1) % B.P.length], q1 = C.P[b], q2 = C.P[(b + 1) % C.P.length];
+        if ((same(p1, q1) && same(p2, q2)) || (same(p1, q2) && same(p2, q1))) hit = [p1, p2]; }
+      if (!hit) continue;
+      const gx = gapX((hit[0][0] + hit[1][0]) / 2, hit[0][1]), I = Math.abs(hit[0][0] - gx) < Math.abs(hit[1][0] - gx) ? hit[0] : hit[1], O = I === hit[0] ? hit[1] : hit[0];
+      const dir = longDir(B.ph), tl = Math.abs(dir[0] / dir[1]), Th = Math.abs(I[0] - O[0]), ta = Math.tan(V.neck.ang * Math.PI / 180), wc = Th / (1 + ta * tl), sx = Math.sign(O[0] - I[0]);
+      const K = [I[0] + sx * wc, I[1] + wc * ta], ox = O[0];
+      B.P = B.P.map(v => same(v, O) ? K.slice() : v); C.P = C.P.map(v => same(v, O) ? K.slice() : Math.abs(v[0] - ox) < 0.6 ? [K[0], v[1]] : v);
+      B.tags.joint = key(I) + '|' + key(K); C.tags.joint = key(K) + '|' + key(I); C.tags.inner = I; } }
+  // 2) верхнее окончание: косой торец (брус бункера, лотка; стенка короба)
+  for (const i of ids){ const B = R[i]; if (B.kind !== 'board' && B.kind !== 'side') continue;
+    const dir = longDir(B.ph), ES = edges17(B.P); let top = -1;
+    ES.forEach((E, k) => { if (Math.abs(E.tx * dir[0] + E.ty * dir[1]) < 0.6 && E.ny < -0.5 && (top < 0 || E.my < ES[top].my)) top = k; });
+    if (top < 0) continue; const E = ES[top]; if (inWood(E.mx, E.my - 2, i)) continue;
+    const gx = gapX(E.mx, E.my), A = Math.abs(E.a[0] - gx) < Math.abs(E.b[0] - gx) ? E.a : E.b, Bv = A === E.a ? E.b : E.a, n = B.P.length;
+    const ia = B.P.findIndex(v => same(v, A)), ib = B.P.findIndex(v => same(v, Bv)), an = B.P[(ia + 1) % n] === Bv || same(B.P[(ia + 1) % n], Bv) ? B.P[(ia + n - 1) % n] : B.P[(ia + 1) % n];
+    const ul = Math.hypot(an[0] - A[0], an[1] - A[1]) || 1, u = [(an[0] - A[0]) / ul, (an[1] - A[1]) / ul], th = thick(B.ph, dir), left = Bv[0] < A[0];
+    const side = B.kind === 'side', up = (side ? 0.08 : V.tip.up) * th, peak = [A[0] - u[0] * up / Math.abs(u[1]), A[1] - up];
+    const al = (side ? V.tip.angSide : V.tip.ang[left ? 0 : 1]) * Math.PI / 180, cd = [Math.sign(Bv[0] - A[0]) * Math.cos(al), Math.sin(al)];
+    const det = cd[0] * (-u[1]) - cd[1] * (-u[0]), rx = Bv[0] - peak[0], ry = Bv[1] - peak[1], k = (rx * (-u[1]) - ry * (-u[0])) / det, Qp = [peak[0] + cd[0] * k, peak[1] + cd[1] * k];
+    const ch = left ? V.tip.chL : V.tip.chR, cA = ch[0] * th, cB = ch[1] * th;
+    const pIn = [peak[0] + u[0] * cA * 1.25, peak[1] + u[1] * cA * 1.25], pCut = [peak[0] + cd[0] * cA * 0.8, peak[1] + cd[1] * cA * 0.8];
+    const qCut = [Qp[0] - cd[0] * cB, Qp[1] - cd[1] * cB], qOut = [Qp[0] + u[0] * cB * 1.1, Qp[1] + u[1] * cB * 1.1];
+    const fwd = (ib === (ia + 1) % n), seq = fwd ? [pIn, pCut, qCut, qOut] : [qOut, qCut, pCut, pIn];
+    const P2 = []; for (let k2 = 0; k2 < n; k2++){ if (k2 === ia) { if (fwd) P2.push(...seq); continue; } if (k2 === ib){ if (!fwd) P2.push(...seq); continue; } P2.push(B.P[k2]); }
+    B.P = P2; B.tags.tip = [pIn, pCut, qCut, qOut].map(key); B.tags.tipAt = A[1]; }
+  // 3) балка уходит за брус: торец балки внутри поля, касается бруса или стенки короба — продлить под неё (почти до внутреннего ребра)
+  for (const i of ids){ const B = R[i]; if (B.kind !== 'beam') continue;
+    for (const j of ids){ const X = R[j]; if (X.kind !== 'board' && X.kind !== 'side') continue;
+      const ES = edges17(B.P); for (const E of ES){ if (Math.abs(E.ty) < 0.5 || E.mx < 1 || E.mx > W - 1 || polyDist(X.ph, E.mx, E.my) > 1) continue;
+        const xs = []; const P = X.ph; for (let k = 0; k < P.length; k++){ const a = P[k], b = P[(k + 1) % P.length]; if ((a[1] - E.my) * (b[1] - E.my) <= 0 && a[1] !== b[1]) xs.push(a[0] + (b[0] - a[0]) * (E.my - a[1]) / (b[1] - a[1])); }
+        if (xs.length < 2) continue; const wX = Math.max(...xs) - Math.min(...xs), cxX = (Math.max(...xs) + Math.min(...xs)) / 2, dx = Math.sign(cxX - E.mx) * Math.max(0, wX - 1.5);
+        B.P = B.P.map(v => same(v, E.a) || same(v, E.b) ? [v[0] + dx, v[1]] : v); B.tags.under = 1; } } }
+  // 4–5) роли рёбер, подрез свободных углов
+  const outV = (v) => v[0] < -0.5 || v[0] > W + 0.5;
+  for (const i of ids){ const B = R[i], dir = B.kind === 'cheek' || B.kind === 'side' || B.kind === 'lip' || B.kind === 'post' ? [0, 1] : longDir(B.ph), th = thick(B.ph, dir); B.dir = dir; B.th = th;
+    const classify = () => edges17(B.P).map((E) => {
+      const ek = key(E.a) + '|' + key(E.b), ekr = key(E.b) + '|' + key(E.a), lng = Math.abs(E.tx * dir[0] + E.ty * dir[1]) > 0.62;
+      if (outV(E.a) && outV(E.b) || (Math.max(E.a[0], E.b[0]) < 0.2 || Math.min(E.a[0], E.b[0]) > W - 0.2) && !lng) return { role: 4 };
+      if (B.tags.joint && (B.tags.joint === ek || B.tags.joint === ekr)) return { role: 3, w: V.sec.joint[0], up: B.kind === 'cheek' ? 1 : 0 };
+      if (B.tags.tip && B.tags.tip.includes(key(E.a)) && B.tags.tip.includes(key(E.b))) return end17(th, true);
+      const ox = E.mx + E.nx * 1.4, oy = E.my + E.ny * 1.4, cx = E.mx + E.nx * 3.5, cy = E.my + E.ny * 3.5;
+      if (inWood(ox, oy, i) && !(B.kind === 'beam' && lng)) return { role: 3, w: V.sec.joint[0], up: 0 };
+      if (backs.some(P => inPoly15(P, cx, cy)) && !inWood(cx, cy, -1) || s.gaps.some(g => Math.abs(cx - g.x) < g.w / 2 && cy > g.y - 4 && cy < (g.yb || CFG.floorY) + 2)) return bev17(th);
+      if (lng && E.ny < -0.45) return bev17(th);
+      if (!lng) return end17(th, E.ny < -0.3);
+      return nar17(th); });
+    let spec = classify();
+    // подрез углов у свободных торцов (не у пика — он уже подрезан; размеры по месту — разные)
+    const n = B.P.length, P2 = [];
+    for (let k = 0; k < n; k++){ const v = B.P[k], rp = spec[(k + n - 1) % n], rn = spec[k], tipV = B.tags.tip && B.tags.tip.includes(key(v));
+      const free = (r) => r.role === 0 || r.role === 1 || r.role === 2, endish = rp.role === 2 || rn.role === 2;
+      if (tipV || outV(v) || !free(rp) || !free(rn) || !endish || B.kind === 'beam' || B.kind === 'board'){ P2.push(v); continue; }
+      const a = B.P[(k + n - 1) % n], b = B.P[(k + 1) % n], la = Math.hypot(a[0] - v[0], a[1] - v[1]), lb = Math.hypot(b[0] - v[0], b[1] - v[1]), h = r3Hash(v[0] * 0.37 + v[1] * 0.71 + lv);
+      const dd = th * (V.cham[0] + (V.cham[1] - V.cham[0]) * h), d1 = Math.min(dd * (0.7 + 0.6 * h), la * 0.3), d2 = Math.min(dd * (1.3 - 0.6 * h), lb * 0.3);
+      P2.push([v[0] + (a[0] - v[0]) / la * d1, v[1] + (a[1] - v[1]) / la * d1], [v[0] + (b[0] - v[0]) / lb * d2, v[1] + (b[1] - v[1]) / lb * d2]); }
+    if (P2.length !== n && P2.length <= 10){ const old = B.P; B.P = P2; const sp2 = classify();
+      spec = sp2.map((r, k) => { const E = edges17(B.P)[k]; return old.some(v => same(v, E.a)) || old.some(v => same(v, E.b)) ? r : end17(th, E.ny < -0.3); }); }
+    B.E = spec; }
+  // 6) профили: ширина бруса (вычет наружной кромки), ширина длинного дна; зарубка — одна на уровень
+  const orient = (B, k) => { const E = edges17(B.P)[k], flip = E.a[1] > E.b[1] + 0.5 || (Math.abs(E.a[1] - E.b[1]) <= 0.5 && E.a[0] > E.b[0]); B.E[k].flip = flip; return { E, L: E.L }; };
+  for (const i of ids){ const B = R[i]; if (B.kind !== 'board' && !(B.kind === 'floor' && edges17(B.P).some(E => E.L > 5 * B.th))) continue;
+    let k = -1; B.E.forEach((r, q) => { if (r.role === 1 && (k < 0 || edges17(B.P)[q].L > edges17(B.P)[k].L)) k = q; }); if (k < 0) continue;
+    const { L } = orient(B, k), left = B.kind === 'board' && longDir(B.ph)[0] > 0, prof = B.kind === 'floor' ? V.width.floor : left ? V.width.L : V.width.R;
+    B.carve = { k, t0: 0, len: L, d: prof.map(x => x * B.th) }; }
+  const inner = (B) => { let k = -1; B.E.forEach((r, q) => { if (r.role === 0 && (k < 0 || edges17(B.P)[q].L > edges17(B.P)[k].L)) k = q; }); return k; };
+  const nt = (B, k, at) => { const { L } = orient(B, k); return { k, t0: at[0] * L, len: at[1] * B.th, dep: at[2] * B.th * at[3] }; };
+  const boards = ids.map(i => R[i]).filter(B => B.kind === 'board');
+  if (lv === 1 && boards.length === 2){ const cxOf = (B) => B.P.reduce((q, v) => q + v[0], 0) / B.P.length, [Lb, Rb] = boards.slice().sort((a, b) => cxOf(a) - cxOf(b)); const kl = inner(Lb), kr = inner(Rb);
+    if (kl >= 0) Lb.n1 = nt(Lb, kl, V.notch.at); if (kr >= 0) Rb.n1 = nt(Rb, kr, V.notch.small); }
+  else { const pool = ids.map(i => R[i]).filter(B => (B.kind === 'board' || B.kind === 'side' || B.kind === 'floor') && inner(B) >= 0).sort((a, b) => edges17(b.P)[inner(b)].L - edges17(a.P)[inner(a)].L);
+    if (pool.length){ const h = r3Hash(lv * 3.17), B = pool[lv % Math.min(pool.length, 3)], k = B.kind === 'floor' ? B.E.findIndex(r => r.role === 1) : inner(B);
+      if (k >= 0) B.n1 = nt(B, k, [0.3 + 0.4 * h, 0.24 + 0.1 * h, B.kind === 'floor' ? 0.09 : 0.08 + 0.02 * h, lv % 2 ? 1 : -1]); } }
+  return R.map(B => B ? { P: B.P, e17: { E: B.E, ph: B.ph, carve: B.carve, n1: B.n1, n2: B.n2 }, dir: B.dir, z: V.z[B.kind] || 0 } : null);
+}
+// v17: верхняя кромка задника — прогиб к середине видимого пролёта (между брусьями) плавной дугой; у брусьев высота прежняя.
+// Только вид: контур панели (клип сплеша и пятен) и кант кромки идут по дуге. В P.arc — точки дуги, внутренняя нормаль, середина.
+function backArc17(P){
+  const s = G.s; if (!s || !wood16Tex()) return P;
+  const B = V17.back, T = W15.t, woods = s.statics.filter(st => st.role === 'wood').map(st => st.poly), ar = polyArea(P) < 0 ? -1 : 1;
+  let best = -1, bl = 0; for (let i = 0; i < P.length; i++){ const a = P[i], b = P[(i + 1) % P.length], ex = b[0] - a[0], ey = b[1] - a[1], Ln = Math.hypot(ex, ey);
+    if (Ln < 30) continue; const ny = -ex / Ln * ar; if (ny > -0.6) continue; if (Ln > bl){ bl = Ln; best = i; } }
+  if (best < 0) return P;
+  const a = P[best], b = P[(best + 1) % P.length], ex = (b[0] - a[0]) / bl, ey = (b[1] - a[1]) / bl, ix = -ey * ar, iy = ex * ar, N = 64;   // внутренняя нормаль (вниз)
+  const cov = (q) => { const x = a[0] + ex * q + ix * 2.5, y = a[1] + ey * q + iy * 2.5; return woods.some(W => polyDist(W, x, y) < 0.3); };
+  let s0 = -1, s1 = -1, c0 = -1; for (let k = 0; k <= N; k++){ const q = bl * k / N, f = !cov(q);
+    if (f && c0 < 0) c0 = q; if ((!f || k === N) && c0 >= 0){ const e = f ? q : bl * (k - 1) / N; if (e - c0 > s1 - s0){ s0 = c0; s1 = e; } c0 = -1; } }
+  if (s1 - s0 < 24) return P;
+  const span = s1 - s0, sag = Math.min(B.sag * T, B.sagMax * span), M = 2 * Math.max(9, Math.ceil(span / 16)), pts = [];
+  for (let k = 0; k <= M; k++){ const q = s0 + span * k / M, z = k / M, dd = sag * 4 * z * (1 - z); pts.push([a[0] + ex * q + ix * dd, a[1] + ey * q + iy * dd]); }
+  const Q = []; for (let i = 0; i < P.length; i++){ Q.push(P[i]); if (i === best) Q.push(...pts); }
+  Q.arc = { pts, ix, iy, ex, ey, mid: pts[M >> 1], T };
+  return Q;
+}
 function shape13(P, r){                                       // контур со скруглёнными углами внутрь (как roundPoly 2D)
   const sh = new THREE.Shape(), n = P.length;
   for (let i = 0; i < n; i++){ const a = P[(i + n - 1) % n], b = P[i], d = P[(i + 1) % n];
@@ -6689,7 +6930,7 @@ function wood13Mesh(P, o){
   for (let i = 0; i < P.length; i++){ const p = P[i], q = P[(i + 1) % P.length], L = Math.hypot(q[0] - p[0], q[1] - p[1]); cx += p[0] / P.length; cy += p[1] / P.length; if (!o.dir && L > best){ best = L; dir = [(q[0] - p[0]) / L, (q[1] - p[1]) / L]; } }
   const geo = new THREE.ExtrudeGeometry(shape13(P, o.r !== undefined ? o.r : Q.r), { depth: Math.max(0.2, 2 * D - 2 * bv), bevelEnabled: bv > 0.05, bevelThickness: bv, bevelSize: bv, bevelOffset: -bv, bevelSegments: 2, curveSegments: 4, steps: 1 });
   geo.translate(0, 0, -(D - bv) + (o.z || 0));
-  const oo = Object.assign({ cx, cy, seed: r3Hash(cx * 0.37 + cy * 0.11) }, o), m = new THREE.Mesh(geo, o.w16 ? wood16Mat(dir || [1, 0], P, oo) : o.w15 ? wood15Mat(dir || [1, 0], P, oo) : wood13Mat(dir || [1, 0], oo)); m.frustumCulled = false;
+  const oo = Object.assign({ cx, cy, seed: r3Hash(cx * 0.37 + cy * 0.11) }, o), m = new THREE.Mesh(geo, o.w16 ? wood17Mat(dir || [1, 0], P, oo) : o.w15 ? wood15Mat(dir || [1, 0], P, oo) : wood13Mat(dir || [1, 0], oo)); m.frustumCulled = false;
   F13.stats.woodTris = (F13.stats.woodTris || 0) + geo.attributes.position.count / 3;
   return m;
 }
@@ -6716,7 +6957,8 @@ function wood13Bake(c){
   const t0 = performance.now(), s = G.s, Q = V13.wood, gy = CFG.grindY, W = CFG.W, top = VIEW.top, T = V13.trough, S = V13.saw, L = V13.look[V13.states[Math.max(0, F13.st)]];
   const [sy0, sy1] = scrY13(), ov = Q.over;
   F13.stats.woodTris = 0;
-  const parts = s.statics.filter(st => st.role !== 'wall'), vis = parts.map(st => st.role === 'peg' ? st.poly : wood13Ext(st.poly));
+  const parts = s.statics.filter(st => st.role !== 'wall'), vis0 = parts.map(st => st.role === 'peg' ? st.poly : wood13Ext(st.poly));
+  const v17 = wood16Tex() && !wood16Wait() ? vis17(s, parts, vis0) : null, vis = v17 ? vis0.map((P, i) => v17[i] ? v17[i].P : P) : vis0;   // v17: контур вида построек из досок
   const posts = [[[-ov, sy0], [0, sy0], [0, gy + T.leg], [-ov, gy + T.leg]], [[W, sy0], [W + ov, sy0], [W + ov, gy + T.leg], [W, gy + T.leg]]];   // стойки — за верх и низ экрана
   const backs = partBacks(s.level.parts || []).map(P => backExt15(P));   // v15: задние стенки полостей
   const rim = [[-ov, top - 6], [W + ov, top - 6], [W + ov, top + 11], [-ov, top + 11]], back = [[-ov, gy + 8], [W + ov, gy + 8], [W + ov, gy + T.back + 3], [-ov, gy + T.back + 3]];
@@ -6726,7 +6968,7 @@ function wood13Bake(c){
   // WebGL ждёт очередь GPU, и если в ней уже лежат размытия задника, ждёт и их (≈ 20 мс на кадре старта уровня)
   const sc = new THREE.Scene(), add = (P, o) => sc.add(wood13Mesh(P, o)), PL = V15.plank, pw = (o) => Object.assign(w16 ? { w16: true, D: PL.D, bevel: PL.bevel, r: PL.r } : { w15: true, D: PL.D, bevel: PL.bevel, r: PL.r }, o);   // круг 3: рисованное дерево; v16 — текстурой GPT
   parts.forEach((st, i) => { if (st.role === 'peg'){ let cx = 0, cy = 0; for (const v of st.poly){ cx += v[0] / st.poly.length; cy += v[1] / st.poly.length; } add(st.poly, { peg: true, cx, cy, r: 2 }); }
-    else if (st.role === 'wood') add(vis[i], pw({ kind: st.kind, dir: st.kind === 'cheek' || st.kind === 'side' || st.kind === 'post' ? [0, 1] : undefined }));   // v15: брус построек
+    else if (st.role === 'wood') add(vis[i], pw(v17 && v17[i] ? { kind: st.kind, dir: v17[i].dir, e17: v17[i].e17, z: v17[i].z, r: 0.4 } : { kind: st.kind, dir: st.kind === 'cheek' || st.kind === 'side' || st.kind === 'post' ? [0, 1] : undefined }));   // v15: брус построек; v17 — форма и сечение
     else add(vis[i], w16 ? pw({ kind: 'block', r: Q.r }) : undefined); });   // v16: клинья, полки, бруски уровней 11–110 — тем же деревом
   posts.forEach((P, i) => add(P, pw({ kind: 'post', dir: [0, 1], seed: 0.3 + 0.4 * i, z: 1.5 })));   // стойки чуть ближе — брусья уходят за них
   add(rim, pw({ kind: 'beam', dir: [1, 0], seed: 0.5, z: 1 }));
@@ -6774,7 +7016,7 @@ function wood13Bake(c){
   if (backs.length && !w16){ c.lineWidth = 0.6; c.strokeStyle = PL.inkCol; c.lineJoin = 'round';   // круг 3: шов между кусками бруса (балка — доска — чурбак); v16 — кант в шейдере
     parts.forEach((st, i) => { if (st.role === 'wood'){ roundPoly(c, vis[i], PL.r); c.stroke(); } }); }
   for (const st of parts){                                    // светлая кромка стенки щели (знание игрока — где щель)
-    const P = st.poly; if (st.role === 'peg') continue; let cx = 0, cy = 0; for (const v of P){ cx += v[0] / P.length; cy += v[1] / P.length; }
+    const P = st.poly; if (st.role === 'peg' || v17 && st.role === 'wood') continue; let cx = 0, cy = 0; for (const v of P){ cx += v[0] / P.length; cy += v[1] / P.length; }   // v17: у построек из досок — фаска щёчки
     c.save(); roundPoly(c, P, Q.r); c.clip();
     for (let i = 0; i < P.length; i++){ const a = P[i], b = P[(i + 1) % P.length], ex = b[0] - a[0], ey = b[1] - a[1], Ln = Math.hypot(ex, ey); if (Ln < 3) continue;
       let nx = -ey / Ln, ny = ex / Ln; if ((cx - a[0]) * nx + (cy - a[1]) * ny < 0){ nx = -nx; ny = -ny; }
@@ -6840,7 +7082,11 @@ function back15Draw(c, backs, woods){
       c.fillStyle = 'rgba(30,12,4,' + sa + ')'; c.beginPath(); c.moveTo(a[0], a[1]); c.lineTo(b[0], b[1]); c.lineTo(b[0] + ix * (tw + sw), b[1] + iy * (tw + sw)); c.lineTo(a[0] + ix * (tw + sw), a[1] + iy * (tw + sw)); c.fill();
       c.fillStyle = tc; c.beginPath(); c.moveTo(a[0], a[1]); c.lineTo(b[0], b[1]); c.lineTo(b[0] + ix * tw, b[1] + iy * tw); c.lineTo(a[0] + ix * tw, a[1] + iy * tw); c.fill();
       if (!best || Ln > best.Ln) best = { a, ex: ex / Ln, ey: ey / Ln, Ln, ix, iy }; }
-    if (best){ const { a, ex, ey, Ln, ix, iy } = best, m = [a[0] + ex * Ln * 0.5, a[1] + ey * Ln * 0.5], [nw, nd] = B.notch, at = (t, dd) => [m[0] + ex * t + ix * dd, m[1] + ey * t + iy * dd];
+    if (P.arc){ const A = P.arc, tw = V17.back.rim * A.T, [sw, sa] = B.topSh, band = (w) => { c.beginPath(); A.pts.forEach((v, k) => k ? c.lineTo(v[0], v[1]) : c.moveTo(v[0], v[1]));
+        for (let k = A.pts.length - 1; k >= 0; k--){ const v = A.pts[k]; c.lineTo(v[0] + A.ix * w, v[1] + A.iy * w); } c.closePath(); c.fill(); };   // v17: кант кромки идёт по дуге
+      c.fillStyle = 'rgba(30,12,4,' + sa + ')'; band(tw + sw); c.fillStyle = B.top[1]; band(tw);
+      best = { a: A.mid, ex: A.ex, ey: A.ey, Ln: 0, ix: A.ix, iy: A.iy, g: V17.back.glitch.map(q => q * A.T) }; }
+    if (best){ const { a, ex, ey, Ln, ix, iy } = best, m = [a[0] + ex * Ln * 0.5, a[1] + ey * Ln * 0.5], [nw, nd] = best.g || B.notch, at = (t, dd) => [m[0] + ex * t + ix * dd, m[1] + ey * t + iy * dd];
       const [cl, ca] = B.crack, L = h * cl;                   // трещинка от щербинки вниз — мягкая тёмная полоска со светлой кромкой
       c.lineCap = 'round'; c.lineWidth = 2.2; c.strokeStyle = 'rgba(28,10,3,' + (ca * 0.45) + ')'; c.beginPath(); c.moveTo(...at(0, nd * 0.6)); c.quadraticCurveTo(...at(1.0, nd + L * 0.5), ...at(-0.4, nd + L)); c.stroke();
       c.lineWidth = 0.7; c.strokeStyle = 'rgba(28,10,3,' + (ca * 0.7) + ')'; c.beginPath(); c.moveTo(...at(0, nd * 0.6)); c.quadraticCurveTo(...at(1.0, nd + L * 0.45), ...at(-0.2, nd + L * 0.7)); c.stroke();
@@ -6893,7 +7139,8 @@ function cwPath15(path, P){ const Q = polyArea(P) < 0 ? P.slice().reverse() : P;
 // с лепестками, брызги вдоль разреза, потёки вниз по доскам; обрезана контуром стенки, раскрывается за open, держится hold, гаснет к life.
 // Рисуется кадр за кадром под тенями и фруктами (фрукты не закрывает); сразу не больше max, рядом с новым старый гаснет быстрее.
 // Задняя стенка уходит за край экрана, только если лежит стороной на стенке короба (жёлоб от стенки), а не задела её углом.
-function backExt15(P, full){ const W = CFG.W, at = (v) => v[0] <= 0.6 ? -1 : v[0] >= W - 0.6 ? 1 : 0; if (!full) P = backTrim15(P); for (let i = 0; i < P.length; i++){ const a = at(P[i]); if (a && a === at(P[(i + 1) % P.length])) return wood13Ext(P); } return P.map(v => [clamp(v[0], 0, W), v[1]]); }
+function backExt15(P, full){ const W = CFG.W, at = (v) => v[0] <= 0.6 ? -1 : v[0] >= W - 0.6 ? 1 : 0; if (!full) P = backArc17(backTrim15(P));
+  if (P.arc){ const A = P.arc; for (let i = 0; i < P.length; i++){ const a = at(P[i]); if (a && a === at(P[(i + 1) % P.length])){ const Q = wood13Ext(P); Q.arc = A; return Q; } } const Q = P.map(v => [clamp(v[0], 0, W), v[1]]); Q.arc = A; return Q; } for (let i = 0; i < P.length; i++){ const a = at(P[i]); if (a && a === at(P[(i + 1) % P.length])) return wood13Ext(P); } return P.map(v => [clamp(v[0], 0, W), v[1]]); }
 function backAt15(x, y){ for (const P of (F13.backsHit || F13.backs || [])) if (inPoly15(P, x, y)) return true; return false; }   // круг 3: по полной стенке (торец ниже — сплеш верхнего ряда обрезается, но есть)
 function inPoly15(P, x, y){ let c = false; for (let i = 0, j = P.length - 1; i < P.length; j = i++){ const a = P[i], b = P[j]; if ((a[1] > y) !== (b[1] > y) && x < (b[0] - a[0]) * (y - a[1]) / (b[1] - a[1]) + a[0]) c = !c; } return c; }
 function splash15(x, y, kind, rad, ux, uy, w){
