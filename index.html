@@ -42,16 +42,17 @@ html,body{margin:0;height:100%;background:var(--world2);color:var(--text);font:5
 .ico svg{width:19px;height:19px;display:block}
 .ico:active{transform:translateY(2px);box-shadow:inset 0 2px 0 #fff,0 0 0 var(--ui-lip),0 2px 4px rgba(50,35,20,.16)}
 body.ut #btn-menu{display:none}
-/* v13 «лесная мастерская» (3D-вид линейки v11): плашка уровня, кнопки верха и лоток — дерево (фактура --wood13 рисуется кодом) */
-body.f13 .hud-lvl{color:#fff4dc;opacity:1;font-weight:600;padding:4px 16px 5px;border-radius:9px;top:calc(env(safe-area-inset-top) + 5px);
-  background:var(--wood13) 0 0/170px auto,#bf8249;text-shadow:0 1px 0 rgba(70,32,8,.8);
-  box-shadow:inset 0 1.5px 0 rgba(255,228,176,.6),inset 0 -2px 0 rgba(80,38,12,.35),0 3px 0 #6e3c1a,0 6px 10px rgba(16,10,0,.3)}
-body.f13 .ico{background:var(--wood13) 30% 0/150px auto,#bf8249;box-shadow:inset 0 1.5px 0 rgba(255,228,176,.6),inset 0 -2px 0 rgba(80,38,12,.3),0 2px 0 #6e3c1a,0 4px 8px rgba(16,10,0,.3)}
+/* v13 «лесная мастерская» (3D-вид линейки v11): плашка уровня, кнопки верха и лоток — дерево (фактура --wood13 рисуется кодом);
+   v15 круг 3: то же рисованное дерево, что брус построек, — светлая верхняя кромка, тёмный низ, тёмный кант; кнопки оружия — деревянные плашки */
+body.f13 .hud-lvl{color:#ffeccb;opacity:1;font-weight:600;padding:3px 15px 4px;border-radius:10px;top:calc(env(safe-area-inset-top) + 5px);border:2px solid #3a1a08;
+  background:var(--wood13) 0 0/170px auto,#975a37;text-shadow:0 1.5px 0 rgba(58,26,8,.9),0 0 2px rgba(58,26,8,.6);
+  box-shadow:inset 0 2px 0 rgba(232,176,116,.85),inset 0 -4px 0 rgba(70,32,14,.45),0 2px 0 #3a1a08,0 5px 9px rgba(16,10,0,.3)}
+body.f13 .ico{background:var(--wood13) 30% 0/150px auto,#975a37;border:2px solid #3a1a08;box-shadow:inset 0 2px 0 rgba(232,176,116,.8),inset 0 -3px 0 rgba(70,32,14,.4),0 2px 0 #3a1a08,0 4px 8px rgba(16,10,0,.3)}
 body.f13 .ico svg{filter:brightness(0) invert(1) drop-shadow(0 1px 0 rgba(70,32,8,.7))}
-body.f13 #tray{background:var(--wood13) 0 0/240px auto,#a96d3c;box-shadow:inset 0 2px 0 rgba(255,228,176,.5),inset 0 -3px 0 rgba(60,28,8,.3),0 5px 0 #5c3116,0 11px 18px rgba(16,10,0,.36)}
-body.f13 .wpn{background:linear-gradient(#fbe8c4,#eccd96);box-shadow:inset 0 2px 0 #fff5de,0 4px 0 #9c6b3d,0 6px 10px rgba(40,20,5,.22)}
-body.f13 .wpn.empty{background:#8c6440;box-shadow:inset 0 2px 5px rgba(40,18,4,.4)}
-body.f13 .wpn.sel{background:linear-gradient(#f4fff1,#d5f6ca);box-shadow:0 0 0 3px var(--good),0 7px 0 var(--good-lip),0 12px 16px rgba(30,100,50,.26)}   /* выбранный — прежняя зелёная рамка */                                   /* v10: сборка для юзер-теста — без выхода в меню */
+body.f13 #tray{background:var(--wood13) 0 0/240px auto,#8e5434;border:2px solid #3a1a08;box-shadow:inset 0 2px 0 rgba(232,176,116,.7),inset 0 -5px 0 rgba(70,32,14,.45),0 4px 0 #3a1a08,0 10px 18px rgba(16,10,0,.36)}
+body.f13 .wpn{background:var(--wood13) 20% 30%/200px auto,#a2643d;border:2px solid #3a1a08;box-shadow:inset 0 2.5px 0 rgba(236,184,124,.9),inset 0 -4px 0 rgba(70,32,14,.45),0 3px 0 #3a1a08,0 6px 10px rgba(40,20,5,.28)}
+body.f13 .wpn.empty{background:var(--wood13) 20% 30%/200px auto,#6a3d24;filter:brightness(.72);box-shadow:inset 0 2px 5px rgba(40,18,4,.5)}
+body.f13 .wpn.sel{background:var(--wood13) 20% 30%/200px auto,#a2643d;box-shadow:inset 0 2.5px 0 rgba(236,184,124,.9),inset 0 -4px 0 rgba(70,32,14,.45),0 0 0 3px var(--good),0 7px 0 var(--good-lip),0 12px 16px rgba(30,100,50,.26)}   /* выбранный — прежняя зелёная рамка */                                   /* v10: сборка для юзер-теста — без выхода в меню */
 /* Кнопки объёмные: «губа» снизу своего цвета и мягкая тень, проседают при нажатии; хорошее — зелёным, нежелательное — маленьким красным. */
 button{font:inherit;cursor:pointer}
 .btn{display:inline-block;font-weight:700;font-size:20px;line-height:1;color:#fff;border:0;border-radius:18px;padding:15px 28px;
@@ -6240,14 +6241,21 @@ function r3BeforeRenderT(ren, sc, cam, geo, mat){
 // =====================================================================================================
 // v15: дерево из досок (первые десять уровней) и сплеш сока на заднем дереве.
 const V15 = {
-  // задняя стенка полости: доски вдоль длинного края шириной w, щель между ними gap; глубина z (за досками постройки), тон доски и щели
-  // круг 2 (реф): брус — рисованная текстура GPT (assets/wood15-plank.jpg, волокно вдоль): масштаб по длине и поперёк (ед. на текстуру),
-  // k — тон, ink — кант (ед., толще прочих уровней); свет боков: база, верх (+), низ (−), бок по x; на лице — светлая кромка сверху
-  // (ширина, сила) и тёмная снизу (ширина, сила); цвет без текстуры
-  plank: { k: 0.92, ink: 2.1, u: 218, v: 54, D: 9, bevel: 2.4, r: 3.5, side: [0.64, 0.66, 0.34, 0.16], hl: [4.2, 0.45], dk: [5.5, 0.24], flat: '#92593a' },
-  // задняя стенка — вертикальные доски (assets/wood15-back.jpg, 4 доски на текстуру): ед. на пиксель текстуры; глубина — темнее книзу
-  // (альфа сверху, снизу); тень от досок постройки на стенку — проходы [размытие ед., альфа]; кант; цвет без текстуры
-  back: { s: 0.205, grad: [0.06, 0.55], ao: '20,8,2', aoPass: [[34, 0.95], [10, 0.7]], rim: [26, 0.8], ink: 1.4, flat: '#6a3d22' },
+  // круг 3 (разбор рефа): брус — рисованное дерево кодом (шейдер W15_FS, без текстур). Лицо face; светлая кромка lt вдоль ребра со
+  // стороны света lit (у балки — широкая светлая верхняя грань top); у теневого ребра тёмная полоса dk. Ширина кромки — доля толщины
+  // [наклонный брус, горизонтальный, мин. ед.], тёмной полосы — [наклонный, горизонтальный] и её сила [накл., гориз.]; grain — линий
+  // волокна, их сила; glow — светлая размытая полоса посередине; seam — брус длиннее стольких ед. собран из двух кусков (стык на
+  // доле seamAt длины); joint — тень бруса бункера на балке у стыка (ед., сила); end — тёмный нижний срез чурбака (ед., сила);
+  // кант — ед. (тонкий, чуть неровный), цвет; фаска и скругление углов — ед.
+  plank: { face: '#975a37', lt: '#cc9460', top: '#dca268', dk: '#5a3123', lit: [-0.15, -1], strip: [0.1, 0.09, 2.2], band: [0.12, 0.27], bandK: [0.45, 0.92],
+    grain: [3, 0.28], glow: 0.12, seam: 150, seamAt: 0.64, joint: [7, 0.42], end: [2.6, 0.45], ink: 1.1, inkCol: 'rgba(56,25,9,0.96)', D: 5, bevel: 1.1, r: 2.2 },
+  // задняя стенка полости — одна цельная гладкая панель (рисуется кодом): тон base, мягкие вертикальные полосы (шаг ед., разброс тона),
+  // светлое пятно в середине верха hi (сила), к низу (к горлу) темнее lo (альфа сверху, снизу); тень от бруса — проходы
+  // [размытие ед., альфа, утолщение бруса ед.] и от краёв стенки [размытие, альфа]; верхняя кромка — торец панели: ниже верха постройки на trim ед.,
+  // светлая полоска (ширина ед., цвет), тень под ней, щербинка посередине (ширина, глубина ед.); трещинка от кромки (доля высоты, сила)
+  back: { base: '#703e27', hi: '#94593a', hiA: 1, lo: '#2a1208', bands: 15, bandA: 0.075, grad: [0.0, 0.42], ao: [[40, 0.95, 8], [8, 0.85, 1.5]], rim: [26, 0.75],
+    trim: 8, top: [2.2, '#c4915a'], topSh: [1.6, 0.55], notch: [5, 3.2], crack: [0.12, 0.36], ink: 1.2,
+    shade: [4, 7, 0.6, 10] },                              // тень фруктов на панели: смещение x, y (ед.), сила, размытие (ед. на пиксель)
   end: { k: 0.55, dk: 0.7 },                                // торец доски: шаг годичных колец (1/ед.), сколько темнее
   // сплеш: радиус кляксы от радиуса тела (доля, мин., макс.), лепестков; брызг вдоль разреза; потёков и их длина (ед.);
   // жизнь: раскрытие, держится, гаснет к life (с); непрозрачность ядра; не больше max сразу, рядом с новым старый гаснет быстрее
@@ -6277,7 +6285,7 @@ const V13 = {
   saw: { n: 8, R: 28, r0: 24, teeth: 22, depth: 2.6, cy: 18.5, spin: [2.6, 12], steel: '#a3abb4', hub: '#7d8792', bolt: '#c4cad1', slot: '#2e333b', ink: '#1f232a', inkW: 1.15, dim: 0.82, shadow: [2.5, 4, 0.34] },
   // корыто (ед. ниже grindY): задняя кромка, дно у задней стенки (пусто) и сок у неё же (полно), передняя кромка (верх), её толщина,
   // низ передней доски, низ ножек; торцы, ножки — ширина
-  trough: { back: 31, floor: 53.5, full: 35, rim: 54, lip: 2.4, face: 63, leg: 72, cap: 7, legW: 11 },
+  trough: { back: 31, floor: 53.5, full: 35, rim: 54, lip: 2.4, face: 74, leg: 84, cap: 7, legW: 13 },   // v15 круг 3: передняя доска выше (как толстое корыто на рефе)
   // куски на пилах: потолок кусков в кадре, новых сеток за кадр (раскол), треугольников
   frag: { max: 32, perFrame: 6, trisCap: 120000 },
   // круг 3: пила ест кусок. eat — время съедания от мелочи до половины арбуза (с) по √площади [от, до]; drag — тянет по вращению к щели
@@ -6486,41 +6494,58 @@ function wood13Mat(dir, o){
   m.uniforms.uK.value *= V13.look[V13.states[Math.max(0, F13.st)]].wk || 1;   // круг 2: вечером дерево темнее янтарного леса
   return m;   // круг 2: дерево — свой наклон камеры (видна верхняя грань)   // проекция отражает y: лицевые грани своих сеток — «задние» для GL
 }
-// v15, круг 2: брус построек первых десяти уровней — рисованная текстура (волокно вдоль длинной стороны, полоса — по толщине),
-// лицо ровное со светлой кромкой сверху и тёмной снизу, верхний бок (виден наклоном камеры) — светлая фаска, нижний — тёмный.
-const W15_FS = `precision highp float;
-uniform vec3 uTint; uniform sampler2D tPl; uniform vec4 uP; uniform vec4 uQ; uniform vec3 cFlat;
+// v15, круг 3 (разбор рефа): брус — рисованное дерево кодом. u — вдоль бруса, vv — поперёк от освещённого ребра (свет сверху,
+// чуть слева). Лицо ровного тона с медленными переливами, светлая размытая полоса посередине, 2–3 длинные мягкие линии волокна
+// (местами пропадают); у освещённого ребра — узкая светлая кромка (у балки и дна — широкая светлая верхняя грань), у теневого —
+// тёмная полоса (у балки ≈ четверть высоты). Стык кусков (длинный брус), трещинки, тень бруса бункера на балке, тёмный нижний срез
+// чурбака — по униформам. Фаска узкая: к свету светлее, от света темнее. Боков не видно (наклон камеры для бруса 0).
+const W15_FS = (() => { const P = V15.plank, f = (x) => x.toFixed(3), Ln = Math.hypot(P.lit[0], P.lit[1]); return `precision highp float;
+uniform vec3 uTint; uniform vec4 uP; uniform vec4 uU; uniform vec4 uQ; uniform vec4 uS; uniform vec4 uC1; uniform vec4 uC2;
+uniform vec3 cFace; uniform vec3 cLt; uniform vec3 cTop; uniform vec3 cDk;
 varying vec3 vW; varying vec3 vN;
+float seg(vec2 p, vec2 a, vec2 b){ vec2 pa = p - a, ba = b - a; float h = clamp(dot(pa, ba) / max(dot(ba, ba), 1e-4), 0.0, 1.0); return length(pa - ba * h); }
 void main(){
-  vec3 N = normalize(vN);
-  vec2 d = uP.xy, e = vec2(-d.y, d.x);
-  float u = dot(vW.xy, d), v = clamp(dot(vW.xy, e) - uP.z, 0.0, uP.w);
-  vec3 col = uQ.w > 0.5 ? texture2D(tPl, vec2(u / ${V15.plank.u.toFixed(1)} + uQ.x, v / ${V15.plank.v.toFixed(1)} + uQ.y)).rgb : cFlat;
-  col *= uQ.z;
-  float front = smoothstep(0.55, 0.9, abs(N.z)), up = clamp(-N.y, 0.0, 1.0), dn = clamp(N.y, 0.0, 1.0);
-  float sd = ${V15.plank.side[0].toFixed(2)} + ${V15.plank.side[1].toFixed(2)} * up - ${V15.plank.side[2].toFixed(2)} * dn + ${V15.plank.side[3].toFixed(2)} * abs(N.x);
-  float eu = e.y > 0.08 ? v : (e.y < -0.08 ? uP.w - v : 1e3), ed = e.y > 0.08 ? uP.w - v : (e.y < -0.08 ? v : 1e3);
-  float hl = 1.0 - smoothstep(0.5, ${V15.plank.hl[0].toFixed(1)}, eu), dk = 1.0 - smoothstep(0.8, ${V15.plank.dk[0].toFixed(1)}, ed);
-  vec3 f = col * (1.0 + ${V15.plank.hl[1].toFixed(2)} * hl - ${V15.plank.dk[1].toFixed(2)} * dk);
-  gl_FragColor = vec4(clamp(mix(col * sd, f, front) * uTint, 0.0, 1.0), 1.0);
-}`;
-// Текстуры круга 2 (брус, задняя стенка): грузятся с запуска; пришли после запекания уровня — фон запекается заново.
-const W15T = { img: {}, tex: null, miss: false };
-function wood15Img(nm){
-  let im = W15T.img[nm]; if (im) return im.complete && im.naturalWidth ? im : null;
-  im = W15T.img[nm] = new Image(); im.decoding = 'async'; const file = 'wood15-' + nm + '.jpg';
-  im.onload = () => { if (W15T.miss && G.s && forest13()){ W15T.miss = false; buildBackground(); } };
-  im.src = (window.PULP_ASSETS && window.PULP_ASSETS[file]) || 'assets/' + file + '?v=' + ASSET_V; return null;
-}
-function wood15Tex(){
-  if (W15T.tex) return W15T.tex; const im = wood15Img('plank'); if (!im) return null;
-  const t = new THREE.Texture(im); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.NoColorSpace; t.anisotropy = 4; t.needsUpdate = true; return (W15T.tex = t);
-}
+  vec3 N = normalize(vN); vec2 Lt = vec2(${f(P.lit[0] / Ln)}, ${f(P.lit[1] / Ln)});
+  vec2 d = uP.xy, e = vec2(-d.y, d.x); float th = uP.w, u = dot(vW.xy, d), v = clamp(dot(vW.xy, e) - uP.z, 0.0, th);
+  float vv = dot(e, Lt) > 0.0 ? th - v : v, hz = e.y * e.y, sa = uQ.x, sb = uQ.y;
+  float q = uS.y > 0.5 ? u - uS.x - uS.z * (vv - th * 0.5) : -1e3;
+  if (q > 0.0) vv = clamp(vv - 0.9, 0.0, th);                                                   // нижний кусок чуть сдвинут — ступенька
+  vec3 c = cFace * (1.0 + 0.05 * sin(u * 0.021 + sa * 6.28) + 0.03 * sin(u * 0.061 + sb * 6.28));
+  float vb = th * (0.46 + 0.07 * sin(u * 0.013 + sa * 9.0));
+  c *= 1.0 + ${f(P.glow)} * exp(-pow((vv - vb) / (th * 0.14), 2.0)) * (0.55 + 0.45 * sin(u * 0.0093 + sb * 5.0));
+  for (int i = 0; i < ${P.grain[0]}; i++){ float fi = float(i), fq = 0.017 + 0.006 * fi, ph = sa * 7.0 + fi * 2.1;
+    float vi = th * (0.27 + 0.25 * fi) + th * 0.07 * sin(u * fq + ph) + th * 0.025 * sin(u * fq * 3.1 + ph * 1.7);
+    float on = smoothstep(-0.65, 0.15, sin(u * (0.0061 + 0.0023 * fi) + sb * 6.0 + fi * 1.9)), w = 0.55 + 0.25 * sin(u * 0.05 + fi);
+    c *= 1.0 - ${f(P.grain[1])} * on * (1.0 - smoothstep(w * 0.35, w + 0.5, abs(vv - vi))); }
+  if (uS.y > 0.5){ c *= 1.0 - 0.05 * step(0.0, q); c *= 1.0 - 0.5 * (1.0 - smoothstep(0.25, 0.8, abs(q + 0.3))); c *= 1.0 + 0.2 * (1.0 - smoothstep(0.2, 0.7, abs(q - 0.85))); }
+  float cr = min(seg(vec2(u, vv), uC1.xy, uC1.zw), seg(vec2(u, vv), uC2.xy, uC2.zw));
+  c *= 1.0 - 0.5 * (1.0 - smoothstep(0.2, 0.65, cr));
+  float ej = min(uU.z > 0.5 ? u - uU.x : 1e3, uU.w > 0.5 ? uU.y - u : 1e3);
+  c *= 1.0 - ${f(P.joint[1])} * (1.0 - smoothstep(0.0, ${f(P.joint[0])}, ej));
+  c *= 1.0 - ${f(P.end[1])} * uS.w * (1.0 - smoothstep(0.0, ${f(P.end[0])}, uU.y - u));
+  float wD = th * mix(${f(P.band[0])}, ${f(P.band[1])}, hz), dk = smoothstep(th - wD - 1.0, th - wD + 0.7, vv);
+  c = mix(c, cDk, dk * mix(${f(P.bandK[0])}, ${f(P.bandK[1])}, hz));
+  float wL = max(th * mix(${f(P.strip[0])}, ${f(P.strip[1])}, hz), ${f(P.strip[2])}), lt = 1.0 - smoothstep(wL - 0.45, wL + 0.45, vv);
+  c = mix(c, mix(cLt, cTop, hz) * (1.0 + 0.05 * sin(u * 0.03 + sb * 4.0)), lt * clamp(0.3 + 1.2 * abs(dot(e, Lt)), 0.0, 1.0));   // у чурбака (ребро сбоку) кромка слабее
+  float fr = smoothstep(0.5, 0.95, abs(N.z)), up = dot(normalize(N.xy + vec2(1e-4)), Lt);
+  c *= mix(1.0 + 0.14 * up, 1.0, fr);
+  gl_FragColor = vec4(clamp(c * uQ.z * uTint, 0.0, 1.0), 1.0);
+}`; })();
+// Брус круга 3: униформы по контуру P (вдоль dir) и роли kind: стык кусков у длинной доски, трещинки у чурбака и корыта, тень
+// на балке у стыка с бункером (конец балки внутри поля), тёмный нижний срез у чурбака и ножки.
 function wood15Mat(dir, P, o){
-  const e = [-dir[1], dir[0]], pr = P.map(v => v[0] * e[0] + v[1] * e[1]), v0 = Math.min(...pr), th = Math.max(...pr) - v0, tex = wood15Tex(), sd = o.seed || 0;
-  if (!tex) W15T.miss = true;
-  const m = new THREE.ShaderMaterial({ vertexShader: W13_VS, fragmentShader: W15_FS, side: THREE.BackSide, uniforms: { uTint: u13().uTint, uTg: { value: V13.wood.tg },
-    tPl: { value: tex }, uP: { value: new THREE.Vector4(dir[0], dir[1], v0, th) }, uQ: { value: new THREE.Vector4(r3Hash(sd * 13.1), r3Hash(sd * 7.7) * 0.8, o.shade || 1, tex ? 1 : 0) }, cFlat: { value: r3c(V15.plank.flat) } } });
+  const PL = V15.plank, W = CFG.W, e = [-dir[1], dir[0]], pr = P.map(v => v[0] * e[0] + v[1] * e[1]), v0 = Math.min(...pr), th = Math.max(...pr) - v0;
+  const pu = P.map(v => v[0] * dir[0] + v[1] * dir[1]), u0 = Math.min(...pu), u1 = Math.max(...pu), L = u1 - u0, kind = o.kind || 'board', sd = o.seed || 0;
+  const inF = (uu) => P.some((v, i) => Math.abs(pu[i] - uu) < 1 && v[0] > 2 && v[0] < W - 2), far = [-1e4, -1e4, -1e4, -1e4];
+  const S = [0, 0, 0, 0]; let C1 = far, C2 = far;
+  if ((kind === 'board' || kind === 'floor') && L > PL.seam){ S[0] = u0 + (dir[1] >= 0 ? PL.seamAt : 1 - PL.seamAt) * L; S[1] = 1; S[2] = r3Hash(sd * 5.3) > 0.5 ? 0.22 : -0.22; }
+  if (kind === 'cheek' || kind === 'leg'){ S[3] = 1; C1 = [u1 - 0.3, th * 0.66, u1 - 0.48 * L, th * 0.6]; if (L > 20) C2 = [u1 - 0.3, th * 0.3, u1 - 0.24 * L, th * 0.34]; }
+  if (kind === 'trough'){ C1 = [u0 + 0.22 * L, th * 0.02, u0 + 0.22 * L + 9, th * 0.3]; C2 = [u0 + 0.71 * L, th * 0.02, u0 + 0.71 * L - 7, th * 0.26]; }   // две короткие зарубки от верхней кромки
+  const m = new THREE.ShaderMaterial({ vertexShader: W13_VS, fragmentShader: W15_FS, side: THREE.BackSide, uniforms: { uTint: u13().uTint, uTg: { value: 0 },
+    uP: { value: new THREE.Vector4(dir[0], dir[1], v0, th) }, uU: { value: new THREE.Vector4(u0, u1, kind === 'beam' && inF(u0) ? 1 : 0, kind === 'beam' && inF(u1) ? 1 : 0) },
+    uQ: { value: new THREE.Vector4(r3Hash(sd * 13.1), r3Hash(sd * 7.7), o.shade || 1, 0) }, uS: { value: new THREE.Vector4(...S) },
+    uC1: { value: new THREE.Vector4(...C1) }, uC2: { value: new THREE.Vector4(...C2) },
+    cFace: { value: r3c(PL.face) }, cLt: { value: r3c(PL.lt) }, cTop: { value: r3c(PL.top) }, cDk: { value: r3c(PL.dk) } } });
   m.uniforms.uQ.value.z *= V13.look[V13.states[Math.max(0, F13.st)]].wk || 1;   // вечером дерево темнее, как и прочее
   return m;
 }
@@ -6562,32 +6587,35 @@ function wood13Bake(c){
   F13.stats.woodTris = 0;
   const parts = s.statics.filter(st => st.role !== 'wall'), vis = parts.map(st => st.role === 'peg' ? st.poly : wood13Ext(st.poly));
   const posts = [[[-ov, sy0], [0, sy0], [0, gy + T.leg], [-ov, gy + T.leg]], [[W, sy0], [W + ov, sy0], [W + ov, gy + T.leg], [W, gy + T.leg]]];   // стойки — за верх и низ экрана
-  const backs = partBacks(s.level.parts || []).map(backExt15);   // v15: задние стенки полостей
+  const backs = partBacks(s.level.parts || []).map(P => backExt15(P));   // v15: задние стенки полостей
   const rim = [[-ov, top - 6], [W + ov, top - 6], [W + ov, top + 11], [-ov, top + 11]], back = [[-ov, gy + 8], [W + ov, gy + 8], [W + ov, gy + T.back + 3], [-ov, gy + T.back + 3]];
   const tin = [[3, gy + T.back], [W - 3, gy + T.back], [W - 3, gy + T.rim + 3], [3, gy + T.rim + 3]];
-  { const d = 6, w = Math.ceil(cv.width / d), h = Math.ceil(cv.height / d), sc = F13.shCv || (F13.shCv = document.createElement('canvas'));   // тень на лес: мягкая (вниз и обратно)
+  { const d = 12, w = Math.ceil(cv.width / d), h = Math.ceil(cv.height / d), sc = F13.shCv || (F13.shCv = document.createElement('canvas'));   // тень на лес: мягкая (вниз и обратно); круг 3 — мягче, без ступенек
     sc.width = w; sc.height = h; const g = sc.getContext('2d'); g.setTransform(K / d, 0, 0, K / d, DPR * view.ox / d, DPR * view.oy / d); g.fillStyle = '#0d160a';
     for (const P of vis.concat(posts, [rim, back], backs)){ roundPoly(g, P, Q.r); g.fill(); }
-    c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.globalAlpha = L.sh[2]; c.imageSmoothingQuality = 'high'; c.drawImage(sc, L.sh[0] * K, L.sh[1] * K, w * d, h * d); c.restore(); }
+    c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.globalAlpha = L.sh[2]; c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high'; c.drawImage(sc, L.sh[0] * K, L.sh[1] * K, w * d, h * d); c.restore(); }
   if (backs.length) back15Draw(c, backs, parts.filter(st => st.role === 'wood').map((st, i) => vis[parts.indexOf(st)]));   // v15, круг 2: задняя стенка — 2D под брусом
-  const sc = new THREE.Scene(), add = (P, o) => sc.add(wood13Mesh(P, o)), PL = V15.plank;
+  const sc = new THREE.Scene(), add = (P, o) => sc.add(wood13Mesh(P, o)), PL = V15.plank, pw = (o) => Object.assign({ w15: true, D: PL.D, bevel: PL.bevel, r: PL.r }, o);   // круг 3: рисованное дерево
   parts.forEach((st, i) => { if (st.role === 'peg'){ let cx = 0, cy = 0; for (const v of st.poly){ cx += v[0] / st.poly.length; cy += v[1] / st.poly.length; } add(st.poly, { peg: true, cx, cy, r: 2 }); }
-    else if (st.role === 'wood') add(vis[i], { w15: true, D: PL.D, bevel: PL.bevel, r: PL.r, dir: st.kind === 'cheek' || st.kind === 'side' || st.kind === 'post' ? [0, 1] : undefined, shade: PL.k });   // v15: брус построек — рисованная текстура
+    else if (st.role === 'wood') add(vis[i], pw({ kind: st.kind, dir: st.kind === 'cheek' || st.kind === 'side' || st.kind === 'post' ? [0, 1] : undefined }));   // v15: брус построек
     else add(vis[i]); });
-  posts.forEach((P, i) => add(P, { dir: [0, 1], seed: 0.3 + 0.4 * i, z: 1.5 }));   // стойки чуть ближе — брусья уходят за них
-  add(rim, { dir: [1, 0], seed: 0.5, z: 1 });
-  add(back, { dir: [1, 0], seed: 0.9, z: -16, D: 3, shade: 0.78 });   // задник пил
-  add(tin, { dir: [1, 0], seed: 0.2, z: -10, D: 2, shade: Q.inner, r: 2 });   // корыто изнутри (задняя стенка и дно)
+  posts.forEach((P, i) => add(P, pw({ kind: 'post', dir: [0, 1], seed: 0.3 + 0.4 * i, z: 1.5 })));   // стойки чуть ближе — брусья уходят за них
+  add(rim, pw({ kind: 'beam', dir: [1, 0], seed: 0.5, z: 1 }));
+  add(back, pw({ kind: 'beam', dir: [1, 0], seed: 0.9, z: -16, D: 3, shade: 0.7 }));   // задник пил
+  add(tin, pw({ kind: 'inner', dir: [1, 0], seed: 0.2, z: -10, D: 2, shade: 0.62, r: 2 }));   // корыто изнутри (задняя стенка и дно) — темнее
   { const ax = new THREE.Mesh(col13(new THREE.CylinderGeometry(3, 3, W + 2 * ov, 16).rotateZ(Math.PI / 2), '#8e979f'), saw13Mat());   // ось пил (сталь, за дисками)
     ax.position.set(W / 2, gy + S.cy, -6); sc.add(ax); }
   r3SetCam(); if (R3.cv.width !== cv.width || R3.cv.height !== cv.height){ R3.cv.width = cv.width; R3.cv.height = cv.height; R3.ren.setSize(cv.width, cv.height, false); }
   R3.ren.render(sc, R3.cam); const tR = performance.now();
   { const ink = F13.inkCv || (F13.inkCv = document.createElement('canvas')); ink.width = cv.width; ink.height = cv.height;   // кант — обводка силуэта (как он виден в 3D)
     const ig = ink.getContext('2d'); ig.drawImage(R3.cv, 0, 0); ig.globalCompositeOperation = 'source-in'; ig.fillStyle = Q.ink; ig.fillRect(0, 0, ink.width, ink.height);
-    c.save(); c.setTransform(1, 0, 0, 1, 0, 0); const r = (backs.length ? V15.plank.ink : Q.inkW) * K;   // v15, круг 2: кант бруса построек толще (как на рефе)
-    for (let k = 0; k < 8; k++){ const a = k * Math.PI / 4; c.drawImage(ink, Math.round(Math.cos(a) * r), Math.round(Math.sin(a) * r)); }
+    if (backs.length){ ig.fillStyle = PL.inkCol; ig.fillRect(0, 0, ink.width, ink.height); }
+    c.save(); c.setTransform(1, 0, 0, 1, 0, 0); const r = (backs.length ? PL.ink : Q.inkW) * K;   // v15, круг 3: кант тонкий, чуть неровный («от руки»)
+    for (let k = 0; k < 8; k++){ const a = k * Math.PI / 4, rk = r * (backs.length ? 1 + 0.22 * Math.sin(k * 2.39 + 0.5) : 1); c.drawImage(ink, Math.round(Math.cos(a) * rk), Math.round(Math.sin(a) * rk)); }
     c.drawImage(R3.cv, 0, 0); c.restore(); }
   dispose13(sc); vbase(c); const tI = performance.now();
+  if (backs.length){ c.lineWidth = 0.6; c.strokeStyle = PL.inkCol; c.lineJoin = 'round';   // круг 3: шов между кусками бруса (балка — доска — чурбак)
+    parts.forEach((st, i) => { if (st.role === 'wood'){ roundPoly(c, vis[i], PL.r); c.stroke(); } }); }
   for (const st of parts){                                    // светлая кромка стенки щели (знание игрока — где щель)
     const P = st.poly; if (st.role === 'peg') continue; let cx = 0, cy = 0; for (const v of P){ cx += v[0] / P.length; cy += v[1] / P.length; }
     c.save(); roundPoly(c, P, Q.r); c.clip();
@@ -6596,7 +6624,7 @@ function wood13Bake(c){
       const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2; if (Math.abs(ny) > 0.35) continue;
       if (!s.gaps.find(q => Math.abs(Math.abs(mx - q.x) - q.w / 2) < 3 && my > q.y - 8 && my < (q.yb || CFG.floorY) + 8)) continue;
       c.beginPath(); c.moveTo(a[0], a[1]); c.lineTo(b[0], b[1]); c.lineTo(b[0] + nx * 3.2, b[1] + ny * 3.2); c.lineTo(a[0] + nx * 3.2, a[1] + ny * 3.2); c.closePath();
-      c.fillStyle = 'rgba(255,232,190,0.7)'; c.fill(); }
+      c.fillStyle = backs.length ? 'rgba(214,158,102,0.6)' : 'rgba(255,232,190,0.7)'; c.fill(); }   // круг 3: у построек из досок — цвет светлой кромки бруса
     c.restore(); }
   { const [dx, dy, al] = S.shadow, step = W / S.n;            // тени пил на задник, изнанку корыта и лес в щелях
     for (let i = 0; i < S.n; i++){ const x = step * (i + 0.5) + dx, y = gy + S.cy + dy, g = c.createRadialGradient(x, y, S.R * 0.8, x, y, S.R * 1.14);
@@ -6606,16 +6634,17 @@ function wood13Bake(c){
   if (F13.front && F13.frontKey === fkey){ F13.stats.bakeMs = +(performance.now() - t0).toFixed(1); F13.stats.bakeParts = [tR - t0, tI - tR, tL - tI, 0].map(v => +v.toFixed(1)); return true; }   // перед корыта от уровня не зависит
   F13.frontKey = fkey;
   const fs = new THREE.Scene(), fa = (P, o) => fs.add(wood13Mesh(P, o)), yr = gy + T.rim, yf = gy + T.face;
-  fa([[-2, yr], [W + 2, yr], [W + 2, yf], [-2, yf]], { dir: [1, 0], seed: 0.15, D: 4.5, bevel: 1.4, r: 2 });
-  for (const xl of [30, W - 30 - T.legW]) fa([[xl, yf - 3], [xl + T.legW, yf - 3], [xl + T.legW, gy + T.leg], [xl, gy + T.leg]], { dir: [0, 1], seed: xl * 0.01, D: 4, bevel: 1, r: 1.5, shade: 0.78 });
-  for (const xe of [-3, W + 3 - T.cap]) fa([[xe, gy + T.back - 3], [xe + T.cap, gy + T.back - 3], [xe + T.cap, yf + 2], [xe, yf + 2]], { dir: [0, 1], seed: xe * 0.013, D: 5.5, bevel: 1.4, r: 2 });
+  const pt = (o) => Object.assign({ w15: true, D: 4.5, bevel: 0.9, r: 2 }, o);   // круг 3: корыто — то же рисованное дерево
+  fa([[-2, yr], [W + 2, yr], [W + 2, yf], [-2, yf]], pt({ kind: 'trough', dir: [1, 0], seed: 0.15 }));
+  for (const xl of [30, W - 30 - T.legW]) fa([[xl, yf - 3], [xl + T.legW, yf - 3], [xl + T.legW, gy + T.leg], [xl, gy + T.leg]], pt({ kind: 'leg', dir: [0, 1], seed: xl * 0.01, D: 4, r: 1.5, shade: 0.8 }));
+  for (const xe of [-3, W + 3 - T.cap]) fa([[xe, gy + T.back - 3], [xe + T.cap, gy + T.back - 3], [xe + T.cap, yf + 2], [xe, yf + 2]], pt({ kind: 'post', dir: [0, 1], seed: xe * 0.013, D: 5.5 }));
   R3.ren.render(fs, R3.cam); dispose13(fs);
   const fy0 = Math.max(0, Math.floor((gy + T.back - 12) * K + view.oy * DPR)), fy1 = Math.min(cv.height, Math.ceil((gy + T.leg + 10) * K + view.oy * DPR));
   if (!F13.front) F13.front = document.createElement('canvas');
   F13.front.width = cv.width; F13.front.height = Math.max(1, fy1 - fy0); F13.frontY = fy0;
   const g2 = F13.front.getContext('2d'); g2.clearRect(0, 0, F13.front.width, F13.front.height);
-  { const r = Q.inkW * K, ink = F13.inkCv, ig = ink.getContext('2d'); ig.globalCompositeOperation = 'source-over'; ig.clearRect(0, 0, ink.width, ink.height); ig.drawImage(R3.cv, 0, 0);
-    ig.globalCompositeOperation = 'source-in'; ig.fillStyle = Q.ink; ig.fillRect(0, 0, ink.width, ink.height); ig.globalCompositeOperation = 'source-over';
+  { const r = PL.ink * K, ink = F13.inkCv, ig = ink.getContext('2d'); ig.globalCompositeOperation = 'source-over'; ig.clearRect(0, 0, ink.width, ink.height); ig.drawImage(R3.cv, 0, 0);
+    ig.globalCompositeOperation = 'source-in'; ig.fillStyle = PL.inkCol; ig.fillRect(0, 0, ink.width, ink.height); ig.globalCompositeOperation = 'source-over';
     for (let k = 0; k < 8; k++){ const a = k * Math.PI / 4; g2.drawImage(ink, 0, fy0, cv.width, fy1 - fy0, Math.round(Math.cos(a) * r), Math.round(Math.sin(a) * r), cv.width, fy1 - fy0); }
     g2.drawImage(R3.cv, 0, fy0, cv.width, fy1 - fy0, 0, 0, cv.width, fy1 - fy0); }
   F13.stats.bakeMs = +(performance.now() - t0).toFixed(1); F13.stats.bakeParts = [tR - t0, tI - tR, tL - tI, performance.now() - tL].map(v => +v.toFixed(1));   // сцена, обводка, кромки и тени пил, перед корыта
@@ -6623,39 +6652,84 @@ function wood13Bake(c){
 }
 const WOOD2D = { top: '#d39a5e', mid: '#ad7140', bot: '#8a5530', ink: '#5a2e12', lit: '#ffe2b0', dk: '#6e3c1c', shadow: 'rgba(18,28,12,0.3)' };   // пока three.js грузится — дерево 2D
 function build13(c){
-  wood15Img('plank'); wood15Img('back');                    // v15, круг 2: текстуры бруса и задней стенки
   document.body.classList.add('f13'); woodCss13(); state13Set(G.s.n);
   c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, c.canvas.width, c.canvas.height); vbase(c);
   wallClip = new Path2D();                                    // круг 2: лес далеко — сок пачкает только дерево (опоры), не воздух перед лесом
   for (const st of G.s.statics) if (st.role !== 'wall') cwPath15(wallClip, st.poly);
-  F13.backs = partBacks(G.s.level.parts || []).map(backExt15); F13.backClip = null; F13.spl = [];   // v15: задние стенки полостей — тоже дерево (пятна, сплеш)
+  F13.backs = partBacks(G.s.level.parts || []).map(P => backExt15(P)); F13.backsHit = partBacks(G.s.level.parts || []).map(P => backExt15(P, true)); F13.backClip = null; F13.spl = [];   // v15: задние стенки полостей — тоже дерево (пятна, сплеш)
   if (F13.backs.length){ F13.backClip = new Path2D(); for (const P of F13.backs){ cwPath15(wallClip, P); cwPath15(F13.backClip, P); } }
   F13.baked = false;
   const tv = R3.tint && R3.tint.value.clone(), T1 = F13.tint1; if (tv) R3.tint.value.set(T1[0], T1[1], T1[2]);   // круг 2: дерево — светом нового состояния (смена идёт плавно, а запекается один раз)
   try { F13.baked = wood13Bake(c); F13.bakeFail = ''; } catch (e){ F13.bakeFail = String(e && e.message || e); log('event', 'f13.fail', F13.bakeFail); F13.baked = false; }
   if (tv) R3.tint.value.copy(tv);
 }
-// v15, круг 2: задняя стенка полости — вертикальные доски (рисованная текстура), темнее книзу (глубина короба, к горлу) и у бруса
-// постройки (размытая тень досок на стенку), тонкий кант по свободным краям; свет состояния леса — умножением.
+// v15, круг 3 (разбор рефа): задняя стенка полости — одна цельная гладкая панель, рисуется кодом: тёмный красно-коричневый тон,
+// мягкие широкие вертикальные полосы, светлее в середине верха, темнее книзу (к горлу), мягкая тень от бруса (шириной с брус) и от
+// краёв; верхняя кромка — светлый торец панели со щербинкой посередине и тенью под ним, от неё — едва заметная трещинка; свет
+// состояния леса — умножением.
 function back15Draw(c, backs, woods){
-  const B = V15.back, im = wood15Img('back'), tv = R3.tint ? R3.tint.value : { x: 1, y: 1, z: 1 }, wk = V13.look[V13.states[Math.max(0, F13.st)]].wk || 1;
-  if (!im) W15T.miss = true;
+  const B = V15.back, tv = R3.tint ? R3.tint.value : { x: 1, y: 1, z: 1 }, wk = V13.look[V13.states[Math.max(0, F13.st)]].wk || 1;
+  const base = hexRgb(B.base), hi = hexRgb(B.hi), lo = hexRgb(B.lo), rgb = (C, k) => 'rgb(' + C.map(q => Math.round(clamp(q * k, 0, 255))).join(',') + ')';
   for (const P of backs){
     let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9; for (const v of P){ x0 = Math.min(x0, v[0]); y0 = Math.min(y0, v[1]); x1 = Math.max(x1, v[0]); y1 = Math.max(y1, v[1]); }
-    const bx = [x0 - 4, y0 - 4, x1 - x0 + 8, y1 - y0 + 8];
+    const bx = [x0 - 4, y0 - 4, x1 - x0 + 8, y1 - y0 + 8], hs = r3Hash(x0 * 0.37 + y0 * 0.11), w = x1 - x0, h = y1 - y0, cx = (x0 + x1) / 2;
     c.save(); roundPoly(c, P, 1.5); c.clip();
-    if (im){ const pat = c.createPattern(im, 'repeat'); pat.setTransform(new DOMMatrix([B.s, 0, 0, B.s, Math.round(r3Hash(x0 * 0.37 + y0 * 0.11) * 4) * 26, y0])); c.fillStyle = pat; } else c.fillStyle = B.flat;
-    c.fillRect(...bx);
-    const g = c.createLinearGradient(0, y0, 0, y1); g.addColorStop(0, 'rgba(' + B.ao + ',' + B.grad[0] + ')'); g.addColorStop(1, 'rgba(' + B.ao + ',' + B.grad[1] + ')'); c.fillStyle = g; c.fillRect(...bx);
-    { c.save(); c.shadowColor = 'rgba(' + B.ao + ',' + B.rim[1] + ')'; c.shadowBlur = B.rim[0] * K; c.shadowOffsetX = 6000 * K; c.translate(-6000, 0);   // край стенки — тень внутрь
-      c.beginPath(); c.rect(x0 - 200, y0 - 200, x1 - x0 + 400, y1 - y0 + 400); const Q = polyArea(P) < 0 ? P : P.slice().reverse(); c.moveTo(Q[0][0], Q[0][1]); for (const v of Q) c.lineTo(v[0], v[1]); c.closePath();
+    c.fillStyle = rgb(base, 1); c.fillRect(...bx);              // цельная панель
+    { const rr = Math.max(w, h) * 0.62, g = c.createRadialGradient(cx, y0 + h * 0.05, 0, cx, y0 + h * 0.05, rr);   // светлее — середина верха
+      g.addColorStop(0, 'rgba(' + hi.join(',') + ',' + B.hiA + ')'); g.addColorStop(0.55, 'rgba(' + hi.join(',') + ',' + (B.hiA * 0.35) + ')'); g.addColorStop(1, 'rgba(' + hi.join(',') + ',0)');
+      c.save(); c.translate(cx, y0); c.scale(w / Math.max(w, h) * 1.1, h / Math.max(w, h) * 1.3); c.translate(-cx, -y0); c.fillStyle = g; c.fillRect(x0 - w, y0 - h, 3 * w, 3 * h); c.restore(); }
+    { const g = c.createLinearGradient(0, y0, 0, y1); g.addColorStop(0, 'rgba(' + lo.join(',') + ',' + B.grad[0] + ')'); g.addColorStop(1, 'rgba(' + lo.join(',') + ',' + B.grad[1] + ')'); c.fillStyle = g; c.fillRect(...bx); }   // к горлу — глубже
+    { const n = Math.max(4, Math.round(w / B.bands)), g = c.createLinearGradient(x0, 0, x1, 0);   // мягкие вертикальные полосы — чуть светлее и темнее тона
+      for (let i = 0; i <= n; i++){ const k = (2 * r3Hash(hs * 31 + i * 7.3) - 1) * B.bandA * (0.5 + r3Hash(hs * 17 + i * 3.1)); g.addColorStop(i / n, k > 0 ? 'rgba(255,214,170,' + (k * 1.6).toFixed(3) + ')' : 'rgba(20,6,0,' + (-k * 1.6).toFixed(3) + ')'); }
+      c.fillStyle = g; c.fillRect(...bx); }
+    { c.save(); c.shadowColor = 'rgba(' + lo.join(',') + ',' + B.rim[1] + ')'; c.shadowBlur = B.rim[0] * K; c.shadowOffsetX = 6000 * K; c.translate(-6000, 0);   // край стенки — тень внутрь
+      c.beginPath(); c.rect(x0 - 200, y0 - 200, w + 400, h + 400); const Q = polyArea(P) < 0 ? P : P.slice().reverse(); c.moveTo(Q[0][0], Q[0][1]); for (const v of Q) c.lineTo(v[0], v[1]); c.closePath();
       c.fillStyle = '#000'; c.fill('evenodd'); c.restore(); }
-    for (const [bl, al] of B.aoPass){ c.save(); c.shadowColor = 'rgba(' + B.ao + ',' + al + ')'; c.shadowBlur = bl * K; c.shadowOffsetX = 6000 * K; c.translate(-6000, 0); c.fillStyle = '#000';
-      for (const Q of woods){ roundPoly(c, Q, 2); c.fill(); } c.restore(); }
+    for (const [bl, al, gr] of B.ao){ c.save(); c.shadowColor = 'rgba(' + lo.join(',') + ',' + al + ')'; c.shadowBlur = bl * K; c.shadowOffsetX = 6000 * K; c.translate(-6000, 0); c.fillStyle = c.strokeStyle = '#000';   // тень бруса на панель
+      c.lineWidth = 2 * gr; c.lineJoin = 'round'; for (const Q of woods){ roundPoly(c, Q, 2); c.fill(); c.stroke(); } c.restore(); }
+    const ar = polyArea(P) < 0 ? -1 : 1;                       // верхняя кромка: рёбра с наружной нормалью вверх
+    let best = null;
+    for (let i = 0; i < P.length; i++){ const a = P[i], b = P[(i + 1) % P.length], ex = b[0] - a[0], ey = b[1] - a[1], Ln = Math.hypot(ex, ey); if (Ln < 12) continue;
+      const nx = ey / Ln * ar, ny = -ex / Ln * ar; if (ny > -0.6) continue;   // наружная нормаль (вверх — ny < 0)
+      const ix = -nx, iy = -ny, [tw, tc] = B.top, [sw, sa] = B.topSh;
+      c.fillStyle = 'rgba(30,12,4,' + sa + ')'; c.beginPath(); c.moveTo(a[0], a[1]); c.lineTo(b[0], b[1]); c.lineTo(b[0] + ix * (tw + sw), b[1] + iy * (tw + sw)); c.lineTo(a[0] + ix * (tw + sw), a[1] + iy * (tw + sw)); c.fill();
+      c.fillStyle = tc; c.beginPath(); c.moveTo(a[0], a[1]); c.lineTo(b[0], b[1]); c.lineTo(b[0] + ix * tw, b[1] + iy * tw); c.lineTo(a[0] + ix * tw, a[1] + iy * tw); c.fill();
+      if (!best || Ln > best.Ln) best = { a, ex: ex / Ln, ey: ey / Ln, Ln, ix, iy }; }
+    if (best){ const { a, ex, ey, Ln, ix, iy } = best, m = [a[0] + ex * Ln * 0.5, a[1] + ey * Ln * 0.5], [nw, nd] = B.notch, at = (t, dd) => [m[0] + ex * t + ix * dd, m[1] + ey * t + iy * dd];
+      const [cl, ca] = B.crack, L = h * cl;                   // трещинка от щербинки вниз — мягкая тёмная полоска со светлой кромкой
+      c.lineCap = 'round'; c.lineWidth = 2.2; c.strokeStyle = 'rgba(28,10,3,' + (ca * 0.45) + ')'; c.beginPath(); c.moveTo(...at(0, nd * 0.6)); c.quadraticCurveTo(...at(1.0, nd + L * 0.5), ...at(-0.4, nd + L)); c.stroke();
+      c.lineWidth = 0.7; c.strokeStyle = 'rgba(28,10,3,' + (ca * 0.7) + ')'; c.beginPath(); c.moveTo(...at(0, nd * 0.6)); c.quadraticCurveTo(...at(1.0, nd + L * 0.45), ...at(-0.2, nd + L * 0.7)); c.stroke();
+      c.lineWidth = 0.8; c.strokeStyle = 'rgba(214,156,100,' + (ca * 0.45) + ')'; c.beginPath(); c.moveTo(...at(1.3, nd)); c.quadraticCurveTo(...at(2.3, nd + L * 0.45), ...at(1.0, nd + L * 0.8)); c.stroke();
+      c.fillStyle = B.top[1]; c.beginPath(); c.moveTo(...at(-nw / 2, 0.2)); c.lineTo(...at(-nw * 0.05, nd + B.top[0])); c.lineTo(...at(nw * 0.18, nd * 0.6 + B.top[0])); c.lineTo(...at(nw / 2, 0.2)); c.fill();   // щербинка — светлый скол торца
+      c.lineWidth = 0.5; c.strokeStyle = 'rgba(40,16,4,0.6)'; c.beginPath(); c.moveTo(...at(-nw / 2, B.top[0])); c.lineTo(...at(-nw * 0.05, nd + B.top[0])); c.lineTo(...at(nw * 0.18, nd * 0.6 + B.top[0])); c.stroke(); }
     c.globalCompositeOperation = 'multiply'; c.fillStyle = 'rgb(' + [tv.x, tv.y, tv.z].map(q => Math.round(clamp(q * wk, 0, 1) * 255)).join(',') + ')'; c.fillRect(...bx);
     c.restore();
-    c.save(); roundPoly(c, P, 1.5); c.lineWidth = B.ink; c.strokeStyle = V13.wood.ink; c.stroke(); c.restore();
+    c.save(); roundPoly(c, P, 1.5); c.lineWidth = B.ink; c.strokeStyle = V15.plank.inkCol; c.stroke(); c.restore();
   }
+}
+// Круг 3: панель полости начинается чуть ниже верха постройки (торец панели — ниже верха балки, как на рефе): верхние рёбра
+// (наружная нормаль вверх) опущены на trim ед. — только вид (клип сплеша и пятен), не физика.
+function backTrim15(P){
+  const d = V15.back.trim, ar = polyArea(P) < 0 ? -1 : 1; let Q = P;
+  for (let i = 0; i < P.length; i++){ const a = P[i], b = P[(i + 1) % P.length], ex = b[0] - a[0], ey = b[1] - a[1], Ln = Math.hypot(ex, ey); if (Ln < 12) continue;
+    const nx = ey / Ln * ar, ny = -ex / Ln * ar; if (ny > -0.6) continue;
+    Q = cut15(Q, (v) => -((v[0] - a[0]) * nx + (v[1] - a[1]) * ny) - d); }
+  return Q.length >= 3 ? Q : P;
+}
+// Круг 3: фрукты отбрасывают на панель полости мягкую тень — силуэты тел (со сдвигом) в холст низкого разрешения, растянутый
+// со сглаживанием (размытие даром), обрезан контуром панелей.
+function shade15(c, s, sh){
+  if (!F13.backClip || !s.bodies.length) return;
+  const [dx, dy, al, du] = V15.back.shade, dd = Math.max(2, du * K), w = Math.ceil(cv.width / dd) + 2, h = Math.ceil(cv.height / dd) + 2, sc = F13.pshCv || (F13.pshCv = document.createElement('canvas'));
+  if (sc.width !== w || sc.height !== h){ sc.width = w; sc.height = h; }
+  const g = sc.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, w, h);
+  g.setTransform(K / dd, 0, 0, K / dd, (DPR * view.ox + sh.x * K) / dd, (DPR * view.oy + sh.y * K) / dd); g.fillStyle = '#1e0c04'; g.beginPath();
+  for (const b of s.bodies){ const cs = Math.cos(b.a), sn = Math.sin(b.a), oy = introOff(b) + dy, V = b.verts;
+    for (let i = 0; i < V.length; i++){ const x = b.x + cs * V[i][0] - sn * V[i][1] + dx, y = b.y + oy + sn * V[i][0] + cs * V[i][1]; if (i) g.lineTo(x, y); else g.moveTo(x, y); }
+    g.closePath(); }
+  g.fill();
+  c.save(); vbase(c, sh.x, sh.y); c.clip(F13.backClip); c.setTransform(1, 0, 0, 1, 0, 0); c.globalAlpha = al; c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high';
+  c.drawImage(sc, 0, 0, w * dd, h * dd); c.restore();
 }
 // Контур для клипа (обход по часовой у всех — объединение без дыр при nonzero).
 function cwPath15(path, P){ const Q = polyArea(P) < 0 ? P.slice().reverse() : P; path.addPath(polyPath2D(Q)); }
@@ -6663,8 +6737,8 @@ function cwPath15(path, P){ const Q = polyArea(P) < 0 ? P.slice().reverse() : P;
 // с лепестками, брызги вдоль разреза, потёки вниз по доскам; обрезана контуром стенки, раскрывается за open, держится hold, гаснет к life.
 // Рисуется кадр за кадром под тенями и фруктами (фрукты не закрывает); сразу не больше max, рядом с новым старый гаснет быстрее.
 // Задняя стенка уходит за край экрана, только если лежит стороной на стенке короба (жёлоб от стенки), а не задела её углом.
-function backExt15(P){ const W = CFG.W, at = (v) => v[0] <= 0.6 ? -1 : v[0] >= W - 0.6 ? 1 : 0; for (let i = 0; i < P.length; i++){ const a = at(P[i]); if (a && a === at(P[(i + 1) % P.length])) return wood13Ext(P); } return P.map(v => [clamp(v[0], 0, W), v[1]]); }
-function backAt15(x, y){ for (const P of (F13.backs || [])) if (inPoly15(P, x, y)) return true; return false; }
+function backExt15(P, full){ const W = CFG.W, at = (v) => v[0] <= 0.6 ? -1 : v[0] >= W - 0.6 ? 1 : 0; if (!full) P = backTrim15(P); for (let i = 0; i < P.length; i++){ const a = at(P[i]); if (a && a === at(P[(i + 1) % P.length])) return wood13Ext(P); } return P.map(v => [clamp(v[0], 0, W), v[1]]); }
+function backAt15(x, y){ for (const P of (F13.backsHit || F13.backs || [])) if (inPoly15(P, x, y)) return true; return false; }   // круг 3: по полной стенке (торец ниже — сплеш верхнего ряда обрезается, но есть)
 function inPoly15(P, x, y){ let c = false; for (let i = 0, j = P.length - 1; i < P.length; j = i++){ const a = P[i], b = P[j]; if ((a[1] > y) !== (b[1] > y) && x < (b[0] - a[0]) * (y - a[1]) / (b[1] - a[1]) + a[0]) c = !c; } return c; }
 function splash15(x, y, kind, rad, ux, uy, w){
   if (!F13.backClip || !backAt15(x, y)) return;
@@ -6703,16 +6777,20 @@ function splash15Draw(c){
     c.beginPath(); c.ellipse(q.x - r * 0.28, q.y - r * 0.32, r * 0.36, r * 0.16, -0.5, 0, 6.29); c.fill(); }
   c.restore(); c.globalAlpha = 1;
 }
-function woodCss13(){                                         // фактура дерева для верха и лотка (DOM): 256×96, волокно и кольца
+function woodCss13(){                                         // фактура дерева для верха и лотка (DOM): 256×96; круг 3 — рисованная, как брус
   if (F13.css) return; F13.css = true;
-  const w = 256, h = 96, c = document.createElement('canvas'); c.width = w; c.height = h; const g = c.getContext('2d'), im = g.createImageData(w, h), d = im.data;
-  const lt = hexRgb(V13.wood.lt), mid = hexRgb(V13.wood.mid), dk = hexRgb(V13.wood.dk), sm = (t) => t * t * (3 - 2 * t);
-  const nz = (x, y) => { const xi = Math.floor(x), yi = Math.floor(y), xf = sm(x - xi), yf = sm(y - yi), hh = (i, j) => r3Hash(i * 157.1 + j * 311.7);
-    return (hh(xi, yi) * (1 - xf) + hh(xi + 1, yi) * xf) * (1 - yf) + (hh(xi, yi + 1) * (1 - xf) + hh(xi + 1, yi + 1) * xf) * yf; };
-  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++){ const ring = y * 0.2 + 2.4 * nz(x * 0.012, y * 0.05) + 0.6 * nz(x * 0.05, y * 0.2), gg = Math.abs((ring % 1) - 0.5) * 2;
-    const k = Math.min(1, Math.max(0, (gg - 0.2) / 0.7)), f = 0.9 + 0.16 * nz(x * 0.45, y * 2.4), dd = gg < 0.2 ? (0.2 - gg) / 0.2 * 0.5 : 0, o = (y * w + x) * 4;
-    for (let ch = 0; ch < 3; ch++){ let v = mid[ch] + (lt[ch] - mid[ch]) * k; v += (dk[ch] - v) * dd; d[o + ch] = Math.max(0, Math.min(255, v * f)); } d[o + 3] = 255; }
-  g.putImageData(im, 0, 0); document.documentElement.style.setProperty('--wood13', 'url(' + c.toDataURL('image/jpeg', 0.86) + ')');
+  const w = 256, h = 96, c = document.createElement('canvas'); c.width = w; c.height = h; const g = c.getContext('2d'), P = V15.plank, face = hexRgb(P.face);
+  g.fillStyle = P.face; g.fillRect(0, 0, w, h);
+  const tone = g.createLinearGradient(0, 0, w, 0); for (let i = 0; i <= 8; i++){ const k = Math.sin(i * 1.7) * 0.05; tone.addColorStop(i / 8, k > 0 ? 'rgba(255,220,170,' + k + ')' : 'rgba(30,10,0,' + (-k) + ')'); }   // медленные переливы
+  g.fillStyle = tone; g.fillRect(0, 0, w, h);
+  const band = g.createLinearGradient(0, 0, 0, h); band.addColorStop(0, 'rgba(255,214,160,0)'); band.addColorStop(0.42, 'rgba(255,214,160,0.16)'); band.addColorStop(0.58, 'rgba(255,214,160,0.12)'); band.addColorStop(1, 'rgba(255,214,160,0)');
+  g.fillStyle = band; g.fillRect(0, 0, w, h);                  // светлая размытая полоса посередине
+  g.lineCap = 'round';
+  for (const [y0, a, ph, al] of [[22, 4, 0.4, 0.32], [50, 6, 2.1, 0.26], [76, 4, 4.0, 0.3]]){   // 2–3 длинные мягкие линии волокна (бесшовно по x)
+    for (const [lw, k] of [[3.2, 0.35], [1.4, 1]]){ g.lineWidth = lw; g.strokeStyle = 'rgba(' + face.map(q => Math.round(q * 0.62)).join(',') + ',' + (al * k) + ')'; g.beginPath();
+      for (let x = 0; x <= w; x += 4){ const y = y0 + a * Math.sin(x / w * 6.2832 + ph) + 1.5 * Math.sin(x / w * 18.85 + ph * 2); if (x) g.lineTo(x, y); else g.moveTo(x, y); } g.stroke(); } }
+  g.strokeStyle = 'rgba(40,14,2,0.45)'; g.lineWidth = 1; g.beginPath(); g.moveTo(180, 96); g.quadraticCurveTo(184, 86, 182, 78); g.stroke();   // короткая трещинка
+  document.documentElement.style.setProperty('--wood13', 'url(' + c.toDataURL('image/jpeg', 0.88) + ')');
 }
 // --- пилы: диск с крючковатыми зубьями и тремя прорезями, ступица, болт со шлицем; одна сетка на диск (цвет — в вершинах) ---
 function saw13Mat(row){ const U = u13(); return new THREE.ShaderMaterial({ vertexShader: S13_VS, fragmentShader: S13_FS, uniforms: Object.assign({}, U, { uR0: { value: V13.saw.r0 }, uDim: { value: 1 }, tWet: { value: wet13().tex }, uRow: { value: row || 0 }, uRows: { value: 2 * V13.saw.n }, uRot: { value: new THREE.Vector3(0, 1, 0) } }), side: THREE.BackSide }); }
@@ -7239,6 +7317,7 @@ function render(){
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.drawImage(bgDirty, Math.round(sh.x * K), Math.round(sh.y * K));
   vbase(ctx, sh.x, sh.y); splash15Draw(ctx);                 // v15: сплеш сока на задней стенке — под тенями и фруктами
+  shade15(ctx, s, sh);                                       // v15, круг 3: мягкая тень фруктов на панели
   vbase(ctx, sh.x, sh.y);
   const intro = G.rt < G.introUntil;                         // въезд: фрукты появляются из-под обода, не поверх HUD
   if (intro){ ctx.save(); ctx.beginPath(); ctx.rect(-10, VIEW.top + 12, CFG.W + 20, VIEW.bottom); ctx.clip(); drawShadows(ctx, s); ctx.restore(); }
