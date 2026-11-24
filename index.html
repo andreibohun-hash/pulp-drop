@@ -301,7 +301,7 @@ const CFG = {
   },
   // --- v7: «развали уровень» (CFG.goalMode 'clear'). Цель одна — пропихнуть всю кучу в жернова; у инструмента один глагол.
   clearSet: 'v11',      // v11: 100 уровней CLEAR11 (шаблоны + решатель, запас — в записи уровня); 'v7' — прежние 12 (CLEAR7, набор ×2, хеш #v7old)
-  loop11: 41,           // v11: после 100-го — по кругу с этого уровня (все механики уже введены)
+  loop11: 51,           // v11: после последнего — по кругу с этого уровня (все механики уже введены; v15 — прежний 41-й, сдвиг на 10)
   //     Числа — DESIGN «v7: факт спайка». Твёрдое (кокос) нож и пила не берут: отскок / пила глохнет, бросок не тратится.
   sweepAt: 0.04,        // осталось меньше этой доли кучи — остатки сметает само (падают сквозь полки в жернова)
   friction7: 0.12,      // трение целых фруктов в v7 (v2–v6 — friction 0,3): мелочь течёт в открытую щель, а не встаёт аркой везде; затор —
@@ -590,6 +590,12 @@ function themeFor(n){ return n <= 10 ? 0 : Math.floor((n - 11) / 10 + 1) % THEME
 //   ['plate', x0, y0, x1, y1, t]        плита: отрезок — верхняя грань, толщина t вниз (вертикальная — вправо)
 //   ['poly', [[x, y], …]]               выпуклый многоугольник
 //   gate: ['gate', side, y, len, ropeY, hookX] — hookX (v3) — крюк не над бортиком, а в своей точке (верёвка наклонная)
+// v15 (дерево из досок, первые десять уровней — сборщики W15 ниже):
+//   ['wood', роль, [[x, y], …]]          доска: выпуклый многоугольник, физика — сама доска (полость между досками пуста);
+//                                       роль — для вида: board · cheek · beam · floor · side · lip
+//   ['back', [[x, y], …]]               задняя стенка полости — только вид (тёмные доски за кучей; на ней сплеш сока), тела нет
+//   ['slot', x, y, w, yb]               щель постройки (раскладка кучи, рука, светлые кромки), тела нет
+//   ['hang', x, y]                      подвес — только вид: стойка от (x, y) вверх за край экрана
 // Подвижные детали (gate, spin): partPolys отдаёт их начальную позу (для раскладки кучи и вида), тела — dynParts.
 const GATE_T = 12, GATE_LIP = 14;
 // Петля — в GATE_HINGE ед. от стенки, торец доски заходит за неё на 10 ед.: углы торца ближе к петле, чем стенка,
@@ -659,6 +665,8 @@ function partPolys(p){
     netSegs(p).forEach(([a, b], i) => out.push({ role: 'net', poly: segQuad(a, b, CFG.netT), seg: i, a, b }));
   } else if (p[0] === 'plank'){
     const P = plankShape(p); for (const Q of P.local) out.push({ role: 'plank', dyn: true, poly: placeLocal(Q, P.c, 0) });
+  } else if (p[0] === 'wood'){                        // v15: доска (роль p[1] — для вида), выпуклый многоугольник p[2]
+    out.push({ role: 'wood', kind: p[1], poly: convexHull(p[2]) });
   } else if (p[0] === 'branch'){                      // v4: ветка — толстая плита от (x0, y0) до (x1, y1)
     out.push({ role: 'branch', poly: segQuad([p[1], p[2]], [p[3], p[4]], p[5] || 14) });
   }
@@ -729,9 +737,112 @@ function partGaps(parts){
     if (p[0] === 'funnel') g.push({ x: p[1], y: CFG.floorY - (p[4] || CFG.slotH), w: p[2] });
     if (p[0] === 'twin'){ const y = CFG.floorY - (p[5] || CFG.slotH); g.push({ x: p[1], y, w: p[3] }); g.push({ x: p[2], y, w: p[3] }); }
     if (p[0] === 'bin') g.push({ x: p[1], y: p[2], w: p[3], yb: p[2] + (p[7] || 16), float: true });   // v3: щель камеры в воздухе
+    if (p[0] === 'slot') g.push({ x: p[1], y: p[2], w: p[3], yb: p[4], float: true });            // v15: щель постройки из досок
   }
   return g;
 }
+
+// ------------------------------------------------------------------ v15: постройки из досок
+// Доска по лицевой грани a→b толщиной t: side +1 — толщина влево от хода a→b (на экране y вниз: при ходе вправо-вниз — вниз-влево),
+// −1 — вправо. Торцы ea / eb: 'h' — срез по горизонтали через конец грани, 'v' — по вертикали, иначе поперёк доски.
+function slab15(a, b, t, side, ea, eb){
+  const L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, dx = (b[0] - a[0]) / L, dy = (b[1] - a[1]) / L, nx = -dy * side, ny = dx * side;
+  const end = (P, e) => { let k = 0; if (e === 'h' && Math.abs(dy) > 0.05) k = -ny * t / dy; else if (e === 'v' && Math.abs(dx) > 0.05) k = -nx * t / dx;
+    return [P[0] + nx * t + dx * k, P[1] + ny * t + dy * k]; };
+  return [a, b, end(b, eb), end(a, ea)].map(v => [+v[0].toFixed(2), +v[1].toFixed(2)]);
+}
+const W15 = {
+  t: 16, tc: 12, tw: 14, bh: 20,                      // толщина досок: наклонных и дна, щёчек, стенок короба; высота балки
+  rect: (x0, y0, x1, y1) => [[x0, y0], [x1, y0], [x1, y1], [x0, y1]],
+  // дно (полка, жёлоб, короб): верхняя грань a→b, толщина вниз
+  floor: (a, b, t, ea, eb) => slab15(a, b, t || W15.t, b[0] > a[0] ? 1 : -1, ea || 'v', eb || 'v'),
+  // балка-перекладина: верх на y, высота h; пролёты [x0, x1] (у стенки короба — уходит за край экрана)
+  beam(y, spans, h){ h = h || W15.bh; return spans.filter(([x0, x1]) => x1 - x0 > 3).map(([x0, x1]) => ['wood', 'beam', W15.rect(x0, y, x1, y + h)]); },
+  // бункер: две наклонные доски от верхних углов (xl, top), (xr, top) к горлу ширины gw (центр gx, верх горла gy), щёчки горла
+  // длины ch; задняя стенка полости; балка по верху — от стенок до досок (o.beam === false — без неё)
+  hopper(gx, gy, gw, xl, xr, top, o){
+    o = o || {}; const t = o.t || W15.t, tc = o.tc || W15.tc, ch = o.ch == null ? 26 : o.ch, a = gx - gw / 2, b = gx + gw / 2, out = [];
+    // щёчки горла — бруски со скосом к щели (sh по горизонтали, o.lipA° к горизонту): крутая доска кончается выше и в стороне от
+    // щели, пробка лежит на углах щёчек (как в щели воронки с пологим клином), а не зажата клином между крутыми досками — после реза
+    // половинки проворачиваются на углах и падают; кусок со скоса соскальзывает в щель
+    const sh = o.sh == null ? 18 : o.sh, rise = sh * Math.tan((o.lipA || 30) * Math.PI / 180), yb = gy + ch;
+    const L = slab15([xl, top], [a - sh, gy - rise], t, 1, 'h', 'h'), R = slab15([xr, top], [b + sh, gy - rise], t, -1, 'h', 'h');
+    out.push(['wood', 'board', L], ['wood', 'board', R]);
+    const xo = Math.min(a - sh - tc, L[2][0] + 2), xo2 = Math.max(b + sh + tc, R[2][0] - 2);
+    out.push(['wood', 'cheek', [[xo, gy - rise], [a - sh, gy - rise], [a, gy], [a, yb], [xo, yb]]], ['wood', 'cheek', [[b + sh, gy - rise], [xo2, gy - rise], [xo2, yb], [b, yb], [b, gy]]]);
+    out.push(['slot', gx, gy, gw, yb], ['back', [L[3], R[3], R[2], [xo2, gy - rise], [xo2, yb], [xo, yb], [xo, gy - rise], L[2]]]);
+    if (o.beam !== false) out.push(...W15.beam(top, [[o.bx0 || 0, L[3][0] + 4], [R[3][0] - 4, o.bx1 || CFG.W]], o.bh));
+    return out;
+  },
+  // жёлоб: дно — доска, верхняя грань (x0, y0)→(x1, y1), x1 — нижний конец; задняя стенка высотой o.wall над дном. Нижний конец
+  // у стенки короба (ближе 150 ед.) — щель между торцом и стенкой: пробка ложится на торец и стенку. o.end — упор на верхнем конце
+  chute(x0, y0, x1, y1, o){
+    o = o || {}; const t = o.t || W15.t, wall = o.wall == null ? 110 : o.wall, dir = x1 > x0 ? 1 : -1, out = [], F = W15.floor([x0, y0], [x1, y1], t);
+    out.push(['wood', 'floor', F], ['back', [[x0, y0 - wall], [x1, y1 - wall], F[2], F[3]]]);
+    if (o.end) out.push(['wood', 'lip', W15.rect(Math.min(x0, x0 - dir * W15.tw), y0 - o.end, Math.max(x0, x0 - dir * W15.tw), y0 + t)]);
+    const Wx = dir > 0 ? CFG.W : 0, gap = Math.abs(Wx - x1);
+    if (o.slot !== false && gap < 150) out.push(['slot', (x1 + Wx) / 2, y1, gap, y1 + t]);
+    for (const x of (o.hang || [])) out.push(['hang', x, y0 + (y1 - y0) * (x - x0) / (x1 - x0) - wall]);
+    return out;
+  },
+  // короб: стенки — внутренние грани x0 и x1 от yt вниз, дно — верхняя грань на yb у щели и выше на o.drop у стенок;
+  // o.slot: ['floor', cx, w] — щель в дне (дно к ней с двух сторон) · ['side', 'L' | 'R', h] — щель высотой h в стенке у дна
+  box(x0, x1, yt, yb, o){
+    o = o || {}; const t = o.t || W15.t, tw = o.tw || W15.tw, sl = o.slot || ['floor', (x0 + x1) / 2, 70], drop = o.drop == null ? 22 : o.drop, out = [];
+    if (sl[0] === 'floor'){
+      const [, cx, w] = sl, a = cx - w / 2, b = cx + w / 2;
+      out.push(['wood', 'floor', W15.floor([x0 - tw, yb - drop], [a, yb], t)], ['wood', 'floor', W15.floor([b, yb], [x1 + tw, yb - drop], t)], ['slot', cx, yb, w, yb + t]);
+      out.push(['wood', 'side', W15.rect(x0 - tw, yt, x0, yb - drop + t)], ['wood', 'side', W15.rect(x1, yt, x1 + tw, yb - drop + t)]);
+    } else {
+      const R = sl[1] === 'R', h = sl[2];
+      out.push(['wood', 'floor', R ? W15.floor([x0 - tw, yb - drop], [x1 + tw, yb], t) : W15.floor([x1 + tw, yb - drop], [x0 - tw, yb], t)]);
+      out.push(['wood', 'side', R ? W15.rect(x0 - tw, yt, x0, yb - drop + t) : W15.rect(x0 - tw, yt, x0, yb - h)]);
+      out.push(['wood', 'side', R ? W15.rect(x1, yt, x1 + tw, yb - h) : W15.rect(x1, yt, x1 + tw, yb - drop + t)]);
+    }
+    out.push(['back', W15.rect(x0 - tw, yt, x1 + tw, yb + t * 0.6)]);
+    for (const x of (o.hang || [x0 - tw / 2, x1 + tw / 2])) out.push(['hang', x, yt]);
+    return out;
+  },
+  // широкий лоток с двумя горлами: крайние доски от (xl, top) и (xr, top) к горлам g1 и g2 (центры, ширины w1, w2) на высоте gy,
+  // между горлами — конёк до ry; щёчки длины ch; одна задняя стенка на весь лоток
+  twin(g1, w1, g2, w2, gy, xl, xr, top, ry, o){
+    o = o || {}; const t = o.t || W15.t, tc = o.tc || W15.tc, ch = o.ch == null ? 20 : o.ch, a1 = g1 - w1 / 2, b1 = g1 + w1 / 2, a2 = g2 - w2 / 2, b2 = g2 + w2 / 2, mx = (b1 + a2) / 2, out = [];
+    const L = slab15([xl, top], [a1, gy], t, 1, 'h', 'h'), R = slab15([xr, top], [b2, gy], t, -1, 'h', 'h');
+    const RL = slab15([mx, ry], [b1, gy], t, -1, 'p', 'h'), RR = slab15([mx, ry], [a2, gy], t, 1, 'p', 'h');
+    out.push(['wood', 'board', L], ['wood', 'board', R], ['wood', 'board', RL], ['wood', 'board', RR]);
+    if (ch > 0) for (const [x0, x1] of [[a1 - tc, a1], [b1, b1 + tc], [a2 - tc, a2], [b2, b2 + tc]]) out.push(['wood', 'cheek', W15.rect(x0, gy, x1, gy + ch)]);
+    out.push(['slot', g1, gy, w1, gy + ch], ['slot', g2, gy, w2, gy + ch]);
+    out.push(['back', [L[3], R[3], R[2], [b2 + tc, gy + ch], [a1 - tc, gy + ch], L[2]]]);
+    if (o.beam !== false) out.push(...W15.beam(top, [[0, L[3][0] + 4], [R[3][0] - 4, CFG.W]], o.bh));
+    return out;
+  },
+  // полка с бортиком: дно (x0, y0)→(x1, y1), бортик высотой o.lip на конце x1; o.gap = [cx, w] — щель перед бортиком: дно кончается
+  // на её ближнем краю, бортик стоит на дальнем (пробка ложится на торец дна и бортик, как в кармане у стенки; за щелью дна нет —
+  // кускам негде залечь); задняя стенка высотой o.wall над дном
+  shelf(x0, y0, x1, y1, o){
+    o = o || {}; const t = o.t || W15.t, tw = W15.tw, dir = x1 > x0 ? 1 : -1, wall = o.wall == null ? 100 : o.wall, out = [], yAt = (x) => y0 + (y1 - y0) * (x - x0) / (x1 - x0);
+    if (o.gap){ const [cx, w] = o.gap, a = cx - dir * w / 2, b = cx + dir * w / 2; x1 = b; y1 = yAt(b);
+      out.push(['wood', 'floor', W15.floor([x0, y0], [a, yAt(a)], t)], ['slot', cx, yAt(a), w, yAt(a) + t]); }
+    else out.push(['wood', 'floor', W15.floor([x0, y0], [x1, y1], t)]);
+    if (o.lip) out.push(['wood', 'lip', W15.rect(Math.min(x1, x1 + dir * tw), y1 - o.lip, Math.max(x1, x1 + dir * tw), y1 + t)]);
+    out.push(['back', [[x0, y0 - wall], [x1 + dir * (o.lip ? tw : 0), y1 - wall], [x1 + dir * (o.lip ? tw : 0), y1 + t * 0.6], [x0, y0 + t * 0.6]]]);
+    for (const x of (o.hang || [])) out.push(['hang', x, yAt(x) - wall]);
+    return out;
+  },
+};
+// Начинка постройки: cnt предметов видов kinds рядами по полосе [x0, x1] (лечь можно только в ней), сыпать ниже from.
+function fill15(kinds, cnt, x0, x1, from, sc){
+  const out = []; let row = 0;
+  while (cnt > 0 && row < 14){
+    const k = kinds[row % kinds.length], f = FILL11.find(q => q[0] === k), d = (f ? f[1] : 40) * (sc || 1) + 6, off = (row % 2) * d / 2;
+    for (let x = x0 + d / 2 + off; x <= x1 - d / 2 && cnt > 0; x += d, cnt--) out.push([k, Math.round(x), sc || 1, 0, null, from == null ? null : from, Math.round(x0), Math.round(x1)]);
+    row++;
+  }
+  return out;
+}
+// Вид: задние стенки и подвесы уровня (в мире их нет).
+const partBacks = (parts) => parts.filter(p => p[0] === 'back').map(p => p[1]);
+const partHangs = (parts) => parts.filter(p => p[0] === 'hang').map(p => [p[1], p[2]]);
 
 // ------------------------------------------------------------------ уровни
 // Уровень: { n, moves, theme, parts, pile }. pile — порядок «засыпки»: [вид, желаемый x, масштаб, угол°, tag].
@@ -1227,8 +1338,8 @@ function levelData(n, attempt){
   let L;
   if (n && typeof n === 'object')   // v11: запись уровня целиком (генератор tools/gen11.mjs, стенды) — правила «развали»
     return Object.assign({ tier: 0, tpl: 'clear', theme: 0, specials: [], mode: 'clear', set: 'v7', v11: true }, n.form ? build11(n.form) : null, n, { n: n.n || 1, idx: n.idx || 1 });
-  if (CFG.goalMode === 'clear' && CFG.clearSet !== 'v7' && CLEAR11.length){   // v11: 100 уровней; после 100-го — по кругу с CFG.loop11
-    const T = CLEAR11, N = T.length, a = Math.max(0, Math.min(N, CFG.loop11) - 1); let k = Math.max(0, n - 1); if (k >= N) k = a + ((k - N) % (N - a));
+  if (CFG.goalMode === 'clear' && CFG.clearSet !== 'v7' && LINE11.length){   // v11: линейка (v15: 110 уровней); после последнего — по кругу с CFG.loop11
+    const T = LINE11, N = T.length, a = Math.max(0, Math.min(N, CFG.loop11) - 1); let k = Math.max(0, n - 1); if (k >= N) k = a + ((k - N) % (N - a));
     return Object.assign({ tier: 0, tpl: 'clear', theme: 0, specials: [], mode: 'clear' }, T[k].form ? build11(T[k].form) : null, T[k], { n, idx: k + 1, set: 'v7', v11: true });
   }
   if (CFG.goalMode === 'clear'){   // v7: «развали уровень» — CLEAR7 по кругу, набор инструментов в записи уровня (×2)
@@ -2959,16 +3070,50 @@ function build11(tpl){
   const pile = plugs.filter(f => f[5] != null).concat(plugs.filter(f => f[5] == null), fills.filter(f => f[5] != null), fills.filter(f => f[5] == null), tops);
   return { parts, pile };
 }
+// v15: первые десять уровней — постройки из досок (бункер, жёлоб, короб, полка, лоток с двумя горлами), ручные: parts (сборщики W15)
+// и pile; решение бросками и запас — tools/lab15.mjs. Линейка игры — LINE11: эти десять, затем 100 уровней v11 (11–110).
+const CLEAR15 = [
+  { name: 'First Cut', role: 'i', hint: ['Cut the melon!'], loadout: { knife: 4 }, solution: [{"w":"knife","pts":[[296.4,388.8],[103.6,618.6]]}],
+    parts: [...W15.hopper(200, 540, 84, 44, 356, 290, { ch: 28 })],
+    pile: [P7('melon', 200, 1.0), ...fill15(['plum', 'lime'], 14, 60, 340)] },
+  { name: 'Slide', role: 'r', loadout: { knife: 3 }, solution: [{"w":"knife","pts":[[212.1,389.1],[471.9,539.1]]}],
+    parts: [...W15.chute(0, 430, 300, 505, { wall: 120, hang: [110, 250] })],
+    pile: [P7('melon', 344, 1.05), ...fill15(['orange', 'apple'], 10, 8, 292)] },
+  { name: 'Two Bins', role: 'n', loadout: { knife: 6 }, solution: [{"w":"knife","pts":[[130.1,579.5],[430.1,579.5]]},{"w":"knife","pts":[[389.8,313.4],[130,463.4]]},{"w":"knife","pts":[[197,436.2],[347,696]]}],
+    parts: [...W15.hopper(190, 440, 80, 30, 330, 340, { ch: 20, beam: false }), ...W15.hopper(280, 590, 80, 120, 396, 480, { ch: 14, beam: false }), ['hang', 40, 340], ['hang', 320, 340], ['hang', 128, 480]],
+    pile: [P7('melon', 280, 0.95, 525), ...fill15(['plum'], 4, 140, 380, 500), P7('melon', 190, 0.95), ...fill15(['lime', 'plum'], 6, 50, 320)] },
+  { name: 'Side Door', role: 'm', loadout: { knife: 4 }, solution: [{"w":"knife","pts":[[169.4,371.7],[319.4,631.5]]},{"w":"knife","pts":[[1.6,517.7],[301.6,517.7]]}],
+    parts: [...W15.box(70, 290, 400, 560, { slot: ['side', 'R', 84], drop: 26 })],
+    pile: [P7('melon', 240, 0.95), ...fill15(['orange', 'apple'], 8, 76, 284)] },
+  { name: 'Ledge', role: 'n', loadout: { knife: 5 }, solution: [{"w":"knife","pts":[[213,238.9],[213,538.9]]},{"w":"knife","pts":[[169,525.2],[469,525.2]]}],
+    parts: [...W15.shelf(0, 390, 330, 450, { gap: [250, 78], lip: 72, wall: 90 }), ...W15.hopper(250, 590, 82, 150, 396, 470, { ch: 14, sh: 18, beam: false }), ['hang', 380, 470]],
+    pile: [P7('cuke', 250, 1.15, 486, 0, 2), ...fill15(['plum'], 4, 160, 380, 486), P7('melon', 250, 0.95), ...fill15(['plum', 'lemon'], 7, 8, 200)] },
+  { name: 'Switchback', role: 'p', loadout: { knife: 8 }, solution: [{"w":"knife","pts":[[-14.9,519.6],[285.1,519.6]]},{"w":"knife","pts":[[109.9,392.4],[409.9,392.4]]},{"w":"knife","pts":[[-32.1,543.8],[267.9,543.8]]},{"w":"knife","pts":[[279.9,348.7],[429.9,608.5]]}],
+    parts: [...W15.chute(0, 354, 300, 412, { wall: 100, hang: [150] }), ...W15.chute(400, 492, 100, 556, { wall: 60, hang: [250] })],
+    pile: [P7('melon', 59, 1.05, 492), ...fill15(['plum'], 5, 110, 390, 490), P7('melon', 344, 1.05), ...fill15(['apple', 'lemon'], 8, 8, 292)] },
+  { name: 'Chop!', role: 'i', hint: ['Axe the coconut!'], pick: 'axe', loadout: { axe: 3, knife: 2 }, solution: [{"w":"axe","pts":[[213.2,605],[53.2,485]]}],
+    parts: [...W15.box(90, 310, 420, 575, { slot: ['floor', 200, 70], drop: 28 })],
+    pile: [P7('coco', 200, 1.3), ...fill15(['cherry', 'berry'], 14, 96, 304)] },
+  { name: 'Two Throats', role: 'n', loadout: { knife: 2, axe: 2 }, solution: [{"w":"knife","pts":[[161.9,464.7],[421.7,614.7]]},{"w":"axe","pts":[[80.1,659],[170.1,479]]}],
+    parts: [...W15.twin(130, 70, 295, 80, 580, 20, 378, 430, 500, { ch: 18 })],
+    pile: [P7('coco', 130, 1.3), P7('melon', 295, 0.95), ...fill15(['plum', 'lime'], 12, 30, 374)] },
+  { name: 'Long Way', role: 'r', loadout: { axe: 2, knife: 2 }, solution: [{"w":"axe","pts":[[223.3,639.9],[63.3,519.9]]},{"w":"knife","pts":[[189.9,331.8],[-70,481.8]]}],
+    parts: [...W15.chute(400, 380, 110, 440, { wall: 90, hang: [300] }), ...W15.hopper(130, 590, 82, 0, 290, 480, { ch: 14, beam: false })],
+    pile: [P7('coco', 130, 1.46, 510), ...fill15(['cherry', 'berry'], 6, 20, 270, 490), P7('melon', 62, 1.1), ...fill15(['apple', 'orange'], 8, 120, 392)] },
+  { name: 'Workshop', role: 'p', loadout: { knife: 4, axe: 2 }, solution: [{"w":"knife","pts":[[115.1,519.4],[415.1,519.4]]},{"w":"knife","pts":[[370,304.1],[110.2,454.1]]},{"w":"axe","pts":[[174.3,466.3],[14.3,346.3]]}],
+    parts: [...W15.box(20, 150, 330, 420, { slot: ['floor', 85, 70], drop: 20 }), ...W15.hopper(234, 420, 80, 175, 396, 330, { ch: 16, sh: 0, beam: false }), ...W15.chute(0, 486, 300, 536, { wall: 50 }), ['hang', 388, 330]],
+    pile: [P7('melon', 344, 1.05, 490), ...fill15(['plum'], 4, 10, 290, 490), P7('coco', 85, 1.3), ...fill15(['cherry', 'lime'], 5, 24, 146), P7('melon', 234, 0.95), ...fill15(['lemon'], 3, 190, 380)] },
+];
 // v11: уровни (пишет tools/gen11.mjs; метки /*S11_n*/ … /*END*/ — решение бросками).
 const CLEAR11 = [
 /* CLEAR11 */
-  { /*S11_1*/ solution: [{"w":"knife","pts":[[409.2,475.5],[149.4,625.5]]},{"w":"knife","pts":[[11.3,581.9],[311.3,581.9]]}], /*END*/name: "First Cut", role: 'i', form: ["F", 101, "M", {pos: "c", fill: ["plum", "lime"], n: 14}], loadout: {knife: 4}, hint: ["Cut the melon!"] },
+  { /*S11_1*/ solution: [{"w":"knife","pts":[[409.2,475.5],[149.4,625.5]]},{"w":"knife","pts":[[11.3,581.9],[311.3,581.9]]}], /*END*/name: "Melon Funnel", role: 'i', form: ["F", 101, "M", {pos: "c", fill: ["plum", "lime"], n: 14}], loadout: {knife: 4} },
   { /*S11_2*/ solution: [{"w":"knife","pts":[[79.3,339.2],[79.3,639.2]]},{"w":"knife","pts":[[281,437.2],[21.2,587.2]]}], /*END*/name: "Again!", role: 'r', form: ["F", 201, "M", {pos: "pl", fill: ["orange", "apple"], n: 12, top: "M"}], loadout: {knife: 4} },
   { /*S11_3*/ solution: [{"w":"knife","pts":[[184,654.6],[249.6,325.1]]},{"w":"knife","pts":[[97.8,448],[357.7,598]]}], /*END*/name: "One Line", role: 'n', form: ["F", 303, "D", {pos: "c", fill: ["apple", "lime"], n: 14, "firstAim":"both"}], loadout: {knife: 4}, hint: ["One cut, two!"] },
   { /*S11_4*/ solution: [{"w":"knife","pts":[[101.3,450.8],[361.1,600.8]]},{"w":"knife","pts":[[323.1,455.6],[63.2,605.6]]},{"w":"knife","pts":[[109.6,566.3],[409.6,566.3]]}], /*END*/name: "Two Gaps", role: 'm', form: ["T", 403, "MM", {fill: ["lemon", "plum"], n: 16}], loadout: {knife: 6} },
   { /*S11_5*/ solution: [{"w":"knife","pts":[[277.1,436.5],[127.1,696.3]]},{"w":"knife","pts":[[270.7,421.6],[120.7,681.4]]}], /*END*/name: "Long One", role: 'n', form: ["F", 509, "L", {pos: "c", fill: ["plum", "berry"], n: 14}], loadout: {knife: 4} },
   { /*S11_6*/ solution: [{"w":"knife","pts":[[196.2,415.7],[46.2,675.5]]},{"w":"knife","pts":[[16.6,548],[316.6,548]]},{"w":"knife","pts":[[-29,541.1],[271,541.1]]},{"w":"knife","pts":[[-28.5,566],[271.5,566]]}], /*END*/name: "Knife Work", role: 'p', form: ["T", 602, "ML", {fill: ["lemon", "plum"], n: 18, top: "M"}], loadout: {knife: 8} },
-  { /*S11_7*/ solution: [{"w":"axe","pts":[[143.5,658.6],[233.5,478.6]]},{"w":"knife","pts":[[82.7,418.4],[232.7,678.2]]}], /*END*/name: "Chop!", role: 'i', form: ["F", 701, "C", {pos: "c", fill: ["cherry", "berry"], n: 16}], loadout: {axe: 3, knife: 3}, pick: 'axe', hint: ["Axe the coconut!"] },
+  { /*S11_7*/ solution: [{"w":"axe","pts":[[143.5,658.6],[233.5,478.6]]},{"w":"knife","pts":[[82.7,418.4],[232.7,678.2]]}], /*END*/name: "Chop Again", role: 'i', form: ["F", 701, "C", {pos: "c", fill: ["cherry", "berry"], n: 16}], loadout: {axe: 3, knife: 3}, pick: 'axe' },
   { /*S11_8*/ solution: [{"w":"axe","pts":[[280.8,662.4],[280.8,462.4]]},{"w":"knife","pts":[[114.8,476.9],[374.6,626.9]]},{"w":"axe","pts":[[71,659.5],[161,479.5]]},{"w":"knife","pts":[[75.9,555.2],[375.9,555.2]]}], /*END*/name: "Hard and Soft", role: 'n', form: ["T", 801, "CM", {fill: ["plum", "lime"], n: 16}], loadout: {axe: 3, knife: 3} },
   { /*S11_9*/ solution: [{"w":"axe","pts":[[311.6,658.3],[401.6,478.3]]},{"w":"axe","pts":[[392,500.7],[192,500.7]]},{"w":"knife","pts":[[252.5,427.8],[402.5,687.6]]}], /*END*/name: "Corner Nut", role: 'r', form: ["F", 902, "C", {pos: "pr", fill: ["berry", "lime"], n: 14, top: "M"}], loadout: {axe: 4, knife: 2} },
   { /*S11_10*/ solution: [{"w":"axe","pts":[[243.6,648.3],[333.6,468.3]]},{"w":"axe","pts":[[249.3,656.4],[339.3,476.4]]},{"w":"axe","pts":[[209.8,624.4],[49.8,504.4]]},{"w":"knife","pts":[[186.5,455.9],[36.5,715.7]]},{"w":"axe","pts":[[42.3,390.4],[162.3,550.4]]},{"w":"axe","pts":[[167.9,569.5],[367.9,569.5]]}], /*END*/name: "First Test", role: 'p', form: ["T", 1001, "CM", {fill: ["plum", "berry"], n: 20, top: "CM"}], loadout: {axe: 6, knife: 1} },
@@ -3064,6 +3209,7 @@ const CLEAR11 = [
   { /*S11_100*/ solution: [{"w":"mace","pts":[[259.3,532],[376.3,298]]},{"w":"knife","pts":[[371.4,489.9],[111.6,639.9]]},{"w":"knife","pts":[[163.9,432.9],[313.9,692.7]]},{"w":"knife","pts":[[216.1,184.3],[66.1,444.1]]},{"w":"knife","pts":[[45.3,528.1],[345.3,528.1]]},{"w":"mace","pts":[[312.4,484.5],[312.4,744.5]]}], /*END*/name: "One Hundred", role: 'p', form: ["G", 10002, "N", {n: 38, top: "CB"}], loadout: {mace: 3, knife: 4} },
 /* END CLEAR11 */
 ];
+const LINE11 = CLEAR15.concat(CLEAR11);   // v15: линейка игры — десять из досок, затем 100 уровней v11 (11–110, те же записи)
 
 // Цель одна — пропихнуть всю кучу в жернова. Куча лежит на клиньях и полках со щелями (детали v1–v3: funnel, twin, bin, shelf,
 // plate, peg); пролезает то, что уже щели. Помехи: крупное (шире щели), твёрдое (кокос: нож отскакивает, пила глохнет), длинное
@@ -3904,7 +4050,7 @@ function flushStamps(rdt){
   FX.stampTok = Math.min(VIEW.stampBurst, (FX.stampTok === undefined ? VIEW.stampBurst : FX.stampTok) + (rdt || 0) * VIEW.stampRate);   // v9: не больше stampRate в с
   if (!FX.stamps.length || !wallClip) return;
   const d = ctx2d(bgDirty);
-  d.save(); vbase(d); d.clip(wallClip, 'evenodd');
+  d.save(); vbase(d); d.clip(wallClip);                      // v15: nonzero — доски поверх задней стенки не вырезают дыр
   { let k = 0; for (const st of FX.stamps){ if (st.drip ? FX.stampTok < 0.05 : FX.stampTok < 1) continue; FX.stampTok -= st.drip ? 0.05 : 1; drawSplat(d, st); k++; } }
   d.restore(); d.globalAlpha = 1;
   FX.stamps.length = 0;
@@ -4408,10 +4554,11 @@ function onEvent(e){
       if (s.moves === 1 && !FX.lowWarned && !e.free){ FX.lowWarned = true; Sound.play('low'); }
       hideHint();
       break; }
-    case 'slice': FX.sliceW = e.w || 'knife'; sliceFX(e); break;               // v2: тело разрезано следом пальца (v6: ножом или пилой)
+    case 'slice': FX.sliceW = e.w || 'knife'; sliceFX(e);                      // v2: тело разрезано следом пальца (v6: ножом или пилой)
+      if (e.p && e.q) splash15((e.p[0] + e.q[0]) / 2, (e.p[1] + e.q[1]) / 2, e.kind, Math.sqrt(e.area / Math.PI), e.ux, e.uy, e.w || 'knife'); break;   // v15: сплеш на заднем дереве
     case 'throw': throwFX(e); break;               // v6: оружие брошено
-    case 'chop': chopFX(e); break;
-    case 'smash': smashFX(e); break;
+    case 'chop': chopFX(e); splash15(e.x, e.y, e.kind, Math.sqrt(e.area / Math.PI), e.ux, e.uy, 'axe'); break;
+    case 'smash': smashFX(e); splash15(e.x, e.y, e.kind, Math.sqrt(e.area / Math.PI), e.ux, e.uy, 'mace'); break;
     case 'shave': shaveFX(e); slabBorn(e, 'saw'); break;
     case 'land': landFX(e); break;
     case 'bounce': bounceFX(e); break;              // v7: нож отскочил от твёрдого / пила заглохла
@@ -4457,7 +4604,7 @@ function onContact(ct){                       // удар кусков: силь
 // Экраны: DOM-оверлеи, любой открывается кодом или хешем (§6, §11). Победа — без карточки: конфетти, фраза, следующий уровень.
 // =====================================================================================================
 const $ = (id) => document.getElementById(id);
-const levelTable = () => CLEAR11;   // v11: 100 уровней «развали» (101+ — по кругу в ядре)
+const levelTable = () => LINE11;   // v15: 110 уровней «развали» — десять из досок и 100 уровней v11 (дальше — по кругу в ядре)
 const okey = () => 'olevel11';   // ключ прогресса линейки v11 в сейве
 const curLevel = () => (G.save[okey()] || 1);
 function isOpen(n){ return G.save.unlockAll || n <= curLevel(); }
@@ -6070,6 +6217,17 @@ function r3BeforeRenderT(ren, sc, cam, geo, mat){
 // стальных дисковых пил (процедурная сетка, центр диска — ось вращения: без биения). Кусок на пилах разлетается на 2–6 частей
 // той же резкой сетки — только вид: событий и тел ядра нет, перемол и сок — по ядру.
 // =====================================================================================================
+// v15: дерево из досок (первые десять уровней) и сплеш сока на заднем дереве.
+const V15 = {
+  // задняя стенка полости: доски вдоль длинного края шириной w, щель между ними gap; глубина z (за досками постройки), тон доски и щели
+  back: { w: 23, gap: 1.6, z: -15, D: 2.2, shade: 0.5, seam: 0.2, jit: 0.12 },
+  hang: { w: 11, z: -6, D: 4, shade: 0.82 },               // подвес — стойка от постройки вверх за край экрана
+  end: { k: 0.55, dk: 0.7 },                                // торец доски: шаг годичных колец (1/ед.), сколько темнее
+  // сплеш: радиус кляксы от радиуса тела (доля, мин., макс.), лепестков; брызг вдоль разреза; потёков и их длина (ед.);
+  // жизнь: раскрытие, держится, гаснет к life (с); непрозрачность ядра; не больше max сразу, рядом с новым старый гаснет быстрее
+  splash: { r: [0.95, 11, 50], lobes: 10, spray: [6, 10], drip: [3, 5], dripL: [22, 80], open: 0.12, hold: 0.8, life: 2.4, a: 0.94, max: 6, near: 0.8,
+    mix: 0.06, dark: 1.0, rim: 0.62, gloss: 0.34, weap: { knife: 1, saw: 0.75, axe: 1.15, mace: 1.35 } },
+};
 const V13 = {
   on: true,
   wait: { bg: '#4e6b3c', after: 250, fade: 200, y: 0.42, w: 176, h: 54 },   // v14: заглушка загрузки — фон до леса, плашка через after мс, проявление, место и размер
@@ -6236,11 +6394,14 @@ void main(){
   float w1 = vn2(vec2(u * 0.017, v * 0.1)), w2 = vn2(vec2(u * 0.06, v * 0.33 + 5.0));
   float ring = v * 0.4 + 2.6 * w1 + 0.7 * w2;
   if (uG.w > 0.5) ring = length(vW.xy - uEnd.xy) * 0.85 + 0.9 * vn2((vW.xy - uEnd.xy) * 0.35);   // торец штыря — годичные кольца
+  float endF = uG.w > 0.5 ? 0.0 : smoothstep(0.55, 0.85, abs(dot(N.xy, d)));                 // v15: торец доски (грань поперёк волокна) — кольца вокруг оси доски
+  if (endF > 0.0){ float vc = dot(uEnd.xy, e) + uG.z * 47.0; ring = mix(ring, length(vec2(v - vc, vW.z * 1.6)) * ${V15.end.k.toFixed(2)} + 0.8 * vn2(vec2(v, vW.z) * 0.3), endF); }
   float g = abs(fract(ring) - 0.5) * 2.0;
   float fib = vn2(vec2(u * 0.45, v * 2.4)) * 0.6 + vn2(vec2(u * 1.3, v * 6.5)) * 0.4;
   vec3 col = mix(cMid, cLt, smoothstep(0.2, 0.9, g) * (0.5 + 0.5 * w2));
   col = mix(col, cDk, (1.0 - smoothstep(0.0, 0.24, g)) * 0.62);
   col *= (0.9 + 0.16 * fib) * uK;
+  col *= 1.0 - endF * ${(1 - V15.end.dk).toFixed(2)};
   float nv = max(dot(N, uV), 0.0), w = smoothstep(uWrap.x, uWrap.y, dot(N, uL));
   vec3 c = mix(pow(col, vec3(uShade.x)) * uShade.y, col * uVin.x, w);
   c += col * uVin.y * smoothstep(0.55, 0.95, 1.0 - nv) * (1.0 - 0.6 * w);
@@ -6344,6 +6505,8 @@ function wood13Bake(c){
     for (const P of vis.concat(posts, [rim, back])){ roundPoly(g, P, Q.r); g.fill(); }
     c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.globalAlpha = L.sh[2]; c.imageSmoothingQuality = 'high'; c.drawImage(sc, L.sh[0] * K, L.sh[1] * K, w * d, h * d); c.restore(); }
   const sc = new THREE.Scene(), add = (P, o) => sc.add(wood13Mesh(P, o));
+  for (const P of partBacks(s.level.parts || [])) back15(add, backExt15(P));     // v15: задняя стенка полости — тёмные доски за кучей
+  for (const [x, y] of partHangs(s.level.parts || [])){ const H = V15.hang; add([[x - H.w / 2, sy0], [x + H.w / 2, sy0], [x + H.w / 2, y + 8], [x - H.w / 2, y + 8]], { dir: [0, 1], seed: x * 0.013, z: H.z, D: H.D, shade: H.shade, r: 1.5, bevel: 1 }); }   // подвес — за верх экрана
   parts.forEach((st, i) => { if (st.role === 'peg'){ let cx = 0, cy = 0; for (const v of st.poly){ cx += v[0] / st.poly.length; cy += v[1] / st.poly.length; } add(st.poly, { peg: true, cx, cy, r: 2 }); } else add(vis[i]); });
   posts.forEach((P, i) => add(P, { dir: [0, 1], seed: 0.3 + 0.4 * i, z: 1.5 }));   // стойки чуть ближе — брусья уходят за них
   add(rim, { dir: [1, 0], seed: 0.5, z: 1 });
@@ -6397,11 +6560,76 @@ function build13(c){
   document.body.classList.add('f13'); woodCss13(); state13Set(G.s.n);
   c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, c.canvas.width, c.canvas.height); vbase(c);
   wallClip = new Path2D();                                    // круг 2: лес далеко — сок пачкает только дерево (опоры), не воздух перед лесом
-  for (const st of G.s.statics) if (st.role !== 'wall') wallClip.addPath(polyPath2D(st.poly));
+  for (const st of G.s.statics) if (st.role !== 'wall') cwPath15(wallClip, st.poly);
+  F13.backs = partBacks(G.s.level.parts || []).map(backExt15); F13.backClip = null; F13.spl = [];   // v15: задние стенки полостей — тоже дерево (пятна, сплеш)
+  if (F13.backs.length){ F13.backClip = new Path2D(); for (const P of F13.backs){ cwPath15(wallClip, P); cwPath15(F13.backClip, P); } }
   F13.baked = false;
   const tv = R3.tint && R3.tint.value.clone(), T1 = F13.tint1; if (tv) R3.tint.value.set(T1[0], T1[1], T1[2]);   // круг 2: дерево — светом нового состояния (смена идёт плавно, а запекается один раз)
   try { F13.baked = wood13Bake(c); F13.bakeFail = ''; } catch (e){ F13.bakeFail = String(e && e.message || e); log('event', 'f13.fail', F13.bakeFail); F13.baked = false; }
   if (tv) R3.tint.value.copy(tv);
+}
+// v15: задняя стенка полости — доски вдоль длинного края (полосы многоугольника), между ними тёмная щель (подложка во всю стенку).
+function back15(add, P){
+  const B = V15.back; let best = 0, d = [1, 0];
+  for (let i = 0; i < P.length; i++){ const a = P[i], b = P[(i + 1) % P.length], L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L > best){ best = L; d = [(b[0] - a[0]) / L, (b[1] - a[1]) / L]; } }
+  if (d[0] < 0) d = [-d[0], -d[1]];
+  const e = [-d[1], d[0]], pr = P.map(v => v[0] * e[0] + v[1] * e[1]), m0 = Math.min(...pr), m1 = Math.max(...pr), sd = r3Hash(m0 * 0.7 + P[0][0] * 0.13);
+  add(P, { dir: d, z: B.z - B.D - 0.6, D: 0.6, shade: B.seam, r: 2, bevel: 0.2, seed: sd });
+  const n = Math.max(1, Math.round((m1 - m0) / B.w)), w = (m1 - m0) / n;
+  for (let k = 0; k < n; k++){ const S = band15(P, e, m0 + k * w + B.gap / 2, m0 + (k + 1) * w - B.gap / 2); if (S.length < 3 || Math.abs(polyArea(S)) < 30) continue;
+    add(S, { dir: d, z: B.z, D: B.D, shade: B.shade * (1 - B.jit + 2 * B.jit * r3Hash(sd * 31 + k * 7.3)), r: 1.2, bevel: 0.7, seed: sd + k * 0.37 }); }
+}
+// Полоса многоугольника P между прямыми e·p = u0 и e·p = u1 (Сазерленд — Ходжман по двум полуплоскостям).
+function band15(P, e, u0, u1){
+  const cut = (Q, f) => { const out = []; for (let i = 0; i < Q.length; i++){ const a = Q[i], b = Q[(i + 1) % Q.length], fa = f(a), fb = f(b);
+    if (fa >= 0) out.push(a); if ((fa >= 0) !== (fb >= 0)){ const t = fa / (fa - fb); out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]); } } return out; };
+  return cut(cut(P, v => v[0] * e[0] + v[1] * e[1] - u0), v => u1 - (v[0] * e[0] + v[1] * e[1]));
+}
+// Контур для клипа (обход по часовой у всех — объединение без дыр при nonzero).
+function cwPath15(path, P){ const Q = polyArea(P) < 0 ? P.slice().reverse() : P; path.addPath(polyPath2D(Q)); }
+// v15: сплеш сока на заднем дереве — удар (рез, топор, пила, булава) по телу, за которым задняя стенка полости: клякса цветом сока
+// с лепестками, брызги вдоль разреза, потёки вниз по доскам; обрезана контуром стенки, раскрывается за open, держится hold, гаснет к life.
+// Рисуется кадр за кадром под тенями и фруктами (фрукты не закрывает); сразу не больше max, рядом с новым старый гаснет быстрее.
+// Задняя стенка уходит за край экрана, только если лежит стороной на стенке короба (жёлоб от стенки), а не задела её углом.
+function backExt15(P){ const W = CFG.W, at = (v) => v[0] <= 0.6 ? -1 : v[0] >= W - 0.6 ? 1 : 0; for (let i = 0; i < P.length; i++){ const a = at(P[i]); if (a && a === at(P[(i + 1) % P.length])) return wood13Ext(P); } return P.map(v => [clamp(v[0], 0, W), v[1]]); }
+function backAt15(x, y){ for (const P of (F13.backs || [])) if (inPoly15(P, x, y)) return true; return false; }
+function inPoly15(P, x, y){ let c = false; for (let i = 0, j = P.length - 1; i < P.length; j = i++){ const a = P[i], b = P[j]; if ((a[1] > y) !== (b[1] > y) && x < (b[0] - a[0]) * (y - a[1]) / (b[1] - a[1]) + a[0]) c = !c; } return c; }
+function splash15(x, y, kind, rad, ux, uy, w){
+  if (!F13.backClip || !backAt15(x, y)) return;
+  const S = V15.splash, L = F13.spl || (F13.spl = []), K = KINDS[kind] || KINDS.melon, base = hexRgb((K.juice || '#ff4d6d').length === 7 ? K.juice : '#ff4d6d');
+  const r = clamp(rad * S.r[0] * (S.weap[w] || 1), S.r[1], S.r[2]), now = G.rt;
+  for (const q of L) if (Math.hypot(q.x - x, q.y - y) < (q.r + r) * S.near) q.t0 = Math.min(q.t0, now - S.hold);   // рядом новый — старый сразу гаснет
+  while (L.length >= S.max) L.shift();
+  const seed = R() * 1000, lobes = [], spray = [], drips = [], nx = -uy || 0, ny = ux || 1;
+  for (let i = 0; i < S.lobes; i++) lobes.push(0.72 + 0.42 * r3Hash(seed + i * 3.1) + (r3Hash(seed + i * 9.7) > 0.78 ? 0.35 : 0));
+  const ns = S.spray[0] + Math.floor(R() * (S.spray[1] - S.spray[0] + 1));
+  for (let i = 0; i < ns; i++){ const sd = i % 2 ? 1 : -1, a = Math.atan2(ny * sd, nx * sd) + (R() - 0.5) * 1.1, dd = r * (1.15 + R() * 1.1); spray.push([Math.cos(a) * dd, Math.sin(a) * dd, 1.2 + R() * 2.6 * Math.min(1.4, r / 20), a]); }
+  const nd = S.drip[0] + Math.floor(R() * (S.drip[1] - S.drip[0] + 1));
+  for (let i = 0; i < nd; i++) drips.push([(R() - 0.5) * 1.3 * r, S.dripL[0] + R() * (S.dripL[1] - S.dripL[0]) * Math.min(1.3, r / 22), 1.4 + R() * 1.8 * Math.min(1.5, r / 20), 0.35 + R() * 0.5]);
+  const col = mixRgb(shadeRgb(base, S.dark), [255, 255, 255], S.mix);
+  L.push({ x, y, r, t0: now, lobes, spray, drips, col: rgbCss(col), dk: rgbCss(shadeRgb(col, S.rim)), hi: rgbCss(mixRgb(col, [255, 255, 255], 0.55)) });
+}
+function splash15Draw(c){
+  const L = F13.spl; if (!L || !L.length || !F13.backClip) return;
+  const S = V15.splash, now = G.rt;
+  for (let i = L.length - 1; i >= 0; i--) if (now - L[i].t0 > S.life) L.splice(i, 1);
+  if (!L.length) return;
+  c.save(); c.clip(F13.backClip);
+  for (const q of L){ const t = now - q.t0, o = clamp(t / S.open, 0, 1), k = 0.55 + 0.45 * (1 - (1 - o) * (1 - o)), al = S.a * (t < S.hold ? 1 : clamp(1 - (t - S.hold) / (S.life - S.hold), 0, 1));
+    if (al <= 0.01) continue; const r = q.r * k, n = q.lobes.length;
+    c.globalAlpha = al; c.fillStyle = q.col;
+    c.beginPath();                                          // ядро: замкнутая кривая через середины лепестков; кромка темнее (сок впитался по краю)
+    const P = q.lobes.map((m, i) => { const a = i / n * 6.2832; return [q.x + Math.cos(a) * r * m, q.y + Math.sin(a) * r * m * 0.92]; });
+    for (let i = 0; i <= n; i++){ const a = P[i % n], b = P[(i + 1) % n], mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2; if (!i) c.moveTo(mx, my); else c.quadraticCurveTo(a[0], a[1], mx, my); }
+    c.fill(); c.lineWidth = 1.6; c.strokeStyle = q.dk; c.stroke();
+    for (const [dx, dy, rr, a] of q.spray){ const kx = q.x + dx * k, ky = q.y + dy * k, e = 1 + 0.9 * (1 - o);   // брызги: вытянуты вдоль разлёта
+      c.beginPath(); c.ellipse(kx, ky, rr * e, rr / Math.sqrt(e), a, 0, 6.29); c.fill(); }
+    const g = Math.min(1, t / 0.9), run = 1 - Math.exp(-t / 0.45);   // потёки вниз по доскам
+    for (const [dx, len, wd, ph] of q.drips){ const x = q.x + dx * k, y0 = q.y + Math.sqrt(Math.max(0, 1 - (dx / (q.r * 1.05)) ** 2)) * r * 0.75, y1 = y0 + len * run * (0.7 + 0.3 * ph);
+      c.beginPath(); c.moveTo(x - wd, y0); c.quadraticCurveTo(x - wd * 0.55, (y0 + y1) / 2, x - wd * 0.5, y1); c.arc(x, y1, wd * (0.75 + 0.35 * g), 3.1416, 0, true); c.quadraticCurveTo(x + wd * 0.55, (y0 + y1) / 2, x + wd, y0); c.closePath(); c.fill(); }
+    c.globalAlpha = al * S.gloss; c.fillStyle = q.hi;       // влажный блик сверху-слева
+    c.beginPath(); c.ellipse(q.x - r * 0.28, q.y - r * 0.32, r * 0.36, r * 0.16, -0.5, 0, 6.29); c.fill(); }
+  c.restore(); c.globalAlpha = 1;
 }
 function woodCss13(){                                         // фактура дерева для верха и лотка (DOM): 256×96, волокно и кольца
   if (F13.css) return; F13.css = true;
@@ -6922,7 +7150,7 @@ function gate13Sync(s){
 function reset13(){                                           // новый уровень: части и искры — долой, ляды — заново
   for (const m of F13.gates) if (m){ if (R3.scene) R3.scene.remove(m); dispose13(m); } F13.gates = [];
   for (const f of F13.frags){ R3.st.delete(f.id); R3.etool.delete(f.id); } F13.frags = []; F13.split.clear(); F13.sparks = []; F13.vst = []; F13.vcol = [];
-  F13.mist = []; if (F13.shd){ F13.shd.length = 0; if (F13.shM) F13.shM.count = 0; } if (F13.dw) F13.dw.fill(1); if (F13.dl) F13.dl.fill(0);   // круг 3: осколки, скорость дисков, сок на дисках — заново
+  F13.mist = []; F13.spl = []; if (F13.shd){ F13.shd.length = 0; if (F13.shM) F13.shM.count = 0; } if (F13.dw) F13.dw.fill(1); if (F13.dl) F13.dl.fill(0);   // круг 3: осколки, скорость дисков, сок на дисках — заново
   const M = F13.wm; if (M){ M.rim.fill(0); M.sm.fill(0); M.data.fill(0); M.on.fill(0); M.avg.fill(0); M.acc.fill(0); M.kind.fill(''); M.tex.needsUpdate = true; }
 }
 function render(){
@@ -6938,6 +7166,7 @@ function render(){
   F13.waitAt = 0; if (!R3.marks.live) r3Mark('live');
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.drawImage(bgDirty, Math.round(sh.x * K), Math.round(sh.y * K));
+  vbase(ctx, sh.x, sh.y); splash15Draw(ctx);                 // v15: сплеш сока на задней стенке — под тенями и фруктами
   vbase(ctx, sh.x, sh.y);
   const intro = G.rt < G.introUntil;                         // въезд: фрукты появляются из-под обода, не поверх HUD
   if (intro){ ctx.save(); ctx.beginPath(); ctx.rect(-10, VIEW.top + 12, CFG.W + 20, VIEW.bottom); ctx.clip(); drawShadows(ctx, s); ctx.restore(); }
@@ -7249,6 +7478,9 @@ if (document.fonts && document.fonts.load) document.fonts.load('700 20px ' + FON
 // открывается в ней: ключи прежних меню (goal, oset, style, view, pieces, blade) сбрасываются, прогресс линейки (olevel11) не трогается.
 if (G.save.goal !== 'clear' || G.save.oset || G.save.style || G.save.view || G.save.pieces || G.save.blade){
   G.save.v7 = 1; G.save.goal = 'clear'; for (const k of ['oset', 'style', 'view', 'pieces', 'blade']) delete G.save[k]; save(); }
+// v15: впереди линейки встали десять уровней из досок — прогресс прежнего сейва сдвигается на 10 (игрок остаётся на том же уровне,
+// новые 1–10 открыты в сетке меню). Один раз: метка v15.
+if (!G.save.v15){ if ((G.save.olevel11 || 1) > 1) G.save.olevel11 = Math.min(LINE11.length, G.save.olevel11 + CLEAR15.length); G.save.v15 = 1; save(); }
 G.view3d = true;
 let startHash = location.hash.slice(1) === 'unlock' ? (setUnlockAll(true), 'menu') : location.hash.slice(1);
 // v10: юзер-тест — сразу с уровня из сейва, без меню
