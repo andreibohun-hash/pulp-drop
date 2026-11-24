@@ -49,7 +49,7 @@ body.f13 .hud-lvl{color:#ffeccb;opacity:1;font-weight:600;padding:3px 15px 4px;b
   box-shadow:inset 0 2px 0 rgba(232,176,116,.85),inset 0 -4px 0 rgba(70,32,14,.45),0 2px 0 #3a1a08,0 5px 9px rgba(16,10,0,.3)}
 body.f13 .ico{background:var(--wood13) 30% 0/150px auto,#975a37;border:2px solid #3a1a08;box-shadow:inset 0 2px 0 rgba(232,176,116,.8),inset 0 -3px 0 rgba(70,32,14,.4),0 2px 0 #3a1a08,0 4px 8px rgba(16,10,0,.3)}
 body.f13 .ico svg{filter:brightness(0) invert(1) drop-shadow(0 1px 0 rgba(70,32,8,.7))}
-body.f13 #tray{background:var(--wood13) 0 0/240px auto,#8e5434;border:2px solid #3a1a08;box-shadow:inset 0 2px 0 rgba(232,176,116,.7),inset 0 -5px 0 rgba(70,32,14,.45),0 4px 0 #3a1a08,0 10px 18px rgba(16,10,0,.36)}
+body.f13 #tray{background:none;border:2px solid transparent;box-shadow:none}   /* v18: без подставки — кнопки стоят на траве под корытом, как на рефе */
 body.f13 .wpn{background:var(--wood13) 20% 30%/200px auto,#a2643d;border:2px solid #3a1a08;box-shadow:inset 0 2.5px 0 rgba(236,184,124,.9),inset 0 -4px 0 rgba(70,32,14,.45),0 3px 0 #3a1a08,0 6px 10px rgba(40,20,5,.28)}
 body.f13 .wpn.empty{background:var(--wood13) 20% 30%/200px auto,#6a3d24;filter:brightness(.72);box-shadow:inset 0 2px 5px rgba(40,18,4,.5)}
 body.f13 .wpn.sel{background:var(--wood13) 20% 30%/200px auto,#a2643d;box-shadow:inset 0 2.5px 0 rgba(236,184,124,.9),inset 0 -4px 0 rgba(70,32,14,.45),0 0 0 3px var(--good),0 7px 0 var(--good-lip),0 12px 16px rgba(30,100,50,.26)}   /* выбранный — прежняя зелёная рамка */                                   /* v10: сборка для юзер-теста — без выхода в меню */
@@ -755,7 +755,7 @@ function slab15(a, b, t, side, ea, eb){
 // Круг 2 (реф Андрея): брус толще — доски бункера 30 (≈ 8% ширины поля), дно 26, щёчки-чурбаки 24 × 34, стенки короба 24, балка 32,
 // кронштейн 22. Толщина растёт наружу от лицевой грани: полость и щели — прежние, фрукты лежат на видимой кромке.
 const W15 = {
-  t: 30, tf: 26, tc: 24, ch: 34, tw: 24, bh: 32, bt: 22,  // доски бункера, дно, щёчки (ширина, высота), стенки короба, балка, кронштейн
+  t: 19, tf: 19, tc: 19, ch: 34, tw: 19, bh: 30, bt: 19,  // доски бункера, дно, щёчки (ширина, высота), стенки короба, балка, кронштейн; v18: брус как на рефе — 19 (было 30/26/24/24/32/22)
   rect: (x0, y0, x1, y1) => [[x0, y0], [x1, y0], [x1, y1], [x0, y1]],
   // дно (полка, жёлоб, короб): верхняя грань a→b, толщина вниз
   floor: (a, b, t, ea, eb) => slab15(a, b, t || W15.tf, b[0] > a[0] ? 1 : -1, ea || 'v', eb || 'v'),
@@ -3095,32 +3095,34 @@ function build11(tpl){
 // v15: первые десять уровней — постройки из досок (бункер, жёлоб, короб, полка, лоток с двумя горлами), ручные: parts (сборщики W15)
 // и pile; решение бросками и запас — tools/lab15.mjs. Линейка игры — LINE11: эти десять, затем 100 уровней v11 (11–110).
 const CLEAR15 = [
-  { name: 'First Cut', role: 'i', hint: ['Cut the melon!'], loadout: { knife: 4 }, solution: [{"w":"knife","pts":[[124.8,366.9],[274.8,626.7]]}],
-    parts: [...W15.hopper(200, 540, 60, 102.7, 297.3, 385.2, { ch: 64, sh: 0, t: 28.1 })],   // v17: пропорции рефа — брус 28 (не тоньше требования «брус толстый»), борта по верху 64 % ширины, 23,5° от вертикали, горло 0,31W, щёчки 2,3T
-    pile: [P7('melon', 200, 0.8), ...fill15(['plum', 'lime'], 12, 107, 293, null, 0.72)] },
+  { name: 'First Cut', role: 'i', hint: ['Cut the melon!'], loadout: { knife: 4 }, solution: [{"w":"knife","pts":[[110.5,378.9],[260.5,638.7]]}],
+    parts: [...W15.hopper(200, 560, 60, 94.9, 305.1, 395.2, { ch: 40, sh: 0 })],   // v18: брус 19 как на рефе, борта по верху 63 % ширины, 24,5° от вертикали, горло 60 = 0,29W, щёчки 40 = 2,1T
+    // арбуз ×0,564 (r 31,6): горло шире двух половинок после пропила ножа (2r − 3,8) и уже арбуза по граням (2r·cos 15°) — вертикальный
+    // рез по центру чистит, как и косые до 45° (207 из 209 резов игрока); мелочь ×0,6 (≤ горло / 2,4)
+    pile: [P7('melon', 200, 0.5638), ...fill15(['plum', 'lime'], 16, 99, 301, null, 0.6)] },
   { name: 'Slide', role: 'r', loadout: { knife: 3 }, solution: [{"w":"knife","pts":[[212.1,389.1],[471.9,539.1]]}],
     parts: [...W15.chute(0, 430, 300, 505, { wall: 120, brace: 50 })],
     pile: [P7('melon', 344, 1.05), ...fill15(['orange', 'apple'], 10, 8, 292)] },
   { name: 'Two Bins', role: 'n', loadout: { knife: 6 }, solution: [{"w":"knife","pts":[[130.1,579.5],[430.1,579.5]]},{"w":"knife","pts":[[389.8,313.4],[130,463.4]]},{"w":"knife","pts":[[123.6,540.7],[423.6,540.7]]}],
-    parts: [...W15.hopper(190, 440, 80, 30, 330, 340, { ch: 38 }), ...W15.hopper(280, 590, 80, 120, 396, 480, { ch: 54 })],
+    parts: [...W15.hopper(190, 440, 80, 30, 330, 340, { ch: 38 }), ...W15.hopper(280, 590, 80, 120, 396, 480, { ch: 42 })],
     pile: [P7('melon', 280, 0.95, 536), ...fill15(['plum'], 4, 140, 380, 500), P7('melon', 190, 0.95), ...fill15(['lime', 'plum'], 6, 50, 320)] },
-  { name: 'Side Door', role: 'm', loadout: { knife: 6 }, solution: [{"w":"knife","pts":[[168.6,371.1],[318.6,630.9]]},{"w":"knife","pts":[[1.6,517.9],[301.6,517.9]]},{"w":"knife","pts":[[-56,515],[244,515]]}],
+  { name: 'Side Door', role: 'm', loadout: { knife: 4 }, solution: [{"w":"knife","pts":[[36.9,392.5],[296.7,542.5]]},{"w":"knife","pts":[[21.5,381.4],[171.5,641.2]]}],
     parts: [...W15.box(70, 290, 400, 560, { slot: ['side', 'R', 84], drop: 26 })],
     pile: [P7('melon', 240, 0.95), ...fill15(['orange', 'apple'], 8, 76, 284)] },
-  { name: 'Ledge', role: 'n', loadout: { knife: 4 }, solution: [{"w":"knife","pts":[[283.2,349.3],[283.2,649.3]]},{"w":"knife","pts":[[242.1,237.4],[242.1,537.4]]}],
-    parts: [...W15.shelf(0, 390, 330, 450, { gap: [250, 78], lip: 72, wall: 90 }), ...W15.hopper(250, 548, 82, 150, 396, 470, { ch: 60, sh: 18 })],
+  { name: 'Ledge', role: 'n', loadout: { knife: 4 }, solution: [{"w":"knife","pts":[[283.8,349.3],[283.8,649.3]]},{"w":"knife","pts":[[3.6,397.1],[303.6,397.1]]}],
+    parts: [...W15.shelf(0, 390, 330, 450, { gap: [250, 78], lip: 72, wall: 90 }), ...W15.hopper(250, 548, 82, 150, 396, 470, { ch: 42, sh: 18 })],
     pile: [P7('cuke', 250, 1.15, 512, 0, 2), ...fill15(['plum'], 4, 160, 380, 470), P7('melon', 250, 0.95), ...fill15(['plum', 'lemon'], 7, 8, 200)] },
-  { name: 'Switchback', role: 'p', loadout: { knife: 8 }, solution: [{"w":"knife","pts":[[-14.9,519.6],[285.1,519.6]]},{"w":"knife","pts":[[109.9,392.4],[409.9,392.4]]},{"w":"knife","pts":[[411,330.7],[261,590.5]]},{"w":"knife","pts":[[265.3,355.3],[415.3,615.1]]}],
+  { name: 'Switchback', role: 'p', loadout: { knife: 6 }, solution: [{"w":"knife","pts":[[-14.9,519.6],[285.1,519.6]]},{"w":"knife","pts":[[109.9,392.4],[409.9,392.4]]},{"w":"knife","pts":[[-33.2,545.6],[266.8,545.6]]}],
     parts: [...W15.chute(0, 354, 300, 412, { wall: 100, brace: 32 }), ...W15.chute(400, 492, 100, 556, { wall: 60, brace: 44 })],
     pile: [P7('melon', 59, 1.05, 492), ...fill15(['plum'], 5, 110, 390, 490), P7('melon', 344, 1.05), ...fill15(['apple', 'lemon'], 8, 8, 292)] },
-  { name: 'Chop!', role: 'i', hint: ['Axe the coconut!'], pick: 'axe', loadout: { axe: 3, knife: 2 }, solution: [{"w":"axe","pts":[[149.8,654.8],[239.8,474.8]]}],
+  { name: 'Chop!', role: 'i', hint: ['Axe the coconut!'], pick: 'axe', loadout: { axe: 3, knife: 2 }, solution: [{"w":"axe","pts":[[213,605.3],[53,485.3]]}],
     parts: [...W15.box(90, 310, 420, 575, { slot: ['floor', 200, 70], drop: 28 })],
     pile: [P7('coco', 200, 1.3), ...fill15(['cherry', 'berry'], 14, 96, 304)] },
-  { name: 'Two Throats', role: 'n', loadout: { knife: 3, axe: 2 }, solution: [{"w":"knife","pts":[[38.8,388.1],[298.6,538.1]]},{"w":"axe","pts":[[14.4,507.5],[214.4,507.5]]}],
-    parts: [...W15.twin(132, 70, 240, 80, 540, 40, 362, 430, 476, { ch: 64 })],
+  { name: 'Two Throats', role: 'n', loadout: { knife: 3, axe: 2 }, solution: [{"w":"knife","pts":[[38.8,388.1],[298.6,538.1]]},{"w":"axe","pts":[[237.6,507.5],[37.6,507.5]]}],
+    parts: [...W15.twin(132, 70, 240, 80, 540, 40, 362, 430, 476, { ch: 42 })],
     pile: [P7('coco', 132, 1.3), P7('melon', 240, 0.95), ...fill15(['plum', 'lime'], 12, 50, 352)] },
-  { name: 'Long Way', role: 'r', loadout: { axe: 3, knife: 2 }, solution: [{"w":"axe","pts":[[200.1,434.2],[80.1,594.2]]},{"w":"axe","pts":[[60,538.2],[60,338.2]]}],
-    parts: [...W15.chute(400, 380, 110, 440, { wall: 90, brace: 40 }), ...W15.hopper(130, 548, 82, 0, 290, 480, { ch: 60 })],
+  { name: 'Long Way', role: 'r', loadout: { axe: 3, knife: 2 }, solution: [{"w":"axe","pts":[[200,434.5],[80,594.5]]},{"w":"axe","pts":[[60,538.2],[60,338.2]]}],
+    parts: [...W15.chute(400, 380, 110, 440, { wall: 90, brace: 40 }), ...W15.hopper(130, 548, 82, 0, 290, 480, { ch: 42 })],
     pile: [P7('coco', 130, 1.46, 510), ...fill15(['cherry', 'berry'], 6, 20, 270, 476), P7('melon', 62, 1.1), ...fill15(['apple', 'orange'], 8, 120, 392)] },
   { name: 'Workshop', role: 'p', loadout: { knife: 4, axe: 2 }, solution: [{"w":"knife","pts":[[110.2,555],[410.2,555]]},{"w":"knife","pts":[[281.1,244.5],[281.1,544.5]]},{"w":"axe","pts":[[20.8,509.8],[110.8,329.8]]}],
     parts: [...W15.box(16, 126, 346, 430, { slot: ['floor', 71, 70], drop: 16, beam: false }), ...W15.hopper(250, 440, 80, 196, 352, 346, { ch: 34, sh: 0, bx0: 150 }), ...W15.chute(0, 530, 290, 580, { wall: 50, brace: 36 })],
@@ -3907,7 +3909,7 @@ const V9 = {
   // жёлоб: верх и низ от grindY, скругление; уровень от доли кучи; волна, ед.; потолок пузырей. v10 — единственный показатель прогресса:
   // кромка видна под валиками (верх 37 > низ зубьев 34), выше (38 ед. вместо 25), уровень от lvl[0] до метки «полный» full у кромки,
   // на победе (spill) — до верха и через край: потёки по стеклу spillDrips, искры sparks (за spillT с), метка зеленеет
-  trough: { y0: 36, y1: 58, r: 9, lvl: [0.08, 0.86], full: 0.86, wave: 2.6, bubbles: 22, spillDrips: 8, sparks: 56, spillT: 1.3, tag: [34, 13] },   // v12 круг 5: 22 ед. вместо 38 — поле во всю ширину
+  trough: { y0: 62, y1: 58, r: 9, lvl: [0.08, 0.86], full: 0.86, wave: 2.6, bubbles: 22, spillDrips: 8, sparks: 56, spillT: 1.3, tag: [34, 13] },   // v12 круг 5: 22 ед. вместо 38 — поле во всю ширину
   chainSpin: 0.14,           // цепочка: валики быстрее на 14% за кусок (до 6)
 };
 // Фонтан из жерновов: скорость вверх урезается так, чтобы капля взлетала не выше VIEW.fountH (выше при длинной цепочке).
@@ -3949,6 +3951,7 @@ function filmUpdate(dt){
   const dry = Math.exp(-dt / V9.film.dry); for (let i = 0; i < n; i++) W[i] *= dry;
 }
 const filmAt = (x) => { const F = FX.film; if (!F) return 0; const n = V9.film.n, i = clamp(Math.floor(x / CFG.W * n), 0, n - 1); return F.w[i]; };
+const filmRgb13 = (x) => { const F = FX.film, n = V9.film.n, i = clamp(Math.floor(x / CFG.W * n), 0, n - 1); return F ? [F.r[i], F.g[i], F.b[i]] : [236, 166, 58]; };   // v18: цвет плёнки для струйки
 const filmCol = (x, al) => { const F = FX.film, n = V9.film.n, i = clamp(Math.floor(x / CFG.W * n), 0, n - 1); return 'rgba(' + Math.round(F.r[i]) + ',' + Math.round(F.g[i]) + ',' + Math.round(F.b[i]) + ',' + al.toFixed(3) + ')'; };
 // --- жёлоб под валиками: уровень сока, цвет — смесь последних фруктов, волны и пузыри ---
 function trough9(){ return FX.tr || (FX.tr = { lvl: V9.trough.lvl[0], col: [255, 196, 120], has: false, waves: [], bub: [], spill: 0, sp: [], spN: 0 }); }
@@ -4706,7 +4709,7 @@ function applyTheme(){
   r.setProperty('--world', th.world); r.setProperty('--world2', th.world2);
   const m = document.querySelector('meta[name="theme-color"]'); if (m) m.setAttribute('content', th.world2);
 }
-const VIEW7 = { top: 64, bottom: CFG.grindY + 61 };         // v7: стойки нет — низ экрана отдан куче, зоне полёта и жерновам; v10: + жёлоб целиком над лотком; v12 круг 5: жёлоб ниже (низ grindY + 58, тень + 61) — поле во всю ширину
+const VIEW7 = { top: 64, bottom: CFG.grindY + 61, anchor: CFG.grindY + 104, pad: 9 };   // v18: anchor — мир у верха кнопок лотка (низ передней доски корыта; кнопка стоит на траве, как на рефе), масштаб — по bottom, как прежде         // v7: стойки нет — низ экрана отдан куче, зоне полёта и жерновам; v10: + жёлоб целиком над лотком; v12 круг 5: жёлоб ниже (низ grindY + 58, тень + 61) — поле во всю ширину
 let LAY = null;                                              // v12 круг 6: текущий кадр; у VIEW7 верх (VIEW.top — обод) считает fit()
 function setLayout(){ const L = VIEW7; if (LAY !== L){ LAY = L; VIEW.top = L.top; VIEW.bottom = L.bottom; fit(); } }
 // v12 круг 6: верх кучи на старте уровня (fit оставляет над ним VIEW.swing ед. для замаха ниже кнопок верха)
@@ -4833,6 +4836,9 @@ function fit(){
     let k = Math.max(VIEW.swingFloor ? kc5 : 0.2, Math.min(k0, avail / Math.max(100, VIEW.bottom - need)));
     if (k >= k0 * VIEW.swingSnap) k = k0;
     nv = { k, ox: (r.width - CFG.W * k) / 2, oy: bot - VIEW.bottom * k, w: r.width, h: r.height, k0, kc5 };
+    if (trayH){ const bt = $('tray').getBoundingClientRect().top - r.top + VIEW7.pad, o0 = nv.oy;   // v18: корыто над кнопками — кадр выше, масштаб тот же;
+      nv.oy = Math.min(o0, bt - VIEW7.anchor * k);                                                    // но над кучей остаётся запас замаха VIEW.swing (иначе кнопка
+      if (G.heapTop > -1e9 && G.heapTop < 1e9) nv.oy = Math.max(nv.oy, Math.min(o0, top + (VIEW.swing - G.heapTop) * k)); }   // заходит на низ доски)
     const yH = (top - nv.oy) / k;                             // мир у низа HUD
     VIEW.top = yH <= VIEW7.top + 6 ? VIEW7.top : -nv.oy / k - 30;   // короб целиком под HUD — обод на месте; иначе — за верхом экрана
   } else {
@@ -6314,10 +6320,18 @@ const V13 = {
   wood: { lt: '#cc9257', mid: '#a2683a', dk: '#62341a', ink: 'rgba(46,20,6,0.95)', inkW: 1.6, D: 9, bevel: 2.4, r: 4, inner: 0.55, tg: 0.5, side: 0.5, post: 9, over: 40 },
   // пилы: число, радиус по зубьям, по впадинам, зубьев, толщина диска, центр ниже grindY (верх зубьев — на прежней высоте: растут вниз
   // и вбок), скорость (покой, перемол), рад/с; ink — тёмный контур (ширина, ед.), dim — задние диски темнее, shadow — тень на то, что за ними
-  saw: { n: 8, R: 28, r0: 24, teeth: 22, depth: 2.6, cy: 18.5, spin: [2.6, 12], steel: '#a3abb4', hub: '#7d8792', bolt: '#c4cad1', slot: '#2e333b', ink: '#1f232a', inkW: 1.15, dim: 0.82, shadow: [2.5, 4, 0.34] },
+  // v18 (реф: «пилы крупнее, видна толщина, центральные крепления, металлические блики»): 7 дисков на ширину поля с перекрытием ≈ 0,22R,
+  // верх зубьев на прежней линии перемола (grindY − 9,5) — диск вырос вниз и в стороны; тёплая тёмная сталь; толщина — свой косой сдвиг по
+  // глубине диска tilt (верхняя кромка и фаска зубьев видны), фаска зубьев bev; проточка-кольцо на ring·R; 4 прорези на slotR·R (дуга slotA рад,
+  // полуширина slotW ед.); ступица: фланец, бобышка, болт со шлицем (доли R); warm — тёплый отсвет дерева и сока снизу, hi — мягкий блик
+  saw: { n: 7, R: 32, r0: 27, teeth: 20, depth: 4.2, cy: 22.5, spin: [2.6, 12], steel: '#7b7672', hub: '#6c6662', boss: '#7e7771', bolt: '#90887f', slot: '#2b1d15', ink: '#1b140f', inkW: 1.25, dim: 0.88, shadow: [2.5, 4, 0.36],
+    tilt: 0.42, bev: 1.05, ring: 0.76, slotR: 0.55, slotA: 0.82, slotW: 1.55, flange: 0.37, bossR: 0.27, boltR: 0.155, warm: [1.02, 0.85, 0.74, 0.5], hi: [0.4, 4, 0.32] },
   // корыто (ед. ниже grindY): задняя кромка, дно у задней стенки (пусто) и сок у неё же (полно), передняя кромка (верх), её толщина,
   // низ передней доски, низ ножек; торцы, ножки — ширина
-  trough: { back: 31, floor: 53.5, full: 35, rim: 54, lip: 2.4, face: 74, leg: 84, cap: 7, legW: 13 },   // v15 круг 3: передняя доска выше (как толстое корыто на рефе)
+  // v18 (реф: «глубокий деревянный лоток, вид чуть сверху»): дальняя стенка — верх back, её верхняя грань farLip; сок пустой/полный — floor/full
+  // (линия сока на дальней стенке); передняя доска — верх rim, верхняя грань lip, низ face; ножки враспор до leg (ширина legW, отступ legX, вынос
+  // legOut); торцевые стенки у краёв экрана — внутренний угол x end[0] у дальней стенки, end[1] у передней; задняя планка за пилами plank [верх, низ]
+  trough: { back: 63, farLip: 3.4, floor: 83.5, full: 68.5, rim: 85, lip: 4, face: 107, leg: 119, legW: 15, legX: 34, legOut: 5, end: [9, -3], plank: [30, 74], axle: 5.2, shadow: [11, 0.36], gold: [246, 172, 46, 0.86] },   // gold — сок в корыте и струйки тянутся к золотому, как на рефе (смесь слив, лаймов и арбуза иначе серая)
   // куски на пилах: потолок кусков в кадре, новых сеток за кадр (раскол), треугольников
   frag: { max: 32, perFrame: 6, trisCap: 120000 },
   // круг 3: пила ест кусок. eat — время съедания от мелочи до половины арбуза (с) по √площади [от, до]; drag — тянет по вращению к щели
@@ -6477,26 +6491,34 @@ void main(){
 // Сталь пил: круговая шлифовка по радиусу, полоса отсвета через центр к свету (стоит на месте, пока диск крутится), зубья темнее,
 // холодная кромка. Круг 3: сок — карта по углу диска (tWet: строка 2i — кромка, 2i+1 — размаз), крутится с диском: кромка цветом фрукта,
 // размаз спиралью к ступице, на медленном диске — потёки вниз (uRot.z, ед.); контур не мокнет.
-const S13_VS = `uniform float uTg; attribute vec3 aCol; varying vec3 vW; varying vec3 vN; varying vec3 vP; varying vec2 vC; varying vec3 vCol;
+const S13_VS = `uniform float uTg; uniform vec2 uTs; attribute vec3 aCol; varying vec3 vW; varying vec3 vN; varying vec3 vP; varying vec2 vC; varying vec3 vCol;
 void main(){ vN = mat3(modelMatrix) * normal; vP = position; vCol = aCol; vC = (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xy;
-  vec4 wp = modelMatrix * vec4(position, 1.0); vW = wp.xyz; wp.y += uTg * max(wp.z, 0.0); gl_Position = projectionMatrix * viewMatrix * wp; }`;
+  vec4 wp = modelMatrix * vec4(position, 1.0); vW = wp.xyz; wp.y += uTg * max(wp.z, 0.0) + uTs.x * (position.z + uTs.y); gl_Position = projectionMatrix * viewMatrix * wp; }`;   // v18: uTs — косой сдвиг по глубине диска (видна толщина)
 const S13_FS = `precision highp float;
 uniform vec3 uL; uniform vec3 uV; uniform vec2 uWrap; uniform vec3 uTint; uniform float uR0; uniform float uDim; uniform sampler2D tWet; uniform float uRow; uniform float uRows; uniform vec3 uRot;
+uniform vec4 uSaw; uniform vec4 uWarm;
 varying vec3 vW; varying vec3 vN; varying vec3 vP; varying vec2 vC; varying vec3 vCol;
 ${R3NOISE}
 void main(){
   vec3 N = normalize(vN);
   float r = length(vP.xy), br = vn2(vec2(r * 6.5, 0.5)) * 0.6 + vn2(vec2(r * 21.0, 2.5)) * 0.4;
+  float face = smoothstep(0.82, 0.97, N.z), disc = step(0.5, uSaw.x);                       // v18: лицо диска (не бок, не фаска); диск, а не ось
   vec3 col = vCol * (0.9 + 0.15 * br);
-  col *= mix(1.0, 0.84, smoothstep(uR0 - 1.0, uR0 + 0.6, r));                                // зубья темнее
+  col *= mix(1.0, 0.9, smoothstep(uR0 - 1.0, uR0 + 0.6, r) * disc);                          // зубья чуть темнее
+  if (disc > 0.5){ float g = abs(r - uSaw.x), gl = abs(r - uSaw.x - 0.95);                    // v18: проточка-кольцо — тёмная канавка и светлый край под ней
+    col *= 1.0 - 0.42 * (1.0 - smoothstep(0.25, 0.75, g)) * face; col += vec3(0.16, 0.15, 0.13) * (1.0 - smoothstep(0.15, 0.55, gl)) * face; }
   vec2 q = vW.xy - vC; float th = atan(q.y, q.x), thL = atan(uL.y, uL.x);
-  float an = pow(abs(cos(th - thL)), 14.0) * smoothstep(2.0, 7.0, length(q)) * max(N.z, 0.0);
+  float ca = cos(th - thL), an = (pow(max(ca, 0.0), uSaw.w) + 0.22 * pow(max(-ca, 0.0), uSaw.w * 1.6)) * smoothstep(2.0, 9.0, length(q)) * max(N.z, 0.0);   // мягкий блик к свету (шлифовка по кругу), слабый отсвет напротив
   float nv = max(dot(N, uV), 0.0), fr = 1.0 - nv, w = smoothstep(uWrap.x, uWrap.y, dot(N, uL));
-  vec3 c = mix(col * 0.5, col * 1.04, w);
-  vec3 H = normalize(uL + uV); c += vec3(1.0, 0.99, 0.97) * 0.22 * pow(max(dot(N, H), 0.0), 18.0);
-  c += vec3(0.95, 0.97, 1.0) * an * 0.2;
-  c = mix(c, c * 0.78 + vec3(0.05, 0.07, 0.1), smoothstep(0.55, 0.95, fr));
-  c *= mix(0.5, 1.0, smoothstep(0.62, 0.93, abs(N.z)));                                     // фаска и бок диска — тёмная кромка по зубьям и прорезям
+  vec3 c = mix(col * 0.55, col * 1.06, w);
+  vec3 H = normalize(uL + uV); c += vec3(1.0, 0.97, 0.9) * 0.2 * pow(max(dot(N, H), 0.0), 16.0);
+  c += vec3(1.0, 0.96, 0.88) * an * uSaw.z;
+  c = mix(c, c * 0.8 + vec3(0.05, 0.04, 0.03), smoothstep(0.55, 0.95, fr));
+  if (disc > 0.5){ float lo = smoothstep(-0.15, 0.95, q.y / uSaw.y) * (0.55 + 0.45 * smoothstep(-0.6, 0.8, q.x / uSaw.y));   // тёплый отсвет дерева и сока снизу-справа
+    c = mix(c, c * uWarm.rgb + vec3(0.035, 0.018, 0.0), uWarm.a * lo * face);
+    vec2 nl = normalize(N.xy + vec2(1e-4)), ll = normalize(uL.xy); float sd = 1.0 - smoothstep(0.62, 0.95, abs(N.z));   // бок и фаска зубьев: к свету — светлая кромка, от света — тёмная
+    c = mix(c, mix(col * 0.42, col * 1.45 + vec3(0.06, 0.05, 0.03), smoothstep(-0.25, 0.65, dot(nl, ll))), sd); }
+  else c *= mix(0.6, 1.0, smoothstep(0.62, 0.93, abs(N.z)));
   { float dry = step(-1.4, vP.z), ua = atan(vP.y, vP.x) / 6.2831853 + 0.5, y0 = (uRow * 2.0 + 0.5) / uRows, y1 = (uRow * 2.0 + 1.5) / uRows, hub = uR0 * 0.36;
     float sp = (uR0 - r) * 0.05;                                                                                              // спираль: размаз отстаёт от кромки к ступице
     float stk = smoothstep(0.5, 0.78, vn2(vec2(ua * 26.0 + sp * 6.0, r * 0.1)));                                             // полосы сока по ходу вращения
@@ -6961,8 +6983,12 @@ function wood13Bake(c){
   const v17 = wood16Tex() && !wood16Wait() ? vis17(s, parts, vis0) : null, vis = v17 ? vis0.map((P, i) => v17[i] ? v17[i].P : P) : vis0;   // v17: контур вида построек из досок
   const posts = [[[-ov, sy0], [0, sy0], [0, gy + T.leg], [-ov, gy + T.leg]], [[W, sy0], [W + ov, sy0], [W + ov, gy + T.leg], [W, gy + T.leg]]];   // стойки — за верх и низ экрана
   const backs = partBacks(s.level.parts || []).map(P => backExt15(P));   // v15: задние стенки полостей
-  const rim = [[-ov, top - 6], [W + ov, top - 6], [W + ov, top + 11], [-ov, top + 11]], back = [[-ov, gy + 8], [W + ov, gy + 8], [W + ov, gy + T.back + 3], [-ov, gy + T.back + 3]];
-  const tin = [[3, gy + T.back], [W - 3, gy + T.back], [W - 3, gy + T.rim + 3], [3, gy + T.rim + 3]];
+  const rim = [[-ov, top - 6], [W + ov, top - 6], [W + ov, top + 11], [-ov, top + 11]], back = [[-ov, gy + T.plank[0]], [W + ov, gy + T.plank[0]], [W + ov, gy + T.plank[1]], [-ov, gy + T.plank[1]]];   // v18: задняя планка за нижней половиной пил
+  const [e0, e1] = T.end, yb = gy + T.back, yl = yb + T.farLip, yr = gy + T.rim;
+  const tin = [[e0, yl], [W - e0, yl], [W - e0, yr + 3], [e0, yr + 3]];                          // v18: дальняя стенка изнутри (и дно под соком)
+  const farRim = [[e0 - 3.5, yb], [W - e0 + 3.5, yb], [W - e0, yl], [e0, yl]];                   // верхняя грань дальней стенки
+  const ends = [-1, 1].map(sd => { const X = (x) => sd < 0 ? x : W - x;                          // торцевые стенки: внутренняя грань и верх — у краёв экрана
+    return { face: [[X(e0), yl], [X(e1), yr], [X(e1), yr + 6], [X(e0), yr + 6]], top: [[X(e0 - 3.5), yb], [X(e0), yl], [X(e1), yr], [X(e1 - 3.6), yr]] }; });
   const w16 = !!wood16Tex(), U16 = V16.wood;                   // v16: рисованное дерево (атлас GPT), иначе — круг 3 кодом
   // v16: порядок — сначала сцены WebGL (брусья, перед корыта) и их копии в 2D, потом 2D-работа на фоне (тень, задник, кант): копия кадра
   // WebGL ждёт очередь GPU, и если в ней уже лежат размытия задника, ждёт и их (≈ 20 мс на кадре старта уровня)
@@ -6972,10 +6998,12 @@ function wood13Bake(c){
     else add(vis[i], w16 ? pw({ kind: 'block', r: Q.r }) : undefined); });   // v16: клинья, полки, бруски уровней 11–110 — тем же деревом
   posts.forEach((P, i) => add(P, pw({ kind: 'post', dir: [0, 1], seed: 0.3 + 0.4 * i, z: 1.5 })));   // стойки чуть ближе — брусья уходят за них
   add(rim, pw({ kind: 'beam', dir: [1, 0], seed: 0.5, z: 1 }));
-  add(back, pw({ kind: 'beam', dir: [1, 0], seed: 0.9, z: -16, D: 3, shade: 0.7 }));   // задник пил
-  add(tin, pw({ kind: 'inner', dir: [1, 0], seed: 0.2, z: -10, D: 2, shade: 0.62, r: 2 }));   // корыто изнутри (задняя стенка и дно) — темнее
-  { const ax = new THREE.Mesh(col13(new THREE.CylinderGeometry(3, 3, W + 2 * ov, 16).rotateZ(Math.PI / 2), '#8e979f'), saw13Mat());   // ось пил (сталь, за дисками)
-    ax.position.set(W / 2, gy + S.cy, -6); sc.add(ax); }
+  add(back, pw({ kind: 'beam', dir: [1, 0], seed: 0.9, z: -16, D: 3, shade: 0.78 }));   // задняя планка за пилами
+  add(tin, pw({ kind: 'inner', dir: [1, 0], seed: 0.2, z: -10, D: 2, shade: 0.6, r: 1 }));   // корыто изнутри (дальняя стенка и дно) — темнее
+  ends.forEach((E, i) => { add(E.face, pw({ kind: 'inner', dir: [0, 1], seed: 0.4 + i, z: -9.5, D: 1.5, shade: 0.5, r: 0.5 })); add(E.top, pw({ kind: 'inner', dir: [0, 1], seed: 0.7 + i, z: -9, D: 1.5, shade: 1.25, r: 0.5 })); });
+  add(farRim, pw({ kind: 'inner', dir: [1, 0], seed: 0.35, z: -9, D: 1.5, shade: 1.3, r: 0.6 }));   // верхняя грань дальней стенки — светлая
+  { const ax = new THREE.Mesh(col13(new THREE.CylinderGeometry(T.axle, T.axle, W + 2 * ov, 20).rotateZ(Math.PI / 2), '#8a837d'), saw13Mat());   // ось пил — труба через диски, за края экрана
+    ax.position.set(W / 2, gy + S.cy, -7); sc.add(ax); }
   r3SetCam(); if (R3.cv.width !== cv.width || R3.cv.height !== cv.height){ R3.cv.width = cv.width; R3.cv.height = cv.height; R3.ren.setSize(cv.width, cv.height, false); }
   const tM = performance.now(); R3.ren.render(sc, R3.cam);
   const wc = F13.woodCv || (F13.woodCv = document.createElement('canvas')); wc.width = cv.width; wc.height = cv.height; wc.getContext('2d').drawImage(R3.cv, 0, 0);   // копия кадра брусьев
@@ -6985,11 +7013,12 @@ function wood13Bake(c){
   // перед корыта: передняя доска (верхняя грань — кромка), торцы, ножки — отдельный слой поверх сока и пил (от уровня не зависит — кэш)
   const fkey = [cv.width, cv.height, view.ox.toFixed(1), view.oy.toFixed(1), view.k.toFixed(4), F13.st, w16].join();
   if (!F13.front || F13.frontKey !== fkey){ F13.frontKey = fkey;
-    const fs = new THREE.Scene(), fa = (P, o) => fs.add(wood13Mesh(P, o)), yr = gy + T.rim, yf = gy + T.face;
+    const fs = new THREE.Scene(), fa = (P, o) => fs.add(wood13Mesh(P, o)), yr = gy + T.rim, yf = gy + T.face, yt = yr + T.lip;
     const pt = (o) => Object.assign({ [w16 ? 'w16' : 'w15']: true, D: 4.5, bevel: 0.9, r: 2 }, o);   // круг 3: корыто — то же рисованное дерево; v16 — текстурой
-    fa([[-2, yr], [W + 2, yr], [W + 2, yf], [-2, yf]], pt({ kind: 'trough', dir: [1, 0], seed: 0.15 }));
-    for (const xl of [30, W - 30 - T.legW]) fa([[xl, yf - 3], [xl + T.legW, yf - 3], [xl + T.legW, gy + T.leg], [xl, gy + T.leg]], pt({ kind: 'leg', dir: [0, 1], seed: xl * 0.01, D: 4, r: 1.5, shade: 0.8 }));
-    for (const xe of [-3, W + 3 - T.cap]) fa([[xe, gy + T.back - 3], [xe + T.cap, gy + T.back - 3], [xe + T.cap, yf + 2], [xe, yf + 2]], pt({ kind: 'post', dir: [0, 1], seed: xe * 0.013, D: 5.5 }));
+    for (const sd of [-1, 1]){ const X = (x) => sd < 0 ? x : W - x, x0 = T.legX, w = T.legW, o2 = T.legOut;   // v18: ножки-бруски враспор (низ — наружу)
+      fa([[X(x0), yf - 4], [X(x0 + w), yf - 4], [X(x0 + w - o2), gy + T.leg], [X(x0 - o2), gy + T.leg]], pt({ kind: 'leg', dir: [0, 1], seed: 0.3 + sd * 0.17, D: 4, r: 1.2, shade: 0.72, z: -2 })); }
+    fa([[-5, yt], [W + 5, yt], [W + 5, yf], [-5, yf]], pt({ kind: 'trough', dir: [1, 0], seed: 0.15 }));   // v18: толстая передняя доска (волокна, зарубки — W17 'trough')
+    fa([[-5, yr], [W + 5, yr], [W + 5, yt + 0.6], [-5, yt + 0.6]], pt({ kind: 'inner', dir: [1, 0], seed: 0.55, D: 4.5, r: 0.6, shade: 1.42, z: 0.4 }));   // её верхняя грань — светлая
     R3.ren.render(fs, R3.cam); dispose13(fs);
     const fy0 = Math.max(0, Math.floor((gy + T.back - 12) * K + view.oy * DPR)), fy1 = Math.min(cv.height, Math.ceil((gy + T.leg + 10) * K + view.oy * DPR)), fh = Math.max(1, fy1 - fy0);
     if (!F13.front) F13.front = document.createElement('canvas');
@@ -7198,7 +7227,8 @@ function woodCss13(){                                         // фактура 
   document.documentElement.style.setProperty('--wood13', 'url(' + c.toDataURL('image/jpeg', 0.88) + ')');
 }
 // --- пилы: диск с крючковатыми зубьями и тремя прорезями, ступица, болт со шлицем; одна сетка на диск (цвет — в вершинах) ---
-function saw13Mat(row){ const U = u13(); return new THREE.ShaderMaterial({ vertexShader: S13_VS, fragmentShader: S13_FS, uniforms: Object.assign({}, U, { uR0: { value: V13.saw.r0 }, uDim: { value: 1 }, tWet: { value: wet13().tex }, uRow: { value: row || 0 }, uRows: { value: 2 * V13.saw.n }, uRot: { value: new THREE.Vector3(0, 1, 0) } }), side: THREE.BackSide }); }
+function saw13Mat(row, disc){ const U = u13(), Q = V13.saw; return new THREE.ShaderMaterial({ vertexShader: S13_VS, fragmentShader: S13_FS, uniforms: Object.assign({}, U, { uR0: { value: Q.r0 }, uDim: { value: 1 }, tWet: { value: wet13().tex }, uRow: { value: row || 0 }, uRows: { value: 2 * Q.n }, uRot: { value: new THREE.Vector3(0, 1, 0) },
+  uTs: { value: new THREE.Vector2(disc ? Q.tilt : 0, disc ? Q.depth / 2 + 0.3 : 0) }, uSaw: { value: new THREE.Vector4(disc ? Q.ring * Q.R : 0, Q.R, Q.hi[0], Q.hi[1]) }, uWarm: { value: new THREE.Vector4(...Q.warm) } }), side: THREE.BackSide }); }   // v18: disc — диск пилы (толщина, кольцо, отсвет); иначе ось и штыри
 function col13(geo, hex){ const c = hexRgb(hex), n = geo.attributes.position.count, A = new Float32Array(n * 3); for (let i = 0; i < n; i++){ A[3 * i] = c[0] / 255; A[3 * i + 1] = c[1] / 255; A[3 * i + 2] = c[2] / 255; } geo.setAttribute('aCol', new THREE.BufferAttribute(A, 3)); return geo; }
 function merge13(list){                                       // [{ geo, col }] → одна неиндексированная сетка (позиция, нормаль, цвет)
   const gs = list.map(q => ({ g: q.geo.index ? q.geo.toNonIndexed() : q.geo, c: hexRgb(q.col) })); let n = 0; for (const q of gs) n += q.g.attributes.position.count;
@@ -7209,26 +7239,29 @@ function merge13(list){                                       // [{ geo, col }] 
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(P, 3)); g.setAttribute('normal', new THREE.BufferAttribute(N, 3)); g.setAttribute('aCol', new THREE.BufferAttribute(C, 3)); return g;
 }
 function saw13Geo(){
-  const Q = V13.saw, T = Q.teeth, R = Q.R, r0 = Q.r0, dA = 2 * Math.PI / T, sh = new THREE.Shape(), ol = new THREE.Shape(), u = R / 23.5;
+  const Q = V13.saw, T = Q.teeth, R = Q.R, r0 = Q.r0, dA = 2 * Math.PI / T, sh = new THREE.Shape(), ol = new THREE.Shape();
   for (let k = 0; k < T; k++){ const a = k * dA;   // зуб: крутая передняя грань, вершина, пологая спинка, круглая впадина
-    const pts = [[a, r0 - 0.6], [a + dA * 0.06, R - 0.8], [a + dA * 0.14, R], [a + dA * 0.3, R - 0.7], [a + dA * 0.78, r0 + 1.0], [a + dA * 0.9, r0 - 0.4]];
+    const pts = [[a, r0 - 0.7], [a + dA * 0.06, R - 0.9], [a + dA * 0.14, R], [a + dA * 0.3, R - 0.9], [a + dA * 0.76, r0 + 1.2], [a + dA * 0.9, r0 - 0.5]];
     pts.forEach(([b, rr], j) => { const x = Math.cos(b) * rr, y = Math.sin(b) * rr, q = (rr + Q.inkW) / rr; if (!k && !j){ sh.moveTo(x, y); ol.moveTo(x * q, y * q); } else { sh.lineTo(x, y); ol.lineTo(x * q, y * q); } }); }
   sh.closePath(); ol.closePath();
-  for (let k = 0; k < 3; k++){ const a0 = k * 2 * Math.PI / 3 + 0.35, a1 = a0 + 0.8, rm = 12.2 * u, hw = 1.35 * u, h = new THREE.Path();   // прорези-«фасолины»
+  for (let k = 0; k < 4; k++){ const a0 = k * Math.PI / 2 + 0.3, a1 = a0 + Q.slotA, rm = Q.slotR * R, hw = Q.slotW, h = new THREE.Path();   // v18: четыре прорези-дуги
     h.absarc(0, 0, rm + hw, a0, a1, false); h.absarc(Math.cos(a1) * rm, Math.sin(a1) * rm, hw, a1, a1 + Math.PI, false);
     h.absarc(0, 0, rm - hw, a1, a0, true); h.absarc(Math.cos(a0) * rm, Math.sin(a0) * rm, hw, a0 + Math.PI, a0 + 2 * Math.PI, false); sh.holes.push(h); }
-  const d = Q.depth, disc = new THREE.ExtrudeGeometry(sh, { depth: d - 0.8, bevelEnabled: true, bevelThickness: 0.4, bevelSize: 0.45, bevelOffset: -0.45, bevelSegments: 1, curveSegments: 3, steps: 1 });
-  disc.translate(0, 0, -(d - 0.8) / 2);
-  const hub = new THREE.CylinderGeometry(6.6 * u, 7.0 * u, 2.0, 22, 1).rotateX(Math.PI / 2).translate(0, 0, d / 2 + 1.0);
-  const bolt = new THREE.CylinderGeometry(3.3 * u, 3.5 * u, 1.5, 14, 1).rotateX(Math.PI / 2).translate(0, 0, d / 2 + 2.75);
-  const slot = new THREE.BoxGeometry(5.0 * u, 0.9 * u, 0.5).translate(0, 0, d / 2 + 3.5);
-  const ink = new THREE.ShapeGeometry(ol, 1).translate(0, 0, -d / 2 - 0.25);   // круг 2: тёмный контур — силуэт чуть шире за диском (и тёмные прорези)
-  return merge13([{ geo: disc, col: Q.steel }, { geo: hub, col: Q.hub }, { geo: bolt, col: Q.bolt }, { geo: slot, col: Q.slot }, { geo: ink, col: Q.ink }]);
+  const d = Q.depth, bv = Q.bev, disc = new THREE.ExtrudeGeometry(sh, { depth: d - 2 * 0.55, bevelEnabled: true, bevelThickness: 0.55, bevelSize: bv, bevelOffset: -bv, bevelSegments: 1, curveSegments: 4, steps: 1 });
+  disc.translate(0, 0, -(d - 1.1) / 2);                       // диск от −d/2 до d/2; фаска зубьев и прорезей — bev
+  const z0 = d / 2, fl = Q.flange * R, bo = Q.bossR * R, bt = Q.boltR * R;
+  const flange = new THREE.CylinderGeometry(fl - 0.9, fl, 1.1, 32, 1).rotateX(Math.PI / 2).translate(0, 0, z0 + 0.55);   // фланец с фаской
+  const boss = new THREE.CylinderGeometry(bo - 1.0, bo, 1.5, 28, 1).rotateX(Math.PI / 2).translate(0, 0, z0 + 1.85);     // бобышка
+  const bolt = new THREE.CylinderGeometry(bt - 0.8, bt, 1.3, 20, 1).rotateX(Math.PI / 2).translate(0, 0, z0 + 3.25);     // болт
+  const slot = new THREE.BoxGeometry(bt * 1.7, bt * 0.3, 0.5).translate(0, 0, z0 + 3.95);                                // шлиц
+  const ink = new THREE.ShapeGeometry(ol, 2).translate(0, 0, -d / 2 - 0.25);   // тёмный контур — силуэт чуть шире за диском (и тёмные прорези)
+  const inkH = new THREE.CylinderGeometry(fl + 0.6, fl + 0.6, 0.3, 32, 1).rotateX(Math.PI / 2).translate(0, 0, z0 + 0.1);   // тёмный ободок под фланцем
+  return merge13([{ geo: disc, col: Q.steel }, { geo: inkH, col: Q.ink }, { geo: flange, col: Q.hub }, { geo: boss, col: Q.boss }, { geo: bolt, col: Q.bolt }, { geo: slot, col: Q.slot }, { geo: ink, col: Q.ink }]);
 }
 function saw13Init(){
   if (F13.sawG) return;
   const Q = V13.saw, geo = saw13Geo(), G0 = new THREE.Group(); F13.saws = [];
-  for (let i = 0; i < Q.n; i++){ const m = new THREE.Mesh(geo, saw13Mat(i)); m.frustumCulled = false; G0.add(m); F13.saws.push(m); }
+  for (let i = 0; i < Q.n; i++){ const m = new THREE.Mesh(geo, saw13Mat(i, true)); m.frustumCulled = false; G0.add(m); F13.saws.push(m); }
   F13.sawTris = geo.attributes.position.count / 3 * Q.n; F13.sawG = G0; R3.scene.add(G0); shard13Init();   // круг 3: осколки — с пилами (шейдер прогревается первым кадром)
 }
 function saw13Update(){                                       // круг 3: у каждого диска своя скорость — под куском садится, потом набирает
@@ -7246,11 +7279,12 @@ function saw13Update(){                                       // круг 3: у 
 // как прежде), на победе — перелив через кромку. Струйки — в щелях между дисками (с мокрых пил и от догрызенных кусков).
 const juiceY13 = () => { const T = V13.trough, lv = clamp(trough9().lvl / V9.trough.full, 0, 1.25); return CFG.grindY + T.floor - (T.floor - T.full) * lv; };
 function juice13(c){
-  const T = V13.trough, gy = CFG.grindY, W = CFG.W, Tr = trough9(), col = Tr.col, x0 = 3, x1 = W - 3, yb = gy + T.back, yr = gy + T.rim + 2.5, yL = juiceY13();
-  c.save(); c.beginPath(); c.rect(x0, yb, x1 - x0, yr - yb); c.clip();
+  const T = V13.trough, gy = CFG.grindY, W = CFG.W, Tr = trough9(), col = mixRgb(Tr.col, T.gold, T.gold[3]), x0 = T.end[1], x1 = W - T.end[1], yb = gy + T.back + T.farLip, yr = gy + T.rim + 2.5, yL = juiceY13();
+  c.save(); c.beginPath(); c.moveTo(T.end[0], yb); c.lineTo(W - T.end[0], yb); c.lineTo(x1, yr); c.lineTo(x0, yr); c.closePath(); c.clip();   // v18: внутри корыта — трапеция (торцы видны)
   c.beginPath(); c.moveTo(x0, yr); for (let x = x0; x < x1 + 8; x += 8){ const xx = Math.min(x, x1); c.lineTo(xx, troughSurf(xx, yL)); } c.lineTo(x1, yr); c.closePath();
-  const g = c.createLinearGradient(0, yL - 3, 0, yr); g.addColorStop(0, rgba(mixRgb(col, [255, 255, 255], 0.38), 0.97)); g.addColorStop(0.3, rgba(col, 0.97)); g.addColorStop(1, rgba(shadeRgb(col, 0.7), 0.98));
+  const g = c.createLinearGradient(0, yL - 3, 0, yr); g.addColorStop(0, rgba(mixRgb(col, [255, 248, 210], 0.3), 0.98)); g.addColorStop(0.4, rgba(col, 0.98)); g.addColorStop(1, rgba(shadeRgb(col, 0.86), 0.98));   // v18: сок светлее, без тёмного низа
   c.fillStyle = g; c.fill();
+  { const h = c.createLinearGradient(0, yL - 1, 0, yL + 6); h.addColorStop(0, rgba(mixRgb(col, [255, 240, 190], 0.55), 0.85)); h.addColorStop(1, rgba(col, 0)); c.fillStyle = h; c.fill(); }   // v18: светлая полоса у поверхности — сок блестит, как на рефе
   c.beginPath(); for (let x = x0; x < x1 + 8; x += 8){ const xx = Math.min(x, x1), y = troughSurf(xx, yL) + 0.7; if (x === x0) c.moveTo(xx, y); else c.lineTo(xx, y); }   // мениск у задней стенки
   c.lineWidth = 1.2; c.strokeStyle = 'rgba(255,255,255,0.72)'; c.stroke();
   c.fillStyle = 'rgba(255,255,255,0.32)';                    // отблески плывут по поверхности
@@ -7262,10 +7296,10 @@ function juice13(c){
   streams13(c, yL);
 }
 function streams13(c, yL){
-  const F = FX.film, Q = V13.saw, step = CFG.W / Q.n, gy = CFG.grindY, yi = gy + Q.cy + Math.sqrt(Math.max(0, Q.R * Q.R - step * step / 4)) - 3;
+  const F = FX.film, Q = V13.saw, step = CFG.W / Q.n, gy = CFG.grindY, yi = gy + Q.cy + Q.R - 4;   // v18: струйки с низа каждого диска в сок, от них круги
   c.lineCap = 'round';
-  for (let v = 0; v < Q.n - 1; v++){ const x = step * (v + 1), ch = F13.vst[v] > G.rt, w = Math.max(F ? filmAt(x) : 0, ch ? 0.75 + 0.25 * Math.min(1, (F13.vst[v] - G.rt) * 3) : 0); if (w < 0.1) continue;
-    const cs = ch ? 'rgba(' + F13.vcol[v].join(',') + ',1)' : filmCol(x, 1), yB = Math.max(yi + 2, troughSurf(x, yL) + 1.5), al = Math.min(1, w * 1.4);
+  for (let v = 0; v < Q.n; v++){ const x = step * (v + 0.5) + (v % 2 ? 2.5 : -2.5), ch = F13.vst[v] > G.rt, w = Math.max(F ? filmAt(x) : 0, ch ? 0.75 + 0.25 * Math.min(1, (F13.vst[v] - G.rt) * 3) : 0); if (w < 0.1) continue;
+    const cs = 'rgba(' + mixRgb(ch ? F13.vcol[v] : filmRgb13(x), V13.trough.gold, 0.35).map(Math.round).join(',') + ',1)', yB = Math.max(yi + 2, troughSurf(x, yL) + 1.5), al = Math.min(1, w * 1.4);
     if (w > 0.35){ c.globalAlpha = Math.min(0.9, (w - 0.35) * 2); c.strokeStyle = cs; c.lineWidth = 1.1 + w * 1.2; c.beginPath(); c.moveTo(x, yi); c.quadraticCurveTo(x + Math.sin(G.rt * 9 + v) * 0.6, (yi + yB) / 2, x, yB); c.stroke();
       c.globalAlpha *= 0.7; c.lineWidth = 0.9; c.strokeStyle = cs; c.beginPath(); c.ellipse(x, yB + 0.5, 2.5 + 2 * w + Math.sin(G.rt * 11 + v) * 0.6, 0.9, 0, 0, 6.29); c.stroke(); }   // круги на соке
     for (let k = 0; k < 2; k++){ const ph = (G.rt * (0.9 + 0.8 * w + 0.25 * k) + v * 0.37 + k * 0.5) % 1, y = yi + ph * ph * (yB - yi);
@@ -7311,12 +7345,14 @@ function front13(c, s, sh){
   const A = grass13(k); c.drawImage(A.cv, Math.round(sh.x * K), A.y + Math.round(sh.y * K));
   if (F13.from >= 0 && f < 1){ const B = grass13(F13.from); c.globalAlpha = 1 - fs; c.drawImage(B.cv, Math.round(sh.x * K), B.y + Math.round(sh.y * K)); c.globalAlpha = 1; }
   c.restore(); vbase(c, sh.x, sh.y);
+  { const [hh, al] = T.shadow, g = c.createLinearGradient(0, yf - 1, 0, yf + hh);   // v18: тень корыта на траве (под передней доской, между ножками)
+    g.addColorStop(0, 'rgba(10,16,6,' + al + ')'); g.addColorStop(1, 'rgba(10,16,6,0)'); c.fillStyle = g; c.fillRect(-8, yf - 1, W + 16, hh + 1); }
 }
 // Трава переднего плана (печётся на состояние и кадр): стебли гуще и выше по углам, несколько листьев, низ углов темнее.
 function grass13(k){
   const key = k + '|' + cv.width + 'x' + cv.height + '|' + view.ox.toFixed(1) + ',' + view.oy.toFixed(1) + ',' + view.k.toFixed(4) + '|' + !!img16(V16.grass.img);
   F13.grass = F13.grass || {}; const old = F13.grass[k]; if (old && old.key === key) return old;
-  const T = V13.trough, gy = CFG.grindY, W = CFG.W, L = V13.look[V13.states[k]], [dk, lt, lf] = L.grass, [, yBot] = scrY13(), yT = gy + T.rim - 14;
+  const T = V13.trough, gy = CFG.grindY, W = CFG.W, L = V13.look[V13.states[k]], [dk, lt, lf] = L.grass, [, yBot] = scrY13(), yT = gy + T.face - 8;   // v18: слой травы (и виньетка углов) — ниже передней доски, корыто не темнит
   const y0 = Math.max(0, Math.floor(yT * K + view.oy * DPR)), c = document.createElement('canvas'); c.width = cv.width; c.height = Math.max(1, cv.height - y0);
   const g = c.getContext('2d'); g.setTransform(K, 0, 0, K, DPR * view.ox, DPR * view.oy - y0);
   const xL = -view.ox / view.k - 4, xR = (cv.width / DPR - view.ox) / view.k + 4, span = xR - xL, yb0 = gy + T.face + 3, gim = img16(V16.grass.img);
@@ -7591,7 +7627,7 @@ function shard13Fly(x, y, d, fl, rd, k){                      // осколок 
 function shard13Stick(di, x, y, fl, rd, slot){                // налип: на зубья в месте укуса или крошкой в прорезь — крутится с диском
   const Q = V13.bite.shard, m = F13.saws[di]; if (!m) return; let n = 0; for (const q of (F13.shd || [])) if (q.ph === 2 && q.disc === di) n++; if (n >= Q.perDisc + (slot ? 2 : 0)) return;
   const q = shard13New(fl, rd); if (!q) return; q.ph = 2; q.disc = di; q.t = 0; q.T = Q.hold[0] + (Q.hold[1] - Q.hold[0]) * R(); q.slot = slot; q.ax = 0; q.ay = 0; q.az = 1; q.a0 = R() * 6.28;
-  if (slot){ const k = Math.floor(R() * 3), a = k * 2 * Math.PI / 3 + 0.35 + 0.8 * R(); q.la = m.scale.x > 0 ? a : Math.PI - a; q.lr = 12.2 * V13.saw.R / 23.5; q.s *= 0.7; }
+  if (slot){ const k = Math.floor(R() * 4), a = k * Math.PI / 2 + 0.3 + V13.saw.slotA * R(); q.la = m.scale.x > 0 ? a : Math.PI - a; q.lr = V13.saw.slotR * V13.saw.R; q.s *= 0.7; }
   else { q.la = Math.atan2(y - m.position.y, x - m.position.x) - m.rotation.z; q.lr = V13.saw.R - 1.2; q.s *= 0.75; }
 }
 function shard13Update(dt){
@@ -7701,10 +7737,10 @@ function bite13Update(dt){
 }
 const idle13 = (s) => !F13.frags.length && s.grinding.every(g => F13.split.has(g.id)) && !s.bodies.some(b => b.flags.swept);   // v13 круг 5: пилы пусты
 function chew13Gap(x, kind, k){                                // сок уходит в щель между дисками: струйка в корыто, круги на соке
-  const Q = V13.saw, st = CFG.W / Q.n, v = clamp(Math.round(x / st) - 1, 0, Q.n - 2), c = hexRgb(juiceHex(kind));
-  F13.vst[v] = Math.max(F13.vst[v] || 0, G.rt + 0.35 + 0.3 * k); F13.vcol[v] = c; filmAdd(st * (v + 1), 0.08 * k, c, 10);
-  const T = trough9(); T.waves.push({ x: st * (v + 1), t0: G.rt, a: 0.9 * k }); if (T.waves.length > 8) T.waves.shift();
-  return st * (v + 1);
+  const Q = V13.saw, st = CFG.W / Q.n, v = clamp(Math.floor(x / st), 0, Q.n - 1), c = hexRgb(juiceHex(kind)), xs = st * (v + 0.5);   // v18: струйка — с низа диска (как на рефе)
+  F13.vst[v] = Math.max(F13.vst[v] || 0, G.rt + 0.35 + 0.3 * k); F13.vcol[v] = c; filmAdd(xs, 0.08 * k, c, 10);
+  const T = trough9(); T.waves.push({ x: xs, t0: G.rt, a: 0.9 * k }); if (T.waves.length > 8) T.waves.shift();
+  return xs;
 }
 // Ляда (доска на верёвке) — тот же брус, поза тела физики каждый кадр.
 function gate13Sync(s){
