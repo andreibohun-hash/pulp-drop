@@ -111,6 +111,19 @@ button{font:inherit;cursor:pointer}
 .tool[data-w=axe] img{width:58px;height:30px;transform:rotate(-80deg)}
 .tool[data-w=saw] img{width:66px;height:34px;transform:rotate(-8deg)}
 .tool[data-w=mace] img{width:62px;height:34px;transform:rotate(-48deg)}
+/* v22 (GPT №1, п. 12): кнопка инструмента видимая 13–15 % W (56×48 на 393), касание — не меньше 44×44 (ячейка с полями); зелёная рамка
+   0,5–0,7 % W (2,5 px #67B957), бейдж количества 4,5–5 % W (19 px) — за углом кнопки, не на лезвии; силуэт инструмента — по кнопке */
+#tray{gap:18px}
+.wpn{width:min(56px,calc((100vw - 96px) / 4));height:48px;border-radius:13px}
+.wpn::after{inset:-8px -10px -8px -10px}
+.wpn b{right:-13px;top:-12px;min-width:19px;height:19px;border-radius:10px;font-size:12.5px;line-height:19px;padding:0 4px;box-shadow:0 1px 0 rgba(0,0,0,.2)}
+.wpn.tool[data-w=knife] img{width:54px;height:18px}
+.wpn.tool[data-w=axe] img{width:46px;height:24px}
+.wpn.tool[data-w=saw] img{width:50px;height:26px}
+.wpn.tool[data-w=mace] img{width:48px;height:27px}
+body.f13 .wpn.sel{box-shadow:inset 0 2.5px 0 rgba(236,184,124,.9),inset 0 -4px 0 rgba(70,32,14,.45),0 0 0 2.5px #67B957,0 4px 0 #3f8a3a,0 8px 12px rgba(30,90,40,.22)}
+body.f13 .wpn.sel b{background:#4f9e44}
+.thand{width:34px;height:52px;margin-left:-11px}
 /* v10: «How to play» — четыре строки «плитка инструмента — слово» */
 .howto{display:grid;gap:11px;margin:16px auto 20px;width:max-content}
 .howto div{display:flex;align-items:center;gap:16px}
@@ -212,6 +225,11 @@ const CFG = {
   plugHang: 20,         // v2: пробка висит в щели и торчит ниже бункера на столько ед. — снизу видно, что резать,
                         // срезанный «низ» падает сразу (как в жанре)
   wallT: 40,            // толщина стенок короба снаружи поля: толстые, чтобы щепки не пролетали
+  // v22: ряд пил ≈ 84 % W — 7 дисков R 32 с шагом 45,2 (11,3 % W) по центру; поля по ≈ 8 % W. По краям (только уровни v11/v15) — наклонные
+  // доски-отбойники от края экрана к крайнему диску: плод скатывается на пилу, мимо ряда не падает. x1 — конец доски (ед. от края), y1 — его
+  // верх над grindY, ang — наклон (град), t — толщина, over — вынос за край экрана. offRow — счётчик «упало мимо» (точка касания линии перемола вне ряда)
+  sawRow: { n: 7, pitch: 45.2, R: 32 },
+  deflect: { x1: 40, y1: -15, ang: 35, t: 14, over: 30 },
   wallTop: -500,        // верх стенок — выше видимого поля
   pileTop: 40,          // при раскладке кучи предметы не выше этой линии
   placeStep: 4,         // шаг перебора x при раскладке кучи
@@ -752,14 +770,17 @@ function slab15(a, b, t, side, ea, eb, tp){
   const L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, dx = (b[0] - a[0]) / L, dy = (b[1] - a[1]) / L, nx = -dy * side, ny = dx * side;
   const end = (P, e, tt) => { let k = 0; if (e === 'h' && Math.abs(dy) > 0.05) k = -ny * tt / dy; else if (e === 'v' && Math.abs(dx) > 0.05) k = -nx * tt / dx;
     return [P[0] + nx * tt + dx * k, P[1] + ny * tt + dy * k]; };
-  const Q = tp ? [a, b, end(b, eb, t * tp[1]), [a[0] + dx * L * tp[0] + nx * t, a[1] + dy * L * tp[0] + ny * t], end(a, ea, t)] : [a, b, end(b, eb, t), end(a, ea, t)];
+  const at = (f, k) => [a[0] + dx * L * f + nx * t * k, a[1] + dy * L * f + ny * t * k];   // v22: точка наружной кромки на доле длины f при толщине k
+  const Q = tp ? (tp.length > 2 ? [a, b, end(b, eb, t * tp[1]), at(tp[2], tp[3]), at(tp[0], 1), end(a, ea, t)] : [a, b, end(b, eb, t * tp[1]), at(tp[0], 1), end(a, ea, t)]) : [a, b, end(b, eb, t), end(a, ea, t)];
   return Q.map(v => [+v[0].toFixed(2), +v[1].toFixed(2)]);
 }
 // Круг 2 (реф Андрея): брус толще — доски бункера 30 (≈ 8% ширины поля), дно 26, щёчки-чурбаки 24 × 34, стенки короба 24, балка 32,
 // кронштейн 22. Толщина растёт наружу от лицевой грани: полость и щели — прежние, фрукты лежат на видимой кромке.
 const W15 = {
   t: 17, tf: 17, tc: 14, ch: 34, tw: 17, bh: 30, bt: 17,  // доски бункера, дно, щёчки (ширина, высота), стенки короба, балка, кронштейн; v18: брус как на рефе — 19 (было 30/26/24/24/32/22); v20: 17 ≈ 4,25 % W, щёчки 14
-  tp: [0.76, 0.7],        // v20: сужение досок и днищ к свободному концу — последние 24 % длины, конец 0,7 толщины (наружной/нижней кромкой)
+  tp: [0.62, 0.7, 0.82, 0.9],   // сужение досок и днищ к свободному концу (наружной/нижней кромкой): с доли длины tp[0] до конца 0,7 толщины; v22 (GPT №2а,
+                                // P1.2) — плавно на последних 38 % длины, через точку tp[2] с толщиной tp[3] (было: последние 24 %, перелом у конца)
+  cw: 13.5,                     // v22: ширина щёчки (нижней стойки) вместе со скосом — 3,4 % W, без «башмака»: конец доски чуть нависает наружу, как на рефе
   rect: (x0, y0, x1, y1) => [[x0, y0], [x1, y0], [x1, y1], [x0, y1]],
   // дно (полка, жёлоб, короб): верхняя грань a→b, толщина вниз
   floor: (a, b, t, ea, eb) => slab15(a, b, t || W15.tf, b[0] > a[0] ? 1 : -1, ea || 'v', eb || 'v', W15.tp),
@@ -781,14 +802,14 @@ const W15 = {
   // бункер: две наклонные доски от верхних углов (xl, top), (xr, top) к горлу ширины gw (центр gx, верх горла gy), щёчки горла
   // высоты ch; задняя стенка полости; балка по верху — от стенок до досок (o.beam === false — без неё; o.bx0 / o.bx1 — откуда)
   hopper(gx, gy, gw, xl, xr, top, o){
-    o = o || {}; const t = o.t || W15.t, tc = o.tc || W15.tc, ch = o.ch == null ? W15.ch : o.ch, a = gx - gw / 2, b = gx + gw / 2, out = [];
+    o = o || {}; const t = o.t || W15.t, ch = o.ch == null ? W15.ch : o.ch, a = gx - gw / 2, b = gx + gw / 2, out = [];
     // щёчки горла — чурбаки со скосом к щели (sh по горизонтали, o.lipA° к горизонту): крутая доска кончается выше и в стороне от
     // щели, пробка лежит на углах щёчек (как в щели воронки с пологим клином), а не зажата клином между крутыми досками — после реза
     // половинки проворачиваются на углах и падают; кусок со скоса соскальзывает в щель
-    const sh = o.sh == null ? 18 : o.sh, rise = sh * Math.tan((o.lipA || 30) * Math.PI / 180), yb = gy + ch;
+    const sh = o.sh == null ? 8 : o.sh, rise = sh * Math.tan((o.lipA || 30) * Math.PI / 180), yb = gy + ch;
     const L = slab15([xl, top], [a - sh, gy - rise], t, 1, 'h', 'h', W15.tp), R = slab15([xr, top], [b + sh, gy - rise], t, -1, 'h', 'h', W15.tp), LT = L[L.length - 1], RT = R[R.length - 1];
     out.push(['wood', 'board', L], ['wood', 'board', R]);
-    const xo = Math.min(a - sh - tc, L[2][0]), xo2 = Math.max(b + sh + tc, R[2][0]), r2 = (v) => [+v[0].toFixed(2), +v[1].toFixed(2)];
+    const cw = Math.max(W15.cw, sh + 4), xo = a - cw, xo2 = b + cw, r2 = (v) => [+v[0].toFixed(2), +v[1].toFixed(2)];
     if (ch > 0) out.push(['wood', 'cheek', [[xo, gy - rise], [a - sh, gy - rise], [a, gy], [a, yb], [xo, yb]].map(r2)], ['wood', 'cheek', [[b + sh, gy - rise], [xo2, gy - rise], [xo2, yb], [b, yb], [b, gy]].map(r2)]);
     const yk = yb - (o.backUp == null ? 7 : o.backUp);   // v20: задник кончается выше концов щёчек (выход не закрыт перемычкой)
     out.push(['slot', gx, gy, gw, yb], ['back', [LT, RT, R[2], [xo2, gy - rise], [xo2, yk], [xo, yk], [xo, gy - rise], L[2]].map(r2)]);
@@ -1483,6 +1504,14 @@ function newState(L){
     s.statics.push(st);
   }
   s.sb = sb;
+  // v22: отбойники по краям ряда пил (уровни v11/v15). Тело planck создаётся лениво — когда тело кучи подлетает к краю (deflectWake):
+  // лишние фикстуры с первого шага меняют порядок контактов planck, и весь мир расходится хаосом; так мир бит в бит прежний, пока ничего
+  // не падает у края. В s.statics — для вида (lazy), раскладка кучи их не видит.
+  if (L.v11 && CFG.deflect){ const D = CFG.deflect, ar = D.ang * Math.PI / 180, c = Math.cos(ar), tg = Math.sin(ar) / c, y1 = CFG.grindY + D.y1, x0 = -D.over,
+      y0 = y1 - (D.x1 - x0) * tg, th = D.t / c;   // tan — через sin/cos DMATH (детерминизм браузер/node)
+    s.defl = [-1, 1].map(sd => { const X = (x) => sd < 0 ? x : W - x;
+      return { role: 'wood', kind: 'deflect', lazy: true, side: sd, poly: convexHull([[X(x0), y0], [X(D.x1), y1], [X(D.x1), y1 + th * 0.8], [X(x0), y0 + th]]) }; });
+    s.deflY = y0 - 40; s.deflX = D.x1 + 6; for (const st of s.defl) s.statics.push(st); }
   // v4: решётка пропускает то, что тоньше зазора (половинки), — контакт с прутом выключается до решателя
   s.world.on('pre-solve', (ct) => {
     const fa = ct.getFixtureA(), fb = ct.getFixtureB(), ua = fa.getUserData(), ub = fb.getUserData();
@@ -1641,7 +1670,7 @@ function addJuice(s, kind, amount, x){
 // тот же результат шаг в шаг, что createState (одна попытка; генератор бака с повторами раскладки — только createState).
 function createBegin(n, attempt){
   const L = levelData(n, attempt || 0), s = newState(L);
-  for (const it of placePile(L, s.statics.map(st => st.poly).concat(s.dynPolys), s.gaps)) makeFruit(s, it.kind, it.x, it.y, it.a, it.sc, it.tag);
+  for (const it of placePile(L, s.statics.filter(st => !st.lazy).map(st => st.poly).concat(s.dynPolys), s.gaps)) makeFruit(s, it.kind, it.x, it.y, it.a, it.sc, it.tag);
   hangFruits(s); hangDamp(s);
   if (L.tagFill){ const cnt = {}; for (const b of s.bodies) if (!b.flags.tag){ const c = KINDS[b.kind].flavor[0].toUpperCase(); cnt[c] = (cnt[c] || 0) + 1; b.flags.tag = c + cnt[c]; } }   // v4: метки начинке (решение)
   return { n, s, k: 0, max: Math.round(CFG.createSettle / CFG.dt), done: false };
@@ -1658,7 +1687,7 @@ function createSettleStep(job, steps){
 function createEnd(s){
   s.settleT = +s.t.toFixed(3);
   s.juice = 0; s.juiceBy = {}; s.events = []; s.won = false; s.lost = false; s.t = 0; s.steps = 0; s.lastCutT = -1e9;
-  s.cutWin = null; s.cutLog = []; s.crumbs = 0; s.escaped = 0;
+  s.cutWin = null; s.cutLog = []; s.crumbs = 0; s.escaped = 0; s.offRow = 0;
   s.grinding = []; s.charge = 0; s.frenzy = 0; s.frenzies = 0; s.stroke = null; s.firstGrind = null; s.selfGone = 0;
   s.spec = { bombs: 0, shells: 0, ropes: 0, spins: 0, turns: 0, nets: 0 };
   for (const b of s.bodies) b.flags.chew = false;
@@ -1747,8 +1776,9 @@ function checkShort(s, only){
 function cloneState(s){
   const c = newState(s.level);
   for (const k of ['n', 't', 'steps', 'quiet', 'juice', 'total', 'goal', 'moves', 'used', 'refunds', 'peakNet', 'won', 'lost', 'lastCutT', 'nextId', 'settleLoss', 'escaped', 'crumbs',
-    'charge', 'frenzy', 'frenzies', 'firstGrind', 'selfGone', 'ground', 'swept'])
+    'charge', 'offRow', 'frenzy', 'frenzies', 'firstGrind', 'selfGone', 'ground', 'swept'])
     c[k] = s[k];
+  if (s.deflOn) deflectWake(c);
   c.grinding = s.grinding.map(g => Object.assign({}, g, { flags: Object.assign({}, g.flags) }));
   c.juiceBy = Object.assign({}, s.juiceBy); c.cutWin = s.cutWin ? Object.assign({}, s.cutWin) : null; c.cutLog = s.cutLog.slice();
   c.spec = Object.assign({}, s.spec);
@@ -1817,6 +1847,9 @@ function startGrind(s, b, yTop, yLow){
   const self = b.cutT !== undefined && s.t - b.cutT > CFG.chargeT;     // v5: «заряженный» кусок ушёл сам — лежал, пока под ним были целые
   if (self) s.selfGone = (s.selfGone || 0) + 1;
   removeBody(s, b); s.grinding.push(g); s.ground = (s.ground || 0) + g.area;   // v7: сколько кучи дошло до жерновов
+  { const Q = CFG.sawRow, h = (Q.n - 1) / 2 * Q.pitch + Q.R, cs = Math.cos(g.a), sn = Math.sin(g.a); let lx = g.x, ly = -1e9;   // v22: «упало мимо» ряда пил —
+    for (const v of g.verts){ const y = g.y + sn * v[0] + cs * v[1]; if (y > ly){ ly = y; lx = g.x + cs * v[0] - sn * v[1]; } }      // по точке касания (нижняя вершина)
+    if (Math.abs(lx - CFG.W / 2) > h) s.offRow = (s.offRow || 0) + 1; }
   if (s.firstGrind === null && s.cutWin) s.firstGrind = s.t - s.lastCutT;
   ev(s, { type: 'grind', id: g.id, kind: g.kind, x: +g.x.toFixed(1), area: +g.area.toFixed(0), dur: +dur.toFixed(3), vy: +g.vy.toFixed(0), self });
 }
@@ -1837,6 +1870,7 @@ function step(s){
   const ppm = CFG.ppm, gy = CFG.grindY;
   let moving = s.grinding.length > 0;
   stepGrind(s);
+  if (s.defl && !s.deflOn) for (const b of s.bodies) if (b.y + b.rad > s.deflY && (b.x - b.rad < s.deflX || b.x + b.rad > CFG.W - s.deflX)){ deflectWake(s); break; }
   const list = s.bodies.slice();
   for (const b of list){
     const pb = b.pb, p = pb.getPosition();
@@ -1887,6 +1921,13 @@ function step(s){
     s.lost = true; s.loseReason = 'cuts'; ev(s, { type: 'lose', reason: 'cuts', juice: +(s.juice / s.total).toFixed(3) });
   }
   if (!s.won && !s.lost && s.moves <= 0 && s.cutWin && s.t - s.lastCutT > CFG.loseWait) closeWindow(s);
+}
+// v22: отбойники — тело planck по первому подлёту к краю (см. newState)
+function deflectWake(s){
+  if (!s.defl || s.deflOn) return; s.deflOn = true;
+  const b = s.world.createBody({ type: 'static' }), ppm = CFG.ppm;
+  for (const st of s.defl) st.fix = b.createFixture(planck.Polygon(st.poly.map(v => planck.Vec2(v[0] / ppm, v[1] / ppm))), { friction: CFG.partFriction, restitution: CFG.restitution });
+  s.deflB = b;
 }
 // Окно реза: сок, пришедший от реза до следующего реза или до покоя мира, приписан этому резу.
 function closeWindow(s){
@@ -3104,19 +3145,21 @@ const CLEAR15 = [
     // v20: арбуз-герой 28 % W (r 56) лежит пробкой на углах горла 104 (26 % W) на коротких скосах щёчек (8 ед., 60°): рез через арбуз почти в любом
     // месте роняет обе половины (DESIGN «v20»: при горле 14–16 % W половины встают аркой). Глубина 205, от выхода до зубьев 110 (27,5 % W).
     // Мелочь ×0,72 (сливы, лаймы ≈ 7 % W) — до обода и выше
-    parts: [...W15.hopper(200, 620, 104, 94.9, 305.1, 445, { ch: 30, sh: 8, lipA: 60 })],
-    pile: [P7('melon', 200, 1), ...fill15(['plum', 'lime'], 24, 105, 295, null, 0.72)] },
+    // v22 (GPT №2а, P1.1): V через верх — внутренние верхние края 74 % W (52…348), доски ≈ 26° от вертикали, наружный верх с брусом ≈ 83 % W;
+    // горло 104 и арбуз 28 % W прежние, выход на прежней высоте (650), щёчки 24 (6 % W), глубина 215 (54 % W); мелочь — 3–4 ряда, верх неровный
+    parts: [...W15.hopper(200, 626, 104, 52, 348, 435, { ch: 24, sh: 8, lipA: 60 })],
+    pile: [P7('melon', 200, 1), ...fill15(['plum', 'lime'], 25, 66, 334, null, 0.72)] },
   { name: 'Slide', role: 'r', loadout: { knife: 3 }, solution: [{"w":"knife","pts":[[342.1,389],[342.1,689]]}],
     parts: [...W15.chute(0, 505, 300, 580, { wall: 120, brace: 50 })],
     pile: [P7('melon', 344, 1.05), ...fill15(['orange', 'apple'], 15, 8, 292, null, 0.95)] },
-  { name: 'Two Bins', role: 'n', loadout: { knife: 5 }, solution: [{"w":"knife","pts":[[130.1,611.5],[430.1,611.5]]},{"w":"knife","pts":[[115,310.7],[265,570.5]]}],
+  { name: 'Two Bins', role: 'n', loadout: { knife: 5 }, solution: [{"w":"knife","pts":[[130,611.4],[430,611.4]]},{"w":"knife","pts":[[115,310.7],[265,570.5]]},{"w":"knife","pts":[[187.1,300.9],[187.1,600.9]]}],
     parts: [...W15.hopper(190, 475, 80, 30, 330, 375, { ch: 34 }), ...W15.hopper(280, 622, 80, 120, 396, 515, { ch: 34 })],
     pile: [P7('melon', 280, 0.95, 566), ...fill15(['plum'], 5, 140, 380, 530), P7('melon', 190, 0.95), ...fill15(['lime', 'plum'], 8, 50, 320)] },
   { name: 'Side Door', role: 'm', loadout: { knife: 7 }, solution: [{"w":"knife","pts":[[103.4,580.6],[403.4,580.6]]},{"w":"knife","pts":[[49.8,437],[199.8,696.8]]},{"w":"knife","pts":[[215,271.1],[65,530.9]]},{"w":"knife","pts":[[138.6,608.3],[438.6,608.3]]},{"w":"knife","pts":[[-28.3,601.8],[271.7,601.8]]}],
     parts: [...W15.hopper(140, 430, 80, 22, 258, 348, { ch: 30 }), ...W15.box(60, 300, 485, 640, { slot: ['side', 'R', 84], drop: 26 })],
     pile: [P7('melon', 240, 0.95, 516, 0, 2), P7('melon', 120, 1.0, 520, 0, 30), ...fill15(['orange', 'apple'], 8, 66, 294, 486, 0.9), P7('melon', 140, 0.9), ...fill15(['plum', 'lemon'], 7, 28, 252)] },
-  { name: 'Ledge', role: 'n', loadout: { knife: 6 }, solution: [{"w":"knife","pts":[[174.4,454.8],[324.4,714.6]]},{"w":"knife","pts":[[213.1,268.6],[213.1,568.6]]},{"w":"knife","pts":[[157.6,282.4],[307.6,542.2]]}],
-    parts: [...W15.shelf(0, 425, 330, 485, { gap: [250, 78], lip: 72, wall: 90 }), ...W15.hopper(250, 600, 82, 150, 396, 515, { ch: 34, sh: 18 })],
+  { name: 'Ledge', role: 'n', loadout: { knife: 7 }, solution: [{"w":"knife","pts":[[174.7,454.8],[324.7,714.6]]},{"w":"knife","pts":[[213.1,268.6],[213.1,568.6]]},{"w":"knife","pts":[[11.8,425.6],[311.8,425.6]]}],
+    parts: [...W15.shelf(0, 425, 330, 485, { gap: [250, 78], lip: 72, wall: 90 }), ...W15.hopper(250, 600, 82, 150, 396, 515, { ch: 34 })],
     pile: [P7('cuke', 250, 1.15, 560, 0, 2), ...fill15(['plum'], 6, 160, 380, 508), P7('melon', 250, 0.95), P7('melon', 160, 1.0, null, 0, 30), ...fill15(['plum', 'lemon'], 9, 8, 210)] },
   { name: 'Switchback', role: 'p', loadout: { knife: 8 }, solution: [{"w":"knife","pts":[[-14.9,575.6],[285.1,575.6]]},{"w":"knife","pts":[[192,446.5],[492,446.5]]},{"w":"knife","pts":[[-15.6,585.1],[284.4,585.1]]},{"w":"knife","pts":[[215.5,355.2],[475.3,505.2]]}],
     parts: [...W15.chute(0, 403, 300, 461, { wall: 100, brace: 32 }), ...W15.chute(400, 548, 100, 612, { wall: 60, brace: 44 })],
@@ -3130,7 +3173,7 @@ const CLEAR15 = [
   { name: 'Long Way', role: 'r', loadout: { axe: 5, knife: 2 }, solution: [{"w":"axe","pts":[[200.8,473],[80.8,633]]},{"w":"axe","pts":[[165.2,515.6],[5.2,395.6]]},{"w":"axe","pts":[[55.6,619.1],[55.6,419.1]]}],
     parts: [...W15.chute(400, 410, 110, 470, { wall: 90, brace: 40 }), ...W15.hopper(130, 590, 82, 0, 290, 520, { ch: 34 })],
     pile: [P7('coco', 130, 1.5, 550), ...fill15(['cherry', 'berry'], 8, 20, 270, 515), P7('melon', 62, 1.1), P7('melon', 170, 1.0, null, 0, 30), ...fill15(['apple', 'orange'], 9, 120, 392, null, 0.9)] },
-  { name: 'Workshop', role: 'p', loadout: { knife: 4, axe: 2 }, solution: [{"w":"knife","pts":[[110.2,585],[410.2,585]]},{"w":"knife","pts":[[281,274.7],[281,574.7]]},{"w":"axe","pts":[[160.3,508.3],[0.3,388.3]]}],
+  { name: 'Workshop', role: 'p', loadout: { knife: 4, axe: 2 }, solution: [{"w":"knife","pts":[[110.2,585],[410.2,585]]},{"w":"knife","pts":[[281,274.7],[281,574.7]]},{"w":"axe","pts":[[160.3,508.3],[0.3,388.3]]},{"w":"knife","pts":[[187.1,352.3],[-72.7,502.3]]}],
     parts: [...W15.box(16, 126, 378, 462, { slot: ['floor', 71, 70], drop: 16, beam: false }), ...W15.hopper(250, 470, 80, 196, 352, 378, { ch: 30, sh: 0, bx0: 150 }), ...W15.chute(0, 560, 290, 610, { wall: 50, brace: 36 })],
     pile: [P7('melon', 340, 1.1, 567), ...fill15(['plum'], 6, 10, 280, 530), P7('coco', 71, 1.3), ...fill15(['cherry', 'lime'], 7, 18, 124), P7('melon', 250, 0.95), ...fill15(['lime'], 5, 204, 346)] },
 
@@ -3139,7 +3182,7 @@ const CLEAR15 = [
 const CLEAR11 = [
 /* CLEAR11 */
   { /*S11_1*/ solution: [{"w":"knife","pts":[[409.2,475.5],[149.4,625.5]]},{"w":"knife","pts":[[11.3,581.9],[311.3,581.9]]}], /*END*/name: "Melon Funnel", role: 'i', form: ["F", 101, "M", {pos: "c", fill: ["plum", "lime"], n: 14}], loadout: {knife: 4} },
-  { /*S11_2*/ solution: [{"w":"knife","pts":[[79.3,339.2],[79.3,639.2]]},{"w":"knife","pts":[[281,437.2],[21.2,587.2]]}], /*END*/name: "Again!", role: 'r', form: ["F", 201, "M", {pos: "pl", fill: ["orange", "apple"], n: 12, top: "M"}], loadout: {knife: 4} },
+  { /*S11_2*/ solution: [{"w":"knife","pts":[[79.3,339.2],[79.3,639.2]]},{"w":"knife","pts":[[181.1,360.1],[31.1,619.9]]},{"w":"knife","pts":[[-8.6,454.3],[141.4,714.1]]}], /*END*/name: "Again!", role: 'r', form: ["F", 201, "M", {pos: "pl", fill: ["orange", "apple"], n: 12, top: "M"}], loadout: {knife: 4} },
   { /*S11_3*/ solution: [{"w":"knife","pts":[[184,654.6],[249.6,325.1]]},{"w":"knife","pts":[[97.8,448],[357.7,598]]}], /*END*/name: "One Line", role: 'n', form: ["F", 303, "D", {pos: "c", fill: ["apple", "lime"], n: 14, "firstAim":"both"}], loadout: {knife: 4}, hint: ["One cut, two!"] },
   { /*S11_4*/ solution: [{"w":"knife","pts":[[101.3,450.8],[361.1,600.8]]},{"w":"knife","pts":[[323.1,455.6],[63.2,605.6]]},{"w":"knife","pts":[[109.6,566.3],[409.6,566.3]]}], /*END*/name: "Two Gaps", role: 'm', form: ["T", 403, "MM", {fill: ["lemon", "plum"], n: 16}], loadout: {knife: 6} },
   { /*S11_5*/ solution: [{"w":"knife","pts":[[277.1,436.5],[127.1,696.3]]},{"w":"knife","pts":[[270.7,421.6],[120.7,681.4]]}], /*END*/name: "Long One", role: 'n', form: ["F", 509, "L", {pos: "c", fill: ["plum", "berry"], n: 14}], loadout: {knife: 4} },
@@ -3154,7 +3197,7 @@ const CLEAR11 = [
   { /*S11_14*/ solution: [{"w":"axe","pts":[[84,657.6],[174,477.6]]},{"w":"knife","pts":[[-21,457.3],[238.8,607.3]]},{"w":"axe","pts":[[75.2,452.1],[75.2,652.1]]},{"w":"axe","pts":[[184.7,398.4],[344.7,278.4]]},{"w":"knife","pts":[[453,242.3],[193.2,392.3]]}], /*END*/name: "Nut House", role: 'p', form: ["B", 1401, "CC", {n: 34, top: "M"}], loadout: {axe: 4, knife: 2} },
   { /*S11_15*/ solution: [{"w":"saw","pts":[[-10,570.1],[290,570.1]]},{"w":"saw","pts":[[151.5,183.4],[134.6,219.6],[105.1,282.6],[319.8,361.8],[357.4,375.6]]},{"w":"saw","pts":[[90.9,271.6],[122.8,295.8],[295,426.8],[326.8,451]]},{"w":"knife","pts":[[101.1,424.3],[401.1,424.3]]},{"w":"saw","pts":[[146.2,445.7],[446.2,445.7]]}], /*END*/name: "Saw Trail", role: 'i', form: ["L", 1502, "OOM", {fill: ["plum"], n: 20}], loadout: {saw: 6, knife: 2}, pick: 'saw', hint: ["Saw through!"] },
   { /*S11_16*/ solution: [{"w":"saw","pts":[[197.8,413.7],[197.8,713.7]]},{"w":"knife","pts":[[153.4,366.5],[153.4,666.5]]},{"w":"saw","pts":[[283.2,410.9],[133.2,670.7]]},{"w":"knife","pts":[[91.6,556.3],[391.6,556.3]]}], /*END*/name: "Orange Jam", role: 'n', form: ["F", 1602, "O", {pos: "c", n: 25, top: "M"}], loadout: {saw: 3, knife: 3} },
-  { /*S11_17*/ solution: [{"w":"saw","pts":[[126.1,349.8],[126.1,649.8]]},{"w":"saw","pts":[[-7.2,429.4],[142.8,689.3]]},{"w":"knife","pts":[[-56.2,486],[203.6,636]]},{"w":"knife","pts":[[379.5,421.1],[119.7,571.1]]},{"w":"axe","pts":[[298,668.6],[298,468.6]]}], /*END*/name: "Jam and Nut", role: 'm', form: ["T", 1702, "OC", {n: 31}], loadout: {saw: 3, knife: 3, axe: 2} },
+  { /*S11_17*/ solution: [{"w":"saw","pts":[[126.1,349.8],[126.1,649.8]]},{"w":"knife","pts":[[58,409.4],[58,709.4]]},{"w":"knife","pts":[[22.5,527.5],[322.5,527.5]]},{"w":"axe","pts":[[384.1,625.5],[224.1,505.5]]},{"w":"knife","pts":[[323.1,417],[323.1,717]]},{"w":"saw","pts":[[318.6,404.3],[318.6,704.3]]},{"w":"saw","pts":[[82.2,406.1],[232.2,665.9]]},{"w":"axe","pts":[[130.6,460.6],[130.6,660.6]]}], /*END*/name: "Jam and Nut", role: 'm', form: ["T", 1702, "OC", {n: 31}], loadout: {saw: 3, knife: 3, axe: 2} },
   { /*S11_18*/ solution: [{"w":"knife","pts":[[-72.6,455.5],[187.2,605.5]]},{"w":"knife","pts":[[303.6,497.5],[43.8,647.5]]},{"w":"knife","pts":[[213.1,441.6],[63.1,701.4]]}], /*END*/name: "Easy Slice", role: 'r', form: ["F", 1801, "M", {pos: "l", n: 25, top: "M"}], loadout: {knife: 6} },
   { /*S11_19*/ solution: [{"w":"axe","pts":[[210,660.3],[300,480.3]]},{"w":"knife","pts":[[369.9,152.5],[219.9,412.3]]},{"w":"knife","pts":[[-24.8,353.4],[235,503.4]]},{"w":"knife","pts":[[2,412.3],[302,412.3]]},{"w":"knife","pts":[[48.1,348.1],[198.1,607.9]]},{"w":"saw","pts":[[26.7,398.2],[66.3,403.9],[137.3,414.2],[108.3,454.8],[85.1,487.3]]}], /*END*/name: "Zigzag", role: 'n', form: ["L", 1903, "OOC", {n: 31}], loadout: {axe: 2, knife: 6, saw: 2} },
   { /*S11_20*/ solution: [{"w":"axe","pts":[[122,668],[122,468]]},{"w":"saw","pts":[[144,409.4],[144,709.4]]},{"w":"knife","pts":[[209.2,173.8],[359.2,433.6]]},{"w":"knife","pts":[[458.1,176.5],[198.3,326.5]]},{"w":"knife","pts":[[-12.7,499.8],[247.1,649.8]]}], /*END*/name: "Stuck Tower", role: 'p', form: ["B", 2001, "OC", {n: 34, top: "C"}], loadout: {axe: 2, saw: 1, knife: 3} },
@@ -3182,10 +3225,10 @@ const CLEAR11 = [
   { /*S11_42*/ solution: [{"w":"knife","pts":[[107,575.4],[407,575.4]]},{"w":"mace","pts":[[200,402.4],[200,142.4]]},{"w":"knife","pts":[[257.8,213.1],[107.8,472.9]]},{"w":"mace","pts":[[227.8,316.6],[-32.2,316.6]]}], /*END*/name: "Nest in the Neck", role: 'n', form: ["H", 4201, "NM", {n: 34}], loadout: {knife: 3, mace: 3} },
   { /*S11_43*/ solution: [{"w":"knife","pts":[[194.2,433.6],[344.2,693.4]]},{"w":"knife","pts":[[193.4,433.3],[343.4,693.1]]},{"w":"axe","pts":[[150,450],[240,270]]},{"w":"axe","pts":[[226.8,178.1],[226.8,378.1]]},{"w":"saw","pts":[[289,405.9],[289,705.9]]}], /*END*/name: "Bottleneck", role: 'p', form: ["H", 4304, "CO", {n: 36, top: "C"}], loadout: {knife: 2, axe: 3, saw: 1} },
   { /*S11_44*/ solution: [{"w":"knife","pts":[[155.1,408.3],[305.1,668.1]]},{"w":"axe","pts":[[249.2,643.7],[159.2,463.7]]},{"w":"knife","pts":[[463.4,426],[203.6,576]]},{"w":"axe","pts":[[174.1,520.3],[264.1,340.3]]},{"w":"knife","pts":[[179.6,493.3],[479.6,493.3]]}], /*END*/name: "Peg Tower", role: 'm', form: ["P", 4402, "MC", {n: 31, top: "M"}], loadout: {knife: 5, axe: 3} },
-  { /*S11_45*/ solution: [{"w":"knife","pts":[[-15,488.8],[244.8,638.8]]},{"w":"knife","pts":[[-6.8,392.2],[143.2,652]]},{"w":"saw","pts":[[424.9,239.2],[165.1,389.2]]},{"w":"saw","pts":[[-37.7,510.2],[262.3,510.2]]}], /*END*/name: "Soft Floors", role: 'r', form: ["B", 4501, "MO", {n: 31}], loadout: {knife: 4, saw: 3} },
+  { /*S11_45*/ solution: [{"w":"knife","pts":[[-15,488.8],[244.8,638.8]]},{"w":"knife","pts":[[-6.8,392.2],[143.2,652]]},{"w":"saw","pts":[[424.9,239.2],[165.1,389.2]]},{"w":"saw","pts":[[137.1,560.1],[175.9,528.5],[206.3,505.7],[198.8,486.9],[160.8,491.8],[134.2,518.4],[105.4,546],[74.9,548.2],[43.5,522.8],[30.6,491.5],[47.5,482.6],[71.7,512.6],[88.2,550.3]]}], /*END*/name: "Soft Floors", role: 'r', form: ["B", 4501, "MO", {n: 31}], loadout: {knife: 4, saw: 3} },
   { /*S11_46*/ solution: [{"w":"knife","pts":[[193.8,361],[193.8,661]]},{"w":"knife","pts":[[252.2,410.4],[102.2,670.2]]},{"w":"knife","pts":[[-2.4,496.6],[257.5,646.6]]},{"w":"knife","pts":[[82.5,447.7],[232.5,707.5]]}], /*END*/name: "Hot Pepper", role: 'i', form: ["F", 4604, "B", {pos: "c", n: 25, top: "M"}], loadout: {knife: 6}, hint: ["Slice the chili!"] },
   { /*S11_47*/ solution: [{"w":"axe","pts":[[210.1,626.8],[370.1,506.8]]},{"w":"knife","pts":[[102.1,456.3],[361.9,606.3]]},{"w":"knife","pts":[[449.3,489.9],[189.5,639.9]]},{"w":"knife","pts":[[234.5,441.1],[384.5,700.9]]}], /*END*/name: "Pepper Pair", role: 'n', form: ["T", 4708, "BC", {n: 31}], loadout: {axe: 2, knife: 5} },
-  { /*S11_48*/ solution: [{"w":"mace","pts":[[127.2,535.5],[127.2,275.5]]},{"w":"knife","pts":[[30.7,382.2],[180.7,642]]},{"w":"knife","pts":[[149.7,253.5],[449.7,253.5]]},{"w":"knife","pts":[[7.4,473.7],[267.2,623.7]]},{"w":"mace","pts":[[120.5,467],[120.5,727]]}], /*END*/name: "Hot Floors", role: 'n', form: ["B", 4804, "BN", {n: 34}], loadout: {mace: 3, knife: 5} },
+  { /*S11_48*/ solution: [{"w":"mace","pts":[[127.2,535.5],[127.2,275.5]]},{"w":"knife","pts":[[30.7,382.2],[180.7,642]]},{"w":"knife","pts":[[149.7,253.5],[449.7,253.5]]},{"w":"mace","pts":[[63,595.7],[271,439.7]]}], /*END*/name: "Hot Floors", role: 'n', form: ["B", 4804, "BN", {n: 34}], loadout: {mace: 3, knife: 5} },
   { /*S11_49*/ solution: [{"w":"knife","pts":[[1.3,460.2],[261.1,610.2]]},{"w":"knife","pts":[[349.6,419],[89.8,569]]},{"w":"knife","pts":[[150,407.9],[150,707.9]]}], /*END*/name: "Long Rest II", role: 'r', form: ["F", 4902, "L", {pos: "c", n: 25}], loadout: {knife: 6} },
   { /*S11_50*/ solution: [{"w":"axe","pts":[[210.5,624.9],[50.5,504.9]]},{"w":"knife","pts":[[50,334.1],[350,334.1]]},{"w":"axe","pts":[[143.4,661.9],[143.4,461.9]]},{"w":"knife","pts":[[-55.1,566],[244.9,566]]},{"w":"knife","pts":[[6.1,316.6],[306.1,316.6]]},{"w":"axe","pts":[[228.2,607.7],[68.2,487.7]]},{"w":"knife","pts":[[289.3,476.7],[29.5,626.7]]},{"w":"knife","pts":[[239.4,495.7],[-20.4,645.7]]}], /*END*/name: "Fifty", role: 'p', form: ["H", 5002, "BC", {n: 36, top: "C"}], loadout: {axe: 4, knife: 5} },
   { /*S11_51*/ solution: [{"w":"axe","pts":[[350.4,625.3],[190.4,505.3]]},{"w":"saw","pts":[[369.9,128.8],[219.9,388.6]]},{"w":"saw","pts":[[-45,440.7],[255,440.7]]},{"w":"saw","pts":[[74.5,354.8],[144.3,394.2],[140.8,419.7],[100.4,429.8],[68.5,413.3],[32.4,377.3]]},{"w":"knife","pts":[[19.2,326.5],[169.2,586.3]]}], /*END*/name: "Spicy Ladder", role: 'm', form: ["L", 5102, "BOC", {n: 34}], loadout: {axe: 2, saw: 5, knife: 2} },
@@ -3194,39 +3237,39 @@ const CLEAR11 = [
   { /*S11_54*/ solution: [{"w":"knife","pts":[[335,419.1],[185,678.9]]},{"w":"knife","pts":[[154.6,548.8],[454.6,548.8]]},{"w":"knife","pts":[[125.5,213.5],[245.5,213.5]]}], /*END*/name: "Trapdoor", role: 'i', form: ["G", 5404, "M", {n: 25}], loadout: {knife: 5}, hint: ["Cut the rope!"] },
   { /*S11_55*/ solution: [{"w":"axe","pts":[[233.2,658.7],[323.2,478.7]]},{"w":"knife","pts":[[202.1,468.3],[461.9,618.3]]},{"w":"knife","pts":[[214.1,214.7],[-45.8,364.7]]},{"w":"knife","pts":[[222.9,437.8],[372.9,697.6]]}], /*END*/name: "Drop the Nuts", role: 'n', form: ["G", 5504, "C", {n: 31}], loadout: {axe: 2, knife: 5} },
   { /*S11_56*/ solution: [{"w":"knife","pts":[[142.6,357.8],[142.6,657.8]]},{"w":"saw","pts":[[82,379.6],[82,679.6]]},{"w":"knife","pts":[[89,396.1],[89,696.1]]},{"w":"knife","pts":[[209.5,237.3],[469.3,387.3]]},{"w":"saw","pts":[[121.2,426.1],[421.2,426.1]]}], /*END*/name: "Hatch Jam", role: 'n', form: ["G", 5601, "O", {n: 31}], loadout: {knife: 5, saw: 3} },
-  { /*S11_57*/ solution: [{"w":"knife","pts":[[-17.7,431.5],[132.3,691.3]]},{"w":"knife","pts":[[158.9,350.1],[8.9,609.9]]},{"w":"knife","pts":[[77.6,434.1],[77.6,734.1]]}], /*END*/name: "Side Pocket", role: 'r', form: ["F", 5701, "M", {pos: "pl", n: 28, top: "C"}], loadout: {knife: 6} },
-  { /*S11_58*/ solution: [{"w":"mace","pts":[[314.2,455],[158.2,663]]},{"w":"mace","pts":[[245.3,616.4],[245.3,356.4]]},{"w":"knife","pts":[[123.3,280.8],[228.7,223.2]]},{"w":"mace","pts":[[268.2,518.9],[424.2,726.9]]},{"w":"knife","pts":[[246.9,416.1],[396.9,675.9]]},{"w":"knife","pts":[[-17.7,440.5],[282.3,440.5]]}], /*END*/name: "Nest Drop", role: 'm', form: ["G", 5803, "N", {n: 34}], loadout: {mace: 5, knife: 5} },
+  { /*S11_57*/ solution: [{"w":"knife","pts":[[-17.7,431.5],[132.3,691.3]]},{"w":"knife","pts":[[158.9,350.1],[8.9,609.9]]},{"w":"knife","pts":[[260.1,462.9],[0.3,612.9]]},{"w":"knife","pts":[[81,400.3],[81,700.3]]},{"w":"knife","pts":[[158.9,512.7],[-100.9,662.7]]}], /*END*/name: "Side Pocket", role: 'r', form: ["F", 5701, "M", {pos: "pl", n: 28, top: "C"}], loadout: {knife: 6} },
+  { /*S11_58*/ solution: [{"w":"mace","pts":[[314.2,455],[158.2,663]]},{"w":"mace","pts":[[245.3,616.4],[245.3,356.4]]},{"w":"knife","pts":[[123.3,280.8],[228.7,223.2]]},{"w":"mace","pts":[[271.3,497.9],[115.3,705.9]]},{"w":"knife","pts":[[113.5,566.5],[413.5,566.5]]}], /*END*/name: "Nest Drop", role: 'm', form: ["G", 5803, "N", {n: 34}], loadout: {mace: 5, knife: 4} },
   { /*S11_59*/ solution: [{"w":"knife","pts":[[134.1,504.9],[434.1,504.9]]},{"w":"knife","pts":[[-67.1,257.3],[232.9,257.3]]}], /*END*/name: "Hot Hatch", role: 'p', form: ["G", 5906, "B", {n: 34, top: "C"}], loadout: {knife: 3} },
   { /*S11_60*/ solution: [{"w":"saw","pts":[[392.8,472.6],[355.2,505.9],[322.4,512.4],[259.6,510.3],[248.1,533.6],[280.6,604.8]]},{"w":"knife","pts":[[125,174.5],[275,434.4]]},{"w":"saw","pts":[[234.4,399.4],[234.4,699.4]]}], /*END*/name: "Easy Neck", role: 'r', form: ["H", 6001, "MO", {n: 31}], loadout: {saw: 4, knife: 2} },
   { /*S11_61*/ solution: [{"w":"mace","pts":[[238.6,461.7],[82.6,669.7]]},{"w":"axe","pts":[[203.2,480.9],[83.2,640.9]]},{"w":"mace","pts":[[55.3,190.5],[211.3,398.5]]},{"w":"axe","pts":[[211.5,483.6],[371.5,363.6]]},{"w":"saw","pts":[[295.5,270.6],[295.5,570.6]]}], /*END*/name: "Hard Ladder", role: 'm', form: ["L", 6104, "CON", {n: 34}], loadout: {mace: 3, axe: 3, saw: 2} },
   { /*S11_62*/ solution: [{"w":"knife","pts":[[110,571.6],[410,571.6]]},{"w":"mace","pts":[[318.4,304.4],[435.4,70.4]]},{"w":"saw","pts":[[125.4,451.5],[89.4,381.9],[82.8,345.7],[101.6,316.4],[118.2,321.1],[158.6,372.4],[192,378.6],[196.2,364.6],[181.8,343.2],[200.7,298.1],[242.7,269.5],[290.5,300.6]]},{"w":"knife","pts":[[-75.8,319.2],[184,469.2]]},{"w":"axe","pts":[[281,364.4],[281,164.4]]}], /*END*/name: "Everything", role: 'p', form: ["L", 6201, "NOB", {n: 36}], loadout: {knife: 2, mace: 2, saw: 1, axe: 2} },
   { /*S11_63*/ solution: [{"w":"knife","pts":[[261,396.5],[261,696.5]]},{"w":"knife","pts":[[33.1,416.1],[183.1,675.9]]},{"w":"knife","pts":[[86,449.2],[345.8,599.2]]},{"w":"knife","pts":[[17.3,546.1],[317.3,546.1]]}], /*END*/name: "Old Friends", role: 'r', form: ["T", 6301, "MM", {n: 31, top: "L"}], loadout: {knife: 7} },
-  { /*S11_64*/ solution: [{"w":"saw","pts":[[86.9,140.1],[107.7,174.3],[306.4,501.7],[279.9,563.9],[264.2,600.7]]},{"w":"knife","pts":[[136.6,494.7],[396.4,644.7]]},{"w":"axe","pts":[[118,433],[118,233]]},{"w":"axe","pts":[[156.4,156.1],[156.4,356.1]]},{"w":"knife","pts":[[184.6,432.8],[334.6,692.6]]}], /*END*/name: "Nut Floors", role: 'm', form: ["B", 6402, "CO", {n: 34, top: "M"}], loadout: {saw: 2, knife: 3, axe: 3} },
+  { /*S11_64*/ solution: [{"w":"saw","pts":[[86.9,140.1],[107.7,174.3],[306.4,501.7],[279.9,563.9],[264.2,600.7]]},{"w":"knife","pts":[[136.6,494.7],[396.4,644.7]]},{"w":"axe","pts":[[118,433],[118,233]]},{"w":"axe","pts":[[154.1,157.4],[154.1,357.4]]},{"w":"knife","pts":[[-67.6,239.1],[192.2,389.1]]}], /*END*/name: "Nut Floors", role: 'm', form: ["B", 6402, "CO", {n: 34, top: "M"}], loadout: {saw: 2, knife: 3, axe: 3} },
   { /*S11_65*/ solution: [{"w":"knife","pts":[[16.7,362.1],[166.7,621.9]]},{"w":"knife","pts":[[-38.4,429],[221.4,579]]},{"w":"knife","pts":[[146,230],[266,230]]}], /*END*/name: "Melon Drop", role: 'm', form: ["G", 6503, "D", {n: 34}], loadout: {knife: 5} },
   { /*S11_66*/ solution: [{"w":"axe","pts":[[84.7,519.2],[284.7,519.2]]},{"w":"mace","pts":[[259.7,396.2],[51.7,240.2]]},{"w":"mace","pts":[[142.7,395.7],[142.7,135.7]]},{"w":"mace","pts":[[258.3,402.2],[258.3,142.2]]},{"w":"knife","pts":[[119.2,196.9],[269.2,456.8]]}], /*END*/name: "Hard Neck", role: 'p', form: ["H", 6603, "NC", {n: 36, top: "C"}], loadout: {axe: 2, mace: 4, knife: 1} },
-  { /*S11_67*/ solution: [{"w":"saw","pts":[[365.7,345.4],[365.7,645.4]]},{"w":"saw","pts":[[217.4,545.6],[517.4,545.6]]},{"w":"knife","pts":[[248.5,406],[398.5,665.8]]}], /*END*/name: "Corner Jam", role: 'r', form: ["F", 6701, "O", {pos: "pr", n: 28}], loadout: {saw: 4, knife: 2} },
+  { /*S11_67*/ solution: [{"w":"saw","pts":[[365.7,345.4],[365.7,645.4]]},{"w":"saw","pts":[[410.4,573.7],[302.3,551.6],[271.9,533.6],[435.8,535.1],[374.1,487.7],[306.8,487.7]]}], /*END*/name: "Corner Jam", role: 'r', form: ["F", 6701, "O", {pos: "pr", n: 28}], loadout: {saw: 4, knife: 2} },
   { /*S11_68*/ solution: [{"w":"mace","pts":[[181.1,470.2],[25.1,678.2]]},{"w":"knife","pts":[[252.5,411.2],[252.5,711.2]]},{"w":"mace","pts":[[204.8,501.5],[48.8,709.5]]},{"w":"knife","pts":[[58.1,527.3],[358.1,527.3]]},{"w":"knife","pts":[[152.4,420.1],[302.4,680]]},{"w":"knife","pts":[[273.5,436.2],[123.5,696]]}], /*END*/name: "Pegs and Nest", role: 'm', form: ["P", 6804, "NC", {n: 34}], loadout: {mace: 3, knife: 6} },
   { /*S11_69*/ solution: [{"w":"mace","pts":[[280,488.4],[280,748.4]]},{"w":"knife","pts":[[36.1,530.1],[336.1,530.1]]},{"w":"knife","pts":[[310.5,464],[50.7,614]]},{"w":"axe","pts":[[364,626.4],[204,506.4]]}], /*END*/name: "Fire and Nuts", role: 'm', form: ["T", 6903, "BN", {n: 34}], loadout: {mace: 2, knife: 3, axe: 2} },
   { /*S11_70*/ solution: [{"w":"knife","pts":[[110,568.1],[410,568.1]]},{"w":"mace","pts":[[214.4,262.7],[474.4,262.7]]},{"w":"mace","pts":[[160.6,409.7],[368.6,253.7]]},{"w":"axe","pts":[[72.6,348.9],[192.6,508.9]]},{"w":"axe","pts":[[38.8,308.5],[158.8,468.5]]}], /*END*/name: "Seventy", role: 'p', form: ["L", 7002, "CNB", {n: 36, top: "C"}], loadout: {knife: 1, mace: 3, axe: 3} },
   { /*S11_71*/ solution: [{"w":"knife","pts":[[199,440],[49,699.8]]},{"w":"knife","pts":[[195.7,396.5],[45.7,656.3]]},{"w":"knife","pts":[[-41.4,452.9],[218.4,602.9]]},{"w":"knife","pts":[[217.8,518],[-42,668]]},{"w":"knife","pts":[[-102.2,568.6],[197.8,568.6]]}], /*END*/name: "Melon Pair", role: 'r', form: ["F", 7101, "D", {pos: "l", n: 28}], loadout: {knife: 9} },
   { /*S11_72*/ solution: [{"w":"axe","pts":[[169.3,624.8],[329.3,504.8]]},{"w":"knife","pts":[[203,436.7],[353,696.5]]},{"w":"knife","pts":[[116.5,533],[416.5,533]]},{"w":"knife","pts":[[115.6,569.8],[415.6,569.8]]},{"w":"knife","pts":[[-46.5,289.4],[253.5,289.4]]}], /*END*/name: "Nut Hatch", role: 'm', form: ["G", 7202, "C", {n: 34, top: "M"}], loadout: {axe: 2, knife: 6} },
-  { /*S11_73*/ solution: [{"w":"mace","pts":[[47.8,520.3],[307.8,520.3]]},{"w":"knife","pts":[[-42.9,559.7],[257.1,559.7]]},{"w":"mace","pts":[[249.5,366.6],[366.5,132.6]]},{"w":"mace","pts":[[316.1,302.7],[56.1,302.7]]}], /*END*/name: "Busy Floors", role: 'm', form: ["B", 7303, "NO", {n: 34}], loadout: {mace: 5, knife: 2} },
+  { /*S11_73*/ solution: [{"w":"mace","pts":[[47.8,520.3],[307.8,520.3]]},{"w":"knife","pts":[[-42.9,559.7],[257.1,559.7]]},{"w":"mace","pts":[[249.5,366.6],[366.5,132.6]]},{"w":"mace","pts":[[316.1,302.7],[56.1,302.7]]},{"w":"mace","pts":[[329.7,317.8],[69.7,317.8]]}], /*END*/name: "Busy Floors", role: 'm', form: ["B", 7303, "NO", {n: 34}], loadout: {mace: 5, knife: 2} },
   { /*S11_74*/ solution: [{"w":"axe","pts":[[208.9,661.5],[208.9,461.5]]},{"w":"knife","pts":[[76.5,409.9],[226.5,669.7]]},{"w":"knife","pts":[[53.3,322.4],[203.3,582.2]]},{"w":"axe","pts":[[84.8,416.7],[284.8,416.7]]},{"w":"axe","pts":[[315.2,644],[155.2,524]]}], /*END*/name: "Hot Pegs", role: 'p', form: ["P", 7403, "BC", {n: 36, top: "C"}], loadout: {axe: 4, knife: 2} },
   { /*S11_75*/ solution: [{"w":"knife","pts":[[253.2,399.8],[103.2,659.6]]},{"w":"knife","pts":[[353.2,416.5],[203.2,676.4]]},{"w":"knife","pts":[[97,556],[397,556]]},{"w":"knife","pts":[[266.3,412.2],[266.3,712.2]]}], /*END*/name: "Easy Long", role: 'r', form: ["T", 7502, "LM", {n: 31}], loadout: {knife: 7} },
   { /*S11_76*/ solution: [{"w":"knife","pts":[[48.9,413.2],[198.9,673]]},{"w":"knife","pts":[[125.1,185.8],[275.1,445.7]]},{"w":"saw","pts":[[304.5,140.2],[154.5,400]]},{"w":"saw","pts":[[97.5,290.5],[142.4,281.6],[165.3,274],[195.9,256.9],[262.6,234.2],[293.7,249.1],[284.4,264.9],[262.2,277.7],[235.5,306.1],[200,308.2],[175.3,303.7],[151.9,275.5],[163.6,235.3]]}], /*END*/name: "Jam and Fire", role: 'm', form: ["H", 7604, "OB", {n: 34}], loadout: {knife: 3, saw: 3} },
   { /*S11_77*/ solution: [{"w":"knife","pts":[[247.4,369.3],[97.4,629.1]]},{"w":"axe","pts":[[104.9,374.6],[104.9,174.6]]},{"w":"knife","pts":[[262.9,493.1],[3.1,643.1]]},{"w":"axe","pts":[[206.6,481.1],[366.6,361.1]]},{"w":"knife","pts":[[7.2,247.8],[307.2,247.8]]}], /*END*/name: "Stairs", role: 'm', form: ["L", 7702, "MCO", {n: 34}], loadout: {knife: 5, axe: 3} },
   { /*S11_78*/ solution: [{"w":"mace","pts":[[301,478.1],[561,478.1]]},{"w":"mace","pts":[[286.9,492.6],[442.9,700.6]]},{"w":"knife","pts":[[131.7,522.8],[431.7,522.8]]},{"w":"knife","pts":[[161.2,558.7],[461.2,558.7]]},{"w":"knife","pts":[[-94.7,315.2],[205.3,315.2]]}], /*END*/name: "Heavy Hatch", role: 'p', form: ["G", 7804, "N", {n: 36, top: "CC"}], loadout: {mace: 3, knife: 3} },
-  { /*S11_79*/ solution: [{"w":"axe","pts":[[-48.2,629],[111.8,509]]},{"w":"knife","pts":[[221,425.1],[-38.8,575.1]]},{"w":"knife","pts":[[143.4,384.9],[-6.6,644.7]]},{"w":"knife","pts":[[-6.7,499.6],[293.3,499.6]]}], /*END*/name: "Pocket Nut", role: 'r', form: ["F", 7904, "C", {pos: "pl", n: 28, top: "M"}], loadout: {axe: 2, knife: 6} },
+  { /*S11_79*/ solution: [{"w":"axe","pts":[[-48.2,629],[111.8,509]]},{"w":"knife","pts":[[-89.6,487.1],[210.4,487.1]]},{"w":"axe","pts":[[-22,387.5],[98,547.5]]}], /*END*/name: "Pocket Nut", role: 'r', form: ["F", 7904, "C", {pos: "pl", n: 28, top: "M"}], loadout: {axe: 2, knife: 5} },
   { /*S11_80*/ solution: [{"w":"mace","pts":[[174.6,612.3],[-33.4,456.3]]},{"w":"knife","pts":[[154.7,426.3],[4.7,686.2]]},{"w":"mace","pts":[[207,315.4],[467,315.4]]},{"w":"mace","pts":[[357,315.1],[97,315.1]]}], /*END*/name: "Eighty", role: 'p', form: ["B", 8002, "NN", {n: 36, top: "C"}], loadout: {mace: 4, knife: 1} },
   { /*S11_81*/ solution: [{"w":"saw","pts":[[280.1,413.6],[280.1,713.6]]},{"w":"knife","pts":[[307.7,373.6],[307.7,673.6]]},{"w":"knife","pts":[[39,406],[189,665.8]]},{"w":"knife","pts":[[91.3,545.1],[391.3,545.1]]},{"w":"knife","pts":[[115.3,568.1],[415.3,568.1]]}], /*END*/name: "Calm", role: 'r', form: ["T", 8101, "MO", {n: 31}], loadout: {saw: 2, knife: 7} },
   { /*S11_82*/ solution: [{"w":"knife","pts":[[230.1,413.8],[230.1,713.8]]},{"w":"saw","pts":[[131,535.4],[288.4,547.4],[313.9,519.5],[101.9,508.5]]},{"w":"axe","pts":[[112.2,473.5],[272.2,353.5]]},{"w":"knife","pts":[[134.9,435.9],[284.9,695.7]]}], /*END*/name: "Peg Jam", role: 'm', form: ["P", 8203, "OM", {n: 34, top: "C"}], loadout: {knife: 3, saw: 2, axe: 2} },
   { /*S11_83*/ solution: [{"w":"mace","pts":[[182.4,443],[182.4,703]]},{"w":"axe","pts":[[89.9,564.4],[289.9,564.4]]},{"w":"knife","pts":[[225,181.6],[225,481.6]]},{"w":"knife","pts":[[66.2,332.2],[366.2,332.2]]}], /*END*/name: "Hot Neck", role: 'm', form: ["H", 8301, "BN", {n: 36}], loadout: {mace: 2, axe: 2, knife: 3} },
-  { /*S11_84*/ solution: [{"w":"axe","pts":[[170.7,625.4],[330.7,505.4]]},{"w":"mace","pts":[[354.6,313.3],[146.6,157.3]]},{"w":"knife","pts":[[-24.8,350.4],[235,500.4]]},{"w":"mace","pts":[[289.9,186.9],[289.9,446.9]]},{"w":"mace","pts":[[1.6,413.6],[261.6,413.6]]},{"w":"knife","pts":[[111.4,328.5],[111.4,628.5]]}], /*END*/name: "Long Climb", role: 'p', form: ["L", 8401, "NOC", {n: 36, top: "C"}], loadout: {axe: 2, mace: 4, knife: 2} },
+  { /*S11_84*/ solution: [{"w":"axe","pts":[[170.7,625.4],[330.7,505.4]]},{"w":"mace","pts":[[354.6,313.3],[146.6,157.3]]},{"w":"knife","pts":[[-24.8,350.4],[235,500.4]]},{"w":"mace","pts":[[256.4,328.4],[373.4,94.4]]},{"w":"knife","pts":[[-124.9,392.3],[175.1,392.3]]},{"w":"axe","pts":[[-4.3,449.1],[195.7,449.1]]}], /*END*/name: "Long Climb", role: 'p', form: ["L", 8401, "NOC", {n: 36, top: "C"}], loadout: {axe: 2, mace: 4, knife: 2} },
   { /*S11_85*/ solution: [{"w":"knife","pts":[[389.6,361.2],[239.6,621]]},{"w":"knife","pts":[[374.9,439.4],[224.9,699.2]]},{"w":"knife","pts":[[13.6,287.4],[313.6,287.4]]},{"w":"knife","pts":[[217.7,389.9],[217.7,689.9]]}], /*END*/name: "Easy Hatch", role: 'r', form: ["G", 8504, "M", {n: 31, top: "M"}], loadout: {knife: 7} },
-  { /*S11_86*/ solution: [{"w":"axe","pts":[[378.5,623.2],[218.5,503.2]]},{"w":"mace","pts":[[114,487.9],[114,747.9]]},{"w":"knife","pts":[[-17.6,428.8],[242.2,578.8]]},{"w":"knife","pts":[[13.9,539.2],[313.9,539.2]]},{"w":"knife","pts":[[454,449.9],[194.2,599.9]]},{"w":"axe","pts":[[207.8,624.6],[367.8,504.6]]}], /*END*/name: "Two Hard", role: 'm', form: ["T", 8601, "NC", {n: 34, top: "M"}], loadout: {axe: 3, mace: 2, knife: 5} },
+  { /*S11_86*/ solution: [{"w":"axe","pts":[[378.5,623.2],[218.5,503.2]]},{"w":"mace","pts":[[114,487.9],[114,747.9]]},{"w":"knife","pts":[[270,384.2],[270,684.2]]},{"w":"mace","pts":[[163.8,455.8],[7.8,663.8]]}], /*END*/name: "Two Hard", role: 'm', form: ["T", 8601, "NC", {n: 34, top: "M"}], loadout: {axe: 3, mace: 2, knife: 3} },
   { /*S11_87*/ solution: [{"w":"knife","pts":[[137.9,488.4],[397.7,638.4]]},{"w":"saw","pts":[[359.4,532.1],[261.3,558.6],[255.8,514.4],[391.8,508.6],[416.1,444.4],[255.3,467]]},{"w":"knife","pts":[[-50,320.4],[250,320.4]]},{"w":"knife","pts":[[57.6,439.2],[317.4,589.2]]},{"w":"knife","pts":[[112.3,546.7],[412.3,546.7]]}], /*END*/name: "Spice Rack", role: 'm', form: ["B", 8701, "BO", {n: 34, top: "C"}], loadout: {knife: 6, saw: 2} },
   { /*S11_88*/ solution: [{"w":"mace","pts":[[270,532.1],[387,298.1]]},{"w":"mace","pts":[[209.7,265.7],[209.7,5.7]]},{"w":"axe","pts":[[157,364.4],[317,244.4]]},{"w":"axe","pts":[[288.4,259.4],[168.4,419.4]]},{"w":"mace","pts":[[233.2,319.4],[-26.8,319.4]]},{"w":"knife","pts":[[289,216.3],[139,476.1]]}], /*END*/name: "Nut Neck", role: 'p', form: ["H", 8808, "NN", {n: 36, top: "C"}], loadout: {mace: 4, axe: 3, knife: 1} },
-  { /*S11_89*/ solution: [{"w":"knife","pts":[[48.8,530.7],[348.8,530.7]]},{"w":"knife","pts":[[365.7,416.4],[215.7,676.2]]},{"w":"knife","pts":[[377.6,501.2],[117.8,651.2]]},{"w":"knife","pts":[[95.6,571.5],[395.6,571.5]]}], /*END*/name: "Pop", role: 'r', form: ["F", 8901, "B", {pos: "r", n: 28}], loadout: {knife: 7} },
+  { /*S11_89*/ solution: [{"w":"knife","pts":[[48.8,530.7],[348.8,530.7]]},{"w":"knife","pts":[[365.7,416.4],[215.7,676.2]]},{"w":"knife","pts":[[139.8,541.4],[439.8,541.4]]}], /*END*/name: "Pop", role: 'r', form: ["F", 8901, "B", {pos: "r", n: 28}], loadout: {knife: 7} },
   { /*S11_90*/ solution: [{"w":"knife","pts":[[50.4,495.6],[350.4,495.6]]},{"w":"knife","pts":[[92.9,529.1],[392.9,529.1]]},{"w":"knife","pts":[[-90.4,255.5],[209.6,255.5]]},{"w":"knife","pts":[[-10.2,365.1],[249.6,515.1]]}], /*END*/name: "Ninety", role: 'p', form: ["G", 9005, "B", {n: 36, top: "CC"}], loadout: {knife: 5} },
   { /*S11_91*/ solution: [{"w":"knife","pts":[[33.8,419],[183.8,678.8]]},{"w":"knife","pts":[[200,419.2],[350,679]]},{"w":"knife","pts":[[-41.3,569.4],[258.7,569.4]]}], /*END*/name: "Melons", role: 'r', form: ["T", 9101, "MM", {n: 31, top: "M"}], loadout: {knife: 6} },
   { /*S11_92*/ solution: [{"w":"mace","pts":[[139.9,449.2],[139.9,709.2]]},{"w":"knife","pts":[[-24.9,208],[234.9,358]]},{"w":"mace","pts":[[353.7,279.9],[197.7,487.9]]},{"w":"knife","pts":[[234.7,207.8],[-25.1,357.8]]},{"w":"knife","pts":[[159.8,152.2],[9.8,412]]},{"w":"knife","pts":[[315,303.8],[315,603.8]]}], /*END*/name: "Fire Stairs", role: 'm', form: ["L", 9201, "OBN", {n: 36}], loadout: {mace: 3, knife: 6} },
@@ -3234,8 +3277,8 @@ const CLEAR11 = [
   { /*S11_94*/ solution: [{"w":"mace","pts":[[270,641.6],[270,381.6]]},{"w":"knife","pts":[[375.7,487.5],[115.9,637.5]]},{"w":"axe","pts":[[223.2,661.2],[313.2,481.2]]},{"w":"axe","pts":[[51.8,409.4],[141.8,229.4]]},{"w":"axe","pts":[[112.3,185.8],[112.3,385.8]]}], /*END*/name: "Iron Tower", role: 'p', form: ["B", 9402, "CN", {n: 36, top: "CC"}], loadout: {mace: 2, knife: 1, axe: 4} },
   { /*S11_95*/ solution: [{"w":"knife","pts":[[-55.2,463.5],[204.6,613.5]]},{"w":"knife","pts":[[236.1,448.8],[-23.7,598.8]]},{"w":"saw","pts":[[241.6,514.7],[13.5,515.6],[-8.5,501],[230.8,486.6]]},{"w":"knife","pts":[[146.4,411.9],[146.4,711.9]]}], /*END*/name: "Last Rest", role: 'r', form: ["F", 9501, "O", {pos: "l", n: 31}], loadout: {knife: 6, saw: 2} },
   { /*S11_96*/ solution: [{"w":"knife","pts":[[277.4,343.9],[277.4,643.9]]},{"w":"saw","pts":[[132.7,547.5],[432.7,547.5]]},{"w":"saw","pts":[[147.5,399.2],[297.5,659]]},{"w":"knife","pts":[[-99.3,270.3],[200.7,270.3]]},{"w":"saw","pts":[[292.2,411.9],[292.2,711.9]]},{"w":"knife","pts":[[107.2,549],[407.2,549]]}], /*END*/name: "Jam Hatch", role: 'm', form: ["G", 9603, "O", {n: 36, top: "C"}], loadout: {knife: 5, saw: 5} },
-  { /*S11_97*/ solution: [{"w":"mace","pts":[[135.4,527.3],[18.4,293.3]]},{"w":"knife","pts":[[18.4,454.6],[278.2,604.6]]},{"w":"mace","pts":[[140.8,263.6],[400.8,263.6]]},{"w":"knife","pts":[[11.1,327.9],[311.1,327.9]]},{"w":"mace","pts":[[198.8,263.6],[458.8,263.6]]}], /*END*/name: "Hard Neck II", role: 'p', form: ["H", 9704, "CN", {n: 36, top: "CC"}], loadout: {mace: 4, knife: 2} },
-  { /*S11_98*/ solution: [{"w":"knife","pts":[[-29.8,535.1],[270.2,535.1]]},{"w":"saw","pts":[[378.9,434.2],[228.9,694.1]]},{"w":"knife","pts":[[327,412],[327,712]]},{"w":"axe","pts":[[209.9,618.6],[49.9,498.6]]},{"w":"saw","pts":[[37.4,537.6],[337.4,537.6]]}], /*END*/name: "Hot Jam", role: 'm', form: ["T", 9801, "BO", {n: 36, top: "C"}], loadout: {knife: 3, saw: 3, axe: 2} },
+  { /*S11_97*/ solution: [{"w":"mace","pts":[[135.4,527.3],[18.4,293.3]]},{"w":"knife","pts":[[18.4,454.6],[278.2,604.6]]},{"w":"mace","pts":[[140.8,263.6],[400.8,263.6]]},{"w":"knife","pts":[[80.6,326.2],[380.6,326.2]]},{"w":"mace","pts":[[116.1,309.7],[116.1,49.7]]},{"w":"mace","pts":[[235.5,259.7],[235.5,519.7]]}], /*END*/name: "Hard Neck II", role: 'p', form: ["H", 9704, "CN", {n: 36, top: "CC"}], loadout: {mace: 4, knife: 2} },
+  { /*S11_98*/ solution: [{"w":"knife","pts":[[-29.8,535.1],[270.2,535.1]]},{"w":"saw","pts":[[378.9,434.2],[228.9,694.1]]},{"w":"knife","pts":[[278.5,419.7],[278.5,719.7]]},{"w":"axe","pts":[[209.9,618.6],[49.9,498.6]]},{"w":"knife","pts":[[219.1,483.4],[-40.7,633.4]]},{"w":"saw","pts":[[318.4,416.8],[318.4,716.8]]}], /*END*/name: "Hot Jam", role: 'm', form: ["T", 9801, "BO", {n: 36, top: "C"}], loadout: {knife: 3, saw: 3, axe: 2} },
   { /*S11_99*/ solution: [{"w":"axe","pts":[[229.7,625.6],[69.7,505.6]]},{"w":"knife","pts":[[144.9,398.1],[444.9,398.1]]},{"w":"mace","pts":[[105,186.3],[105,446.3]]},{"w":"axe","pts":[[298.9,345.3],[418.9,505.3]]}], /*END*/name: "Almost", role: 'p', form: ["L", 9901, "NBC", {n: 38, top: "C"}], loadout: {axe: 3, knife: 1, mace: 2} },
   { /*S11_100*/ solution: [{"w":"mace","pts":[[259.3,532],[376.3,298]]},{"w":"knife","pts":[[371.4,489.9],[111.6,639.9]]},{"w":"knife","pts":[[163.9,432.9],[313.9,692.7]]},{"w":"knife","pts":[[216.1,184.3],[66.1,444.1]]},{"w":"knife","pts":[[45.3,528.1],[345.3,528.1]]},{"w":"mace","pts":[[312.4,484.5],[312.4,744.5]]}], /*END*/name: "One Hundred", role: 'p', form: ["G", 10002, "N", {n: 38, top: "CB"}], loadout: {mace: 3, knife: 4} },
 /* END CLEAR11 */
@@ -4737,7 +4780,7 @@ function applyTheme(){
   r.setProperty('--world', th.world); r.setProperty('--world2', th.world2);
   const m = document.querySelector('meta[name="theme-color"]'); if (m) m.setAttribute('content', th.world2);
 }
-const VIEW7 = { top: 64, bottom: CFG.grindY + 61, anchor: CFG.grindY + 104, pad: 9 };   // v18: anchor — мир у верха кнопок лотка (низ передней доски корыта; кнопка стоит на траве, как на рефе), масштаб — по bottom, как прежде         // v7: стойки нет — низ экрана отдан куче, зоне полёта и жерновам; v10: + жёлоб целиком над лотком; v12 круг 5: жёлоб ниже (низ grindY + 58, тень + 61) — поле во всю ширину
+const VIEW7 = { top: 64, bottom: CFG.grindY + 61, anchor: CFG.grindY + 104, pad: 0 };   // v22: pad 0 — низ корыта не ниже верха поднятой (выбранной) кнопки;   // v18: anchor — мир у верха кнопок лотка (низ передней доски корыта; кнопка стоит на траве, как на рефе), масштаб — по bottom, как прежде         // v7: стойки нет — низ экрана отдан куче, зоне полёта и жерновам; v10: + жёлоб целиком над лотком; v12 круг 5: жёлоб ниже (низ grindY + 58, тень + 61) — поле во всю ширину
 let LAY = null;                                              // v12 круг 6: текущий кадр; у VIEW7 верх (VIEW.top — обод) считает fit()
 function setLayout(){ const L = VIEW7; if (LAY !== L){ LAY = L; VIEW.top = L.top; VIEW.bottom = L.bottom; fit(); } }
 // v12 круг 6: верх кучи на старте уровня (fit оставляет над ним VIEW.swing ед. для замаха ниже кнопок верха)
@@ -4763,7 +4806,7 @@ function startLevel(n){
   order.forEach((b, i) => FX.intro.set(b.id, VIEW.introSpread * (N > 1 ? i / (N - 1) : 0)));
   G.introAt = G.rt; G.introUntil = G.rt + (REDUCED ? 0 : VIEW.introSpread + VIEW.introT); FX.introOn = true; log('fx.start', 'intro', 'bodies=' + N);
   log('event', 'level.start', 'level=' + n + ' moves=' + G.s.moves + ' bodies=' + N + ' tpl=' + (G.s.level.tpl || '') + '');
-  addWord(G.s.level.name, 200, CFG.grindY - 80, { size: 34, dur: 1.5, rise: 6, quiet: true });   // название уровня — в пустой зоне полёта
+  addWord(G.s.level.name, 200, CFG.grindY - 50, { size: 34, dur: V22.hint.title, rise: 6, quiet: true });   // v22: название 0,8 с — уходит до падения фруктов   // название уровня — в пустой зоне полёта
   Sound.play('drop', N);
   $('toast').classList.add('hide'); toastUntil = 0;
   TRAYV.key = ''; goto('game'); hud(); fit();
@@ -4866,7 +4909,9 @@ function fit(){
     nv = { k, ox: (r.width - CFG.W * k) / 2, oy: bot - VIEW.bottom * k, w: r.width, h: r.height, k0, kc5 };
     if (trayH){ const bt = $('tray').getBoundingClientRect().top - r.top + VIEW7.pad, o0 = nv.oy;   // v18: корыто над кнопками — кадр выше, масштаб тот же;
       nv.oy = Math.min(o0, bt - VIEW7.anchor * k);                                                    // но над кучей остаётся запас замаха VIEW.swing (иначе кнопка
-      if (G.heapTop > -1e9 && G.heapTop < 1e9) nv.oy = Math.max(nv.oy, Math.min(o0, top + (VIEW.swing - G.heapTop) * k)); }   // заходит на низ доски)
+      if (G.heapTop > -1e9 && G.heapTop < 1e9){ const kM = (bt - top) / Math.max(100, VIEW7.anchor + VIEW.swing - G.heapTop);   // v22: запас замаха и корыто над кнопкой
+          if (kM < k){ k = kM; nv.k = k; nv.ox = (r.width - CFG.W * k) / 2; }                                                  // не влезают вместе — кадр мельче, кнопка не заходит
+          nv.oy = Math.min(bot - VIEW.bottom * k, bt - VIEW7.anchor * k); nv.oy = Math.max(nv.oy, Math.min(bot - VIEW.bottom * k, top + (VIEW.swing - G.heapTop) * k)); } }   // на корыто (было: кадр ниже)
     const yH = (top - nv.oy) / k;                             // мир у низа HUD
     VIEW.top = yH <= VIEW7.top + 6 ? VIEW7.top : -nv.oy / k - 30;   // короб целиком под HUD — обод на месте; иначе — за верхом экрана
   } else {
@@ -4985,9 +5030,9 @@ function updateHint(){
   if (s && s.level.v11){
     const can = hintWant11(s) && G.screen === 'game' && !s.won && !s.lost && !G.aim && G.rt >= G.introUntil + 1 && !s.cutWin && !G.autoThrow;
     if (!can){ hideHint(); return; }
-    const wait = s.level.hint && !s.used && !s.thrown.length ? 0.35 : HINT11.idle;
+    const wait = s.level.hint ? V22.hint.idle : HINT11.idle;   // v22: рука — после 1,2–1,5 с бездействия (было 0,35 с на первом броске уровня с подсказкой)
     if (!T.on && isSettled(s) && G.rt - Math.max(G.lastInput, G.introUntil + 1) > wait){   // простой — с конца названия уровня или с последнего касания
-      const t = liveHint11(s); if (t){ T.w = t.w; T.line = hintVisible(weaponPath(t.w, t.pts, s)); if (T.line){ T.on = true; T.t0 = G.rt; T.n++; log('fx.start', 'hand', t.w + ' ' + (s.used + 1)); } } }
+      const t = liveHint11(s); if (t){ T.w = t.w; T.clip = null; T.line = hintVisible(weaponPath(t.w, t.pts, s)); if (T.line){ T.on = true; T.t0 = G.rt; T.n++; log('fx.start', 'hand', t.w + ' ' + (s.used + 1)); } } }
     return;
   }
   const want = s && (!!s.level.hint && s.used < s.level.hint.length && T.n < 4 && !s.flight && !!sol7Peek(s));
@@ -5001,7 +5046,17 @@ function updateHint(){
 }
 // v7: следующий бросок записанного решения уровня (рука на знакомстве, автоигра) — по числу потраченных инструментов.
 function sol7Peek(s){ const L = s.level.solution; if (!L) return null; const t = L[s.used]; return t && s.ammo[t.w] > 0 ? t : null; }
-function hideHint(){ const T = FX.tut; if (T.on){ T.on = false; log('fx.end', 'hand'); } trayHand(null); }
+function hideHint(){ const T = FX.tut; if (T.on){ T.on = false; log('fx.end', 'hand'); } T.clip = null; trayHand(null); }
+// v22 (GPT №1, п. 12): пунктир подсказки — только область свайпа: часть траектории, что идёт по телам кучи, с запасом V22.hint.pad
+// (3–5 % W) с обеих сторон; не нашлось тел на пути — прежняя траектория целиком
+function hint22Clip(s, P){
+  const L = pathLen(P), pad = V22.hint.pad; if (!(L > 0)) return P; let a = 1e9, b = -1e9;
+  for (let d = 0; d <= L; d += 3){ const q = flightAt({ path: P }, d); for (const bd of s.bodies) if (Math.hypot(q[0] - bd.x, q[1] - bd.y) < bd.rad + 2){ a = Math.min(a, d); b = Math.max(b, d); break; } }
+  if (b < a) return P; a = Math.max(0, a - pad); b = Math.min(L, b + pad); if (b - a < 40){ const m = (a + b) / 2; a = Math.max(0, m - 20); b = Math.min(L, m + 20); }
+  const out = [flightAt({ path: P }, a)]; let acc = 0;
+  for (let i = 1; i < P.length; i++){ acc += Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]); if (acc > a && acc < b) out.push(P[i]); }
+  out.push(flightAt({ path: P }, b)); return out.map(q => [q[0], q[1]]);
+}
 function drawHint(c, s){
   const T = FX.tut; if (!T.on || !T.line) return;
   if (T.w) return drawHintThrow(c, s, T);                       // v6: рука бросает оружие
@@ -5016,7 +5071,7 @@ function drawHint(c, s){
     c.setLineDash([9, 6]); c.lineCap = 'round'; c.beginPath(); c.moveTo(ax, ay); c.lineTo(ax + (bx - ax) * trail, ay + (by - ay) * trail);
     c.lineWidth = 5.5; c.strokeStyle = 'rgba(43,33,64,0.55)'; c.stroke(); c.lineWidth = 2.8; c.strokeStyle = '#ffffff'; c.stroke(); c.setLineDash([]);
   }
-  drawHand(c, x, y, 1.15, press, al);
+  drawHand(c, x, y, V22.hint.hand, press, al);
   const txt = hintText(s);
   c.font = '700 27px ' + FONT; c.textAlign = 'center'; c.textBaseline = 'middle'; c.lineJoin = 'round';
   const ty = CFG.grindY - 64;           // v4: в пустой зоне полёта, не поверх композиции
@@ -5031,7 +5086,7 @@ function drawHintPath(c, s, T){
   const H = at(e * tot);
   if (e > 0){ c.setLineDash([9, 6]); c.lineCap = 'round'; c.lineJoin = 'round'; c.beginPath(); c.moveTo(P[0][0], P[0][1]); for (let i = 1; i < H[2]; i++) c.lineTo(P[i][0], P[i][1]); c.lineTo(H[0], H[1]);
     c.lineWidth = 5.5; c.strokeStyle = 'rgba(43,33,64,0.55)'; c.stroke(); c.lineWidth = 2.8; c.strokeStyle = '#ffffff'; c.stroke(); c.setLineDash([]); }
-  drawHand(c, H[0], H[1], 1.15, press, al);
+  drawHand(c, H[0], H[1], V22.hint.hand, press, al);
   const txt = hintText(s); if (!txt) return; c.font = '700 26px ' + FONT; c.textAlign = 'center'; c.textBaseline = 'middle'; c.lineJoin = 'round';
   const ty = CFG.grindY - 70; c.lineWidth = 7; c.strokeStyle = VIEW.ink; c.strokeText(txt, 200, ty); c.fillStyle = '#ffffff'; c.fillText(txt, 200, ty);
 }
@@ -5326,7 +5381,7 @@ function drawHintTray(c, s, T){ return trayHand(T.w); }
 function drawHintThrow(c, s, T){
   if (s.level.v11 && s.weapon !== T.w && s.ammo[T.w] > 0 && drawHintTray(c, s, T)) return;
   trayHand(null);
-  const P = T.line, tot = pathLen(P), dur = 1.6 + tot / 420, u = ((G.rt - T.t0) % dur) / dur;
+  const P = T.clip || (T.clip = hint22Clip(s, T.line)), tot = pathLen(P), dur = 1.6 + tot / 420, u = ((G.rt - T.t0) % dur) / dur;   // v22: рука и пунктир — только по области реза
   let press = 0, al = 1, e = 0;
   if (u < 0.16){ press = u / 0.16; al = Math.min(1, u / 0.07); } else if (u < 0.66){ const q = (u - 0.16) / 0.5; e = q * q * (3 - 2 * q); press = 1; } else if (u < 0.8){ e = 1; press = 1 - (u - 0.66) / 0.14; } else { e = 1; al = 1 - (u - 0.8) / 0.2; }
   const H = flightAt({ path: P }, e * tot), ang = Math.atan2(P[1][1] - P[0][1], P[1][0] - P[0][0]);
@@ -5335,7 +5390,7 @@ function drawHintThrow(c, s, T){
     c.lineWidth = 5.5; c.strokeStyle = 'rgba(43,33,64,0.55)'; c.stroke(); c.lineWidth = 2.8; c.strokeStyle = '#ffffff'; c.stroke(); c.setLineDash([]); }
   if (u > 0.05 && u < 0.8) drawWeapon(c, T.w, P[0][0], P[0][1], ang, 0.9, Math.min(1, (u - 0.05) / 0.06) * 0.9);
   if (u >= 0.8){ const f = (u - 0.8) / 0.2, Q = flightAt({ path: P }, f * tot); drawWeapon(c, T.w, Q[0], Q[1], ang, 0.9, 0.75 * (1 - f), T.w === 'axe' ? { spin: f * tot * W6.axeSpin } : null); }
-  drawHand(c, H[0], H[1], 1.15, press, al);
+  drawHand(c, H[0], H[1], V22.hint.hand, press, al);
   const txt = hintText(s); if (!txt) return; c.font = '700 26px ' + FONT; c.textAlign = 'center'; c.textBaseline = 'middle'; c.lineJoin = 'round';
   const ty = CFG.grindY - 70; c.lineWidth = 7; c.strokeStyle = VIEW.ink; c.strokeText(txt, 200, ty); c.fillStyle = '#ffffff'; c.fillText(txt, 200, ty);
 }
@@ -5361,7 +5416,7 @@ const V12 = {
   buildMax: 14,             // новых сеток за кадр
   crackT: 0.25,             // трещины по корке от булавы проступают за столько с
   chips: 140,               // потолок стружки пил (v13 круг 5: мелочь из мотаемого тела)
-  light: [-0.42, -0.74, 0.53],   // на ключевой свет (x вправо, y вниз, z к зрителю): сверху-слева-спереди
+  light: [0.5, -0.6, 0.55],      // на ключевой свет (x вправо, y вниз, z к зрителю); v22 (GPT №1, п. 7): сверху-справа-спереди ≈ 40° от вертикали — как лучи в лесу (было сверху-слева)
 };
 // Палитры (sRGB): цвета набора toy, срезы — как toy-slice-*.
 const K3 = {
@@ -6304,7 +6359,7 @@ const V15 = {
   // волокна, их сила; glow — светлая размытая полоса посередине; seam — брус длиннее стольких ед. собран из двух кусков (стык на
   // доле seamAt длины); joint — тень бруса бункера на балке у стыка (ед., сила); end — тёмный нижний срез чурбака (ед., сила);
   // кант — ед. (тонкий, чуть неровный), цвет; фаска и скругление углов — ед.
-  plank: { face: '#975a37', lt: '#cc9460', top: '#dca268', dk: '#5a3123', lit: [-0.15, -1], strip: [0.1, 0.09, 2.2], band: [0.12, 0.27], bandK: [0.45, 0.92],
+  plank: { face: '#975a37', lt: '#cc9460', top: '#dca268', dk: '#5a3123', lit: [0.8, -1], strip: [0.1, 0.09, 2.2], band: [0.12, 0.27], bandK: [0.45, 0.92],
     grain: [3, 0.28], glow: 0.12, seam: 150, seamAt: 0.64, joint: [7, 0.42], end: [2.6, 0.45], ink: 1.1, inkCol: 'rgba(56,25,9,0.96)', D: 5, bevel: 1.1, r: 2.2 },
   // задняя стенка полости — одна цельная гладкая панель (рисуется кодом): тон base, мягкие вертикальные полосы (шаг ед., разброс тона),
   // светлое пятно в середине верха hi (сила), к низу (к горлу) темнее lo (альфа сверху, снизу); тень от бруса — проходы
@@ -6312,7 +6367,7 @@ const V15 = {
   // светлая полоска (ширина ед., цвет), тень под ней, щербинка посередине (ширина, глубина ед.); трещинка от кромки (доля высоты, сила)
   back: { base: '#703e27', hi: '#94593a', hiA: 1, lo: '#2a1208', bands: 15, bandA: 0.075, grad: [0.0, 0.42], ao: [[40, 0.95, 8], [8, 0.85, 1.5]], rim: [26, 0.75],
     trim: 8, top: [2.2, '#c4915a'], topSh: [1.6, 0.55], notch: [5, 3.2], crack: [0.12, 0.36], ink: 1.2,
-    shade: [4, 7, 0.6, 10] },                              // тень фруктов на панели: смещение x, y (ед.), сила, размытие (ед. на пиксель)
+    shade: [-3, 5.5, 0.46, 8] },   // v22: свет сверху справа — тень влево-вниз, мягче                              // тень фруктов на панели: смещение x, y (ед.), сила, размытие (ед. на пиксель)
   end: { k: 0.55, dk: 0.7 },                                // торец доски: шаг годичных колец (1/ед.), сколько темнее
   // сплеш: радиус кляксы от радиуса тела (доля, мин., макс.), лепестков; брызг вдоль разреза; потёков и их длина (ед.);
   // жизнь: раскрытие, держится, гаснет к life (с); непрозрачность ядра; не больше max сразу, рядом с новым старый гаснет быстрее
@@ -6329,10 +6384,19 @@ const V15 = {
 // светлой кромкой (сила, яркость) и тенью в стыке с лицом (ridge: сила, ширина ед.). У чурбака верхнее ребро — стык (jointTop: ширина,
 // сила), без светлой рамки. Кант — внутри контура, слабый (ширина ед., у света, в тени); наружная обводка — радиус, в тени, у света.
 // задник — wood17-back.jpg (3 доски GPT на ширину, крупные неровные волокна; бесшовно).
+// v22: низ кадра — трава (пучки по бокам), свет, интерфейс. Пучки: [центр x, ширина, высота видимой кочки, низ (ед. ниже grindY), кочка картинки
+// x0…x1 px (картинка 1024×325), зеркало]; top — верх слоя травы (ед. ниже grindY)
+const V22 = {
+  bg: { dim: [0.13, 0.75], green: ['#173F2E', 0.13], dimK: [1, 1.55, 1.25, 0.6], greenK: [1, 1.25, 1.1, 0.8] },   // по состояниям (день, туман, вечер, ночь): туман и вечер — темнее (фон сереет и гасит дерево)
+  spill: false,
+  hint: { hand: 0.88, pad: 16, idle: 1.3, title: 0.8 },   // рука ×0,88 (−23 %), запас пунктира 16 ед. (4 % W), рука после 1,3 с простоя, название уровня 0,8 с   // фон: за постройкой темнее (alpha в центре, радиус — доля прежнего), нижняя треть — зелёный слой
+  grass: { top: 58, clumps: [[6, 52, 40, 128, 60, 230, 0], [30, 30, 24, 125, 330, 470, 1], [50, 22, 10, 121, 330, 470, 0], [118, 26, 7, 118, 540, 640, 1],
+    [396, 46, 33, 128, 760, 930, 1], [373, 30, 21, 125, 330, 470, 0], [352, 24, 11, 121, 80, 200, 0]] },
+};
 const V16 = {
   wood: { atlas: 'wood17-plank.jpg', rows: 6, rowH: 104, atlasH: 624, len: 330, band: 34, gain: 1.0, con: 0.62, mean: [0.588, 0.369, 0.235], glue: 0.2, tone: [0.06, 80],
-    lit: [-0.25, -1], cy: 0.45, face2c: [0.0, 0.4], up: [0.35, 0.75], soft: 1.1,
-    bevel: [0.08, 0.1, 1.7, 2.6], bevIn: 0.45, bevK: [1.4, 0.045, 0.028, 0.0], bevVar: [46, 13, 0.2, 0.7, 0.22],
+    lit: [0.8, -1], cy: 0.45, face2c: [0.0, 0.4], up: [0.35, 0.75], soft: 1.1,
+    bevel: [0.08, 0.1, 1.7, 2.6], bevIn: 0.45, bevK: [1.18, 0.018, 0.01, 0.0], bevVar: [46, 13, 0.2, 0.7, 0.22],
     side: [0.2, 0.24, 3, 7], sideK: [0.64, 0.6, 0.58], rimLt: [0.35, 1.12], ridge: [0.22, 0.9],
     ink: [0.8, 0.05, 0.42], inkCol: [0.2, 0.08, 0.03], outer: [0.6, 0.42, 0.1], outerCol: '#2e1306', shadowBlur: 9,
     seam: [0.3, 0.1], crack: 0.38, joint: [12, 0.5], end: [3, 0.3], jointTop: [0.9, 0.45] },
@@ -6342,7 +6406,7 @@ const V16 = {
   // фрукты: мягче и сочнее — мельче фактура (смещение мип-уровня текстуры, сила рельефа), насыщенность, глубже тень (степень, доля),
   // крупный мягкий блик (сила, ширина) и мягкое пятно блика (сила, ширина) — по гладкой нормали, без «окон»
   fruit: { lod: 1.4, lodK: { melon: 2.6, orange: 2.2, lemon: 2.0, lime: 1.8, coco: 1.8 }, bump: 0.3, sat: 1.12, shade: [1.9, 0.46], wrap: [-0.2, 0.95], hi: [0.2, 4, 0.13, 18] },   // wrap — переход света уже (тень глубже, объём крупнее)
-  grass: { img: 'grass16.webp', h: 58, y: -3 },             // трава переднего плана — рисованные пучки GPT: высота полосы (ед.), сдвиг верха от кромки корыта (ед.)
+  grass: { img: 'grass16.webp', h: 58, y: 5 },              // трава переднего плана — рисованные пучки GPT: высота полосы (ед.), сдвиг верха от кромки корыта (ед.); v22 — ниже (ножки видны, перекрыты на 1–2 % W)
 };
 // v19 (отзыв Андрея 24.11): «зелёные слишком яркие, почти неоновые, у фиолетовых очень тёмные нижние половины; на рефе зелёный уходит
 // в жёлтый и оливковый, переходы света и тени спокойнее» + «срез — плоский яркий диск, пятна сока — однотонные графические фигуры».
@@ -6364,10 +6428,10 @@ const V13 = {
   // переднего плана (тёмная, светлая, лист); desat — лес за полем бледнее (доля); blur — доля размытой копии леса
   // v16: лес темнее и обобщённее (новые картинки), дымка и обесцвечивание почти сняты; наружная тень дерева — слабая и почти без сдвига
   look: {
-    day:   { tint: [1.0, 1.0, 1.0],     wash: [236, 248, 214, 0.1, 0.0],   vig: 0.2,  sh: [1.5, 3.5, 0.24], rim: [1.0, 0.94, 0.78, 0.2],  grass: ['#2f6b1f', '#7cbf3a', '#d8a23c'], desat: 0.08, blur: 0.3 },
-    fog:   { tint: [0.97, 0.99, 1.03],  wash: [226, 236, 230, 0.1, 0.0],   vig: 0.16, sh: [1.2, 3, 0.18],   rim: [0.86, 0.95, 1.0, 0.16], grass: ['#3c5a3a', '#86a37c', '#b59a62'], desat: 0.05, blur: 0.25 },
-    eve:   { tint: [1.04, 0.98, 0.91],  wash: [255, 236, 200, 0.14, 0.0],  vig: 0.24, wk: 0.9, sh: [2, 3.5, 0.24], rim: [1.0, 0.66, 0.3, 0.3],   grass: ['#3d4f17', '#9a9a34', '#c8692a'], desat: 0.1, blur: 0.3 },   // вечер: дымка гуще и светлее — апельсины не тонут в янтаре
-    night: { tint: [0.86, 0.92, 1.06],  wash: [18, 36, 56, 0.06, 0.0],    vig: 0.3,  sh: [1.2, 3, 0.26],   rim: [0.5, 0.72, 1.0, 0.3],   grass: ['#10291f', '#2f5a44', '#6b6a3e'], desat: 0.05, blur: 0.3 },
+    day:   { tint: [1.0, 1.0, 1.0],     wash: [236, 248, 214, 0.0, 0.0],   vig: 0.2,  sh: [-1.5, 3.5, 0.24], rim: [1.0, 0.94, 0.78, 0.2],  grass: ['#2f6b1f', '#7cbf3a', '#d8a23c'], desat: 0.08, blur: 0.3 },
+    fog:   { tint: [0.97, 0.99, 1.03],  wash: [226, 236, 230, 0.03, 0.0],   vig: 0.16, sh: [-1.2, 3, 0.18],   rim: [0.86, 0.95, 1.0, 0.16], grass: ['#3c5a3a', '#86a37c', '#b59a62'], desat: 0.05, blur: 0.25 },
+    eve:   { tint: [1.04, 0.98, 0.91],  wash: [255, 236, 200, 0.06, 0.0],  vig: 0.24, wk: 0.9, sh: [-2, 3.5, 0.24], rim: [1.0, 0.66, 0.3, 0.3],   grass: ['#3d4f17', '#9a9a34', '#c8692a'], desat: 0.1, blur: 0.3 },   // вечер: дымка гуще и светлее — апельсины не тонут в янтаре
+    night: { tint: [0.86, 0.92, 1.06],  wash: [18, 36, 56, 0.06, 0.0],    vig: 0.3,  sh: [-1.2, 3, 0.26],   rim: [0.5, 0.72, 1.0, 0.3],   grass: ['#10291f', '#2f5a44', '#6b6a3e'], desat: 0.05, blur: 0.3 },
   },
   res: 0.5,                                                   // лес: доля разрешения холста (картинка в расфокусе — хватает)
   // дерево: светлое, среднее, тёмное (кольца), кант; полуглубина бруса, фаска, скругление углов, изнанка корыта темнее
@@ -6379,14 +6443,24 @@ const V13 = {
   // верх зубьев на прежней линии перемола (grindY − 9,5) — диск вырос вниз и в стороны; тёплая тёмная сталь; толщина — свой косой сдвиг по
   // глубине диска tilt (верхняя кромка и фаска зубьев видны), фаска зубьев bev; проточка-кольцо на ring·R; 4 прорези на slotR·R (дуга slotA рад,
   // полуширина slotW ед.); ступица: фланец, бобышка, болт со шлицем (доли R); warm — тёплый отсвет дерева и сока снизу, hi — мягкий блик
-  saw: { n: 7, R: 32, r0: 27, teeth: 20, depth: 4.2, cy: 22.5, spin: [2.6, 12], steel: '#7b7672', hub: '#6c6662', boss: '#7e7771', bolt: '#90887f', slot: '#2b1d15', ink: '#1b140f', inkW: 1.25, dim: 0.88, shadow: [2.5, 4, 0.36],
-    tilt: 0.42, bev: 1.05, ring: 0.76, slotR: 0.55, slotA: 0.82, slotW: 1.55, flange: 0.37, bossR: 0.27, boltR: 0.155, warm: [1.02, 0.85, 0.74, 0.5], hi: [0.4, 4, 0.32] },
+  // v22 (GPT №1, п. 5): ряд ≈ 84 % W — шаг pitch 11,3 % W (из CFG.sawRow), перекрытие ≈ 29 % диаметра; phase — начальные углы дисков (град),
+  // соседние разведены на 15–35°, чтобы повтор не бросался в глаза
+  // v22 (GPT №1, п. 5): 18 широких загнутых зубьев (hook) высотой R − r0 = 4,2 ед. (1,05 % W); тёплая тёмная сталь без полировки — основа #77736D,
+  // углубления #45413E, тёплая кромка #B6AA91 (edge), светлого не больше 10–15 % площади диска (spec — сила зеркального блика)
+  saw: { n: 7, pitch: CFG.sawRow.pitch, phase: [0, 27, 49, 71, 103, 121, 152], R: 32, r0: 27.8, teeth: 18, hook: true, depth: 4.2, cy: 22.5, spin: [2.6, 12], steel: '#79746d', hub: '#5f5a55', boss: '#6e6862', bolt: '#7c756d',
+    edge: [0.714, 0.667, 0.569], spec: 0.1, slot: '#2b1d15', ink: '#1b140f', inkW: 1.25, dim: 0.88, shadow: [2.5, 4, 0.36],
+    tilt: 0.42, bev: 1.05, ring: 0.76, slotR: 0.55, slotA: 0.82, slotW: 1.55, flange: 0.37, bossR: 0.27, boltR: 0.155, warm: [1.02, 0.85, 0.74, 0.5], hi: [0.2, 4, 0.32] },
   // корыто (ед. ниже grindY): задняя кромка, дно у задней стенки (пусто) и сок у неё же (полно), передняя кромка (верх), её толщина,
   // низ передней доски, низ ножек; торцы, ножки — ширина
   // v18 (реф: «глубокий деревянный лоток, вид чуть сверху»): дальняя стенка — верх back, её верхняя грань farLip; сок пустой/полный — floor/full
   // (линия сока на дальней стенке); передняя доска — верх rim, верхняя грань lip, низ face; ножки враспор до leg (ширина legW, отступ legX, вынос
   // legOut); торцевые стенки у краёв экрана — внутренний угол x end[0] у дальней стенки, end[1] у передней; задняя планка за пилами plank [верх, низ]
-  trough: { back: 63, farLip: 3.4, floor: 83.5, full: 68.5, rim: 85, lip: 4, face: 107, leg: 119, legW: 15, legX: 34, legOut: 5, end: [9, -3], plank: [30, 74], axle: 5.2, shadow: [11, 0.36], gold: [246, 172, 46, 0.86] },   // gold — сок в корыте и струйки тянутся к золотому, как на рефе (смесь слив, лаймов и арбуза иначе серая)
+  // v22 (GPT №1, п. 6): корыто — предмет, а не полоса: ширина x0…W−x0 = 90,5 % W, чаша back…face = 54 ед. (13,5 % W), передняя стенка rim…face
+  // 26 ед. (6,5 % W), ножки face…leg 14 ед. (3,5 % W); боковые стенки толщиной side, внутренний угол end[0] у дальней стенки, end[1] у передней;
+  // полость тёмная (cav — цвет #493023); полный сок на 5,6 ед. (1,4 % W) ниже дальней кромки; задней планки за пилами нет — ось видна до краёв;
+  // contact — тень под чашей на траве [высота, alpha, вынос за ножки]
+  trough: { back: 50, farLip: 3.4, floor: 81, full: 59, rim: 78, lip: 4, face: 104, leg: 118, legW: 13, legX: 33, legOut: 4, x0: 19, side: 6, end: [31, 25], axle: 5.5,
+    cav: '#493023', shadow: [10, 0.42, 6], gold: [246, 172, 46, 0.86] },   // gold — сок в корыте и струйки тянутся к золотому, как на рефе (смесь слив, лаймов и арбуза иначе серая)   // gold — сок в корыте и струйки тянутся к золотому, как на рефе (смесь слив, лаймов и арбуза иначе серая)
   // куски на пилах: потолок кусков в кадре, новых сеток за кадр (раскол), треугольников
   frag: { max: 32, perFrame: 6, trisCap: 120000 },
   // круг 3: пила ест кусок. eat — время съедания от мелочи до половины арбуза (с) по √площади [от, до]; drag — тянет по вращению к щели
@@ -6417,7 +6491,7 @@ const V13 = {
   fx: { motes: 14, flies: 8, sparks: [1, 3], sparkMax: 24 },   // v21 (GPT №1): искр 1–3 на удар (было 3–6) — главный материал жидкость
   occ: [3, 7, 0.93, 0.42],
   liqK: [0.35, 0.7],                                         // круг 2: фонтан жидкого сока v9 на перемоле — доля числа капель и размер                                   // круг 2: тень соседа сверху на фрукте: сдвиг от света (x, y), доля радиуса, сила
-  contact: [0.55, 4.6],                                       // круг 2: тень-контакт фрукта на дереве: сила, полувысота, ед.
+  contact: [0.28, 4.2, -2.2, 1.8],   // v22 (GPT №1, п. 7): alpha 0,2–0,3, смещение вниз-влево (x, y ед.), мягкость ≈ 1 % W                                       // круг 2: тень-контакт фрукта на дереве: сила, полувысота, ед.
 };
 const F13 = { st: -1, from: -1, at: -9, force: -1, img: {}, cv: null, cvKey: '', prev: null, tint0: [1, 1, 1], tint1: [1, 1, 1], live: false, vst: [], vcol: [],
   baked: false, front: null, frontY: 0, sawG: null, saws: [], gates: [], frags: [], split: new Set(), sparks: [], nid: 0, shd: null, shM: null, wm: null, da: null, dw: null, om: null, dl: null, tickAt: 0, ray: null, glow: null, fog: null, css: false, stats: {} };
@@ -6454,7 +6528,11 @@ function canvas13(k){                                         // лес сост
   const rad = g.createRadialGradient(cx, cy, 30, cx, cy, R0);
   rad.addColorStop(0, 'rgba(' + r + ',' + gg + ',' + b + ',' + a0 + ')'); rad.addColorStop(1, 'rgba(' + r + ',' + gg + ',' + b + ',' + a1 + ')');
   g.fillStyle = rad; g.fillRect(-300, top - 400, W + 600, gy - top + 420);
+  { const da = V22.bg.dim[0] * V22.bg.dimK[k], dr = V22.bg.dim[1], dm = g.createRadialGradient(cx, cy, 20, cx, cy, R0 * dr);   // v22 (GPT №1, п. 7): лес прямо за постройкой темнее на 10–15 %
+    dm.addColorStop(0, 'rgba(6,14,8,' + da + ')'); dm.addColorStop(0.6, 'rgba(6,14,8,' + (da * 0.75).toFixed(3) + ')'); dm.addColorStop(1, 'rgba(6,14,8,0)'); g.fillStyle = dm; g.fillRect(-300, top - 400, W + 600, gy - top + 420); }
   g.setTransform(1, 0, 0, 1, 0, 0);
+  { const col = V22.bg.green[0], ga = +(V22.bg.green[1] * V22.bg.greenK[k]).toFixed(3), lg = g.createLinearGradient(0, h * 0.6, 0, h); lg.addColorStop(0, 'rgba(' + hexRgb(col).join(',') + ',0)'); lg.addColorStop(0.35, 'rgba(' + hexRgb(col).join(',') + ',' + ga + ')');
+    lg.addColorStop(1, 'rgba(' + hexRgb(col).join(',') + ',' + ga + ')'); g.fillStyle = lg; g.fillRect(0, h * 0.6, w, h * 0.4); }   // v22: нижняя треть — общий зелёный слой (тёмная опора низа)
   const v = g.createRadialGradient(w / 2, h * 0.45, Math.min(w, h) * 0.4, w / 2, h * 0.45, Math.max(w, h) * 0.72); v.addColorStop(0, 'rgba(8,18,10,0)'); v.addColorStop(1, 'rgba(8,18,10,' + L.vig + ')');
   g.fillStyle = v; g.fillRect(0, 0, w, h);
   return c;
@@ -6551,7 +6629,7 @@ void main(){ vN = mat3(modelMatrix) * normal; vP = position; vCol = aCol; vC = (
   vec4 wp = modelMatrix * vec4(position, 1.0); vW = wp.xyz; wp.y += uTg * max(wp.z, 0.0) + uTs.x * (position.z + uTs.y); gl_Position = projectionMatrix * viewMatrix * wp; }`;   // v18: uTs — косой сдвиг по глубине диска (видна толщина)
 const S13_FS = `precision highp float;
 uniform vec3 uL; uniform vec3 uV; uniform vec2 uWrap; uniform vec3 uTint; uniform float uR0; uniform float uDim; uniform sampler2D tWet; uniform float uRow; uniform float uRows; uniform vec3 uRot;
-uniform vec4 uSaw; uniform vec4 uWarm;
+uniform vec4 uSaw; uniform vec4 uWarm; uniform vec3 uEdge; uniform float uSpec;
 varying vec3 vW; varying vec3 vN; varying vec3 vP; varying vec2 vC; varying vec3 vCol;
 ${R3NOISE}
 void main(){
@@ -6566,13 +6644,13 @@ void main(){
   float ca = cos(th - thL), an = (pow(max(ca, 0.0), uSaw.w) + 0.22 * pow(max(-ca, 0.0), uSaw.w * 1.6)) * smoothstep(2.0, 9.0, length(q)) * max(N.z, 0.0);   // мягкий блик к свету (шлифовка по кругу), слабый отсвет напротив
   float nv = max(dot(N, uV), 0.0), fr = 1.0 - nv, w = smoothstep(uWrap.x, uWrap.y, dot(N, uL));
   vec3 c = mix(col * 0.55, col * 1.06, w);
-  vec3 H = normalize(uL + uV); c += vec3(1.0, 0.97, 0.9) * 0.2 * pow(max(dot(N, H), 0.0), 16.0);
+  vec3 H = normalize(uL + uV); c += vec3(1.0, 0.97, 0.9) * uSpec * pow(max(dot(N, H), 0.0), 16.0);   // v22: блик слабее (было 0,2) — без «полировки»
   c += vec3(1.0, 0.96, 0.88) * an * uSaw.z;
   c = mix(c, c * 0.8 + vec3(0.05, 0.04, 0.03), smoothstep(0.55, 0.95, fr));
   if (disc > 0.5){ float lo = smoothstep(-0.15, 0.95, q.y / uSaw.y) * (0.55 + 0.45 * smoothstep(-0.6, 0.8, q.x / uSaw.y));   // тёплый отсвет дерева и сока снизу-справа
     c = mix(c, c * uWarm.rgb + vec3(0.035, 0.018, 0.0), uWarm.a * lo * face);
     vec2 nl = normalize(N.xy + vec2(1e-4)), ll = normalize(uL.xy); float sd = 1.0 - smoothstep(0.62, 0.95, abs(N.z));   // бок и фаска зубьев: к свету — светлая кромка, от света — тёмная
-    c = mix(c, mix(col * 0.42, col * 1.45 + vec3(0.06, 0.05, 0.03), smoothstep(-0.25, 0.65, dot(nl, ll))), sd); }
+    c = mix(c, mix(col * 0.42, uEdge, smoothstep(-0.25, 0.65, dot(nl, ll))), sd); }   // v22: светлая кромка — тёплая #B6AA91
   else c *= mix(0.6, 1.0, smoothstep(0.62, 0.93, abs(N.z)));
   { float dry = step(-1.4, vP.z), ua = atan(vP.y, vP.x) / 6.2831853 + 0.5, y0 = (uRow * 2.0 + 0.5) / uRows, y1 = (uRow * 2.0 + 1.5) / uRows, hub = uR0 * 0.36;
     float sp = (uR0 - r) * 0.05;                                                                                              // спираль: размаз отстаёт от кромки к ступице
@@ -6768,11 +6846,11 @@ function wood16Mat(dir, P, o){
 // cham — подрез свободных углов (доля T: мин, макс), z — порядок деталей по глубине (балка — за брусом)
 // back — прогиб верхней кромки задника к середине (доля T бруса, не больше доли пролёта), кант кромки (доля T), сбой посередине (ширина, глубина — доли T)
 const V17 = {
-  sec: { bev: [0.15, 2.2, 2.8], bevVar: [0.22, 37], bevK: [1.42, 0.04, 0.022, 0.0], bevAmt: [0.82, 53], crease: 0.1,
-         nar: [0.08, 1.6, 3.0], sideK: [0.76, 0.72, 0.7], rim: [0.08, 1.12],
+  sec: { bev: [0.15, 2.2, 2.8], bevVar: [0.22, 37], bevK: [1.17, 0.016, 0.008, 0.0], bevAmt: [0.82, 53], crease: 0.1,   // v22: фаска светлее лица на 15–20 % (было +42 %), бок — к #583A29
+         nar: [0.08, 1.6, 3.0], sideK: [0.64, 0.62, 0.66], rim: [0.08, 1.12],
          end: [0.18, 2.4, 3.6], endK: [1.16, 0.64], endStep: 11,
          joint: [1.0, 0.5, 1.12], ink: [0.8, 0.3, 0.42, 0.55] },
-  tip: { up: 0.12, ang: [58, 66], angSide: 47, chL: [0.08, 0.05], chR: [0.1, 0.07] },
+  tip: { up: [0.1, 0.32], ang: [58, 66], angSide: 47, chL: [0.08, 0.05], chR: [0.1, 0.07] },
   neck: { ang: 11 },
   width: { L: [0, 0.015, 0.025, 0], R: [0, 0.012, 0.03, 0], floor: [0, 0.02, 0.025, 0], beam: 0.12 },   // v20: сужение досок — в теле (W15.tp), здесь лёгкая неровность; балка к концу за экраном — 12 %
   notch: { at: [0.45, 0.3, 0.1, 1], small: [0.68, 0.18, 0.06, -1] },
@@ -6916,7 +6994,7 @@ function vis17(s, parts, vis){
     const gx = gapX(E.mx, E.my), A = Math.abs(E.a[0] - gx) < Math.abs(E.b[0] - gx) ? E.a : E.b, Bv = A === E.a ? E.b : E.a, n = B.P.length;
     const ia = B.P.findIndex(v => same(v, A)), ib = B.P.findIndex(v => same(v, Bv)), an = B.P[(ia + 1) % n] === Bv || same(B.P[(ia + 1) % n], Bv) ? B.P[(ia + n - 1) % n] : B.P[(ia + 1) % n];
     const ul = Math.hypot(an[0] - A[0], an[1] - A[1]) || 1, u = [(an[0] - A[0]) / ul, (an[1] - A[1]) / ul], th = thick(B.ph, dir), left = Bv[0] < A[0];
-    const side = B.kind === 'side', up = (side ? 0.08 : V.tip.up) * th, peak = [A[0] - u[0] * up / Math.abs(u[1]), A[1] - up];
+    const side = B.kind === 'side', up = (side ? 0.08 : Array.isArray(V.tip.up) ? V.tip.up[left ? 0 : 1] : V.tip.up) * th, peak = [A[0] - u[0] * up / Math.abs(u[1]), A[1] - up];   // v22: левый и правый торцы разной длины (≈ 0,9 % W)
     const al = (side ? V.tip.angSide : V.tip.ang[left ? 0 : 1]) * Math.PI / 180, cd = [Math.sign(Bv[0] - A[0]) * Math.cos(al), Math.sin(al)];
     const det = cd[0] * (-u[1]) - cd[1] * (-u[0]), rx = Bv[0] - peak[0], ry = Bv[1] - peak[1], k = (rx * (-u[1]) - ry * (-u[0])) / det, Qp = [peak[0] + cd[0] * k, peak[1] + cd[1] * k];
     const ch = left ? V.tip.chL : V.tip.chR, cA = ch[0] * th, cB = ch[1] * th;
@@ -7043,12 +7121,14 @@ function wood13Bake(c){
   const v17 = wood16Tex() && !wood16Wait() ? vis17(s, parts, vis0) : null, vis = v17 ? vis0.map((P, i) => v17[i] ? v17[i].P : P) : vis0;   // v17: контур вида построек из досок
   const posts = [[[-ov, sy0], [0, sy0], [0, gy + T.leg], [-ov, gy + T.leg]], [[W, sy0], [W + ov, sy0], [W + ov, gy + T.leg], [W, gy + T.leg]]];   // стойки — за верх и низ экрана
   const backs = partBacks(s.level.parts || []).map(P => backExt15(P));   // v15: задние стенки полостей
-  const rim = [[-ov, top - 6], [W + ov, top - 6], [W + ov, top + 11], [-ov, top + 11]], back = [[-ov, gy + T.plank[0]], [W + ov, gy + T.plank[0]], [W + ov, gy + T.plank[1]], [-ov, gy + T.plank[1]]];   // v18: задняя планка за нижней половиной пил
-  const [e0, e1] = T.end, yb = gy + T.back, yl = yb + T.farLip, yr = gy + T.rim;
-  const tin = [[e0, yl], [W - e0, yl], [W - e0, yr + 3], [e0, yr + 3]];                          // v18: дальняя стенка изнутри (и дно под соком)
-  const farRim = [[e0 - 3.5, yb], [W - e0 + 3.5, yb], [W - e0, yl], [e0, yl]];                   // верхняя грань дальней стенки
-  const ends = [-1, 1].map(sd => { const X = (x) => sd < 0 ? x : W - x;                          // торцевые стенки: внутренняя грань и верх — у краёв экрана
-    return { face: [[X(e0), yl], [X(e1), yr], [X(e1), yr + 6], [X(e0), yr + 6]], top: [[X(e0 - 3.5), yb], [X(e0), yl], [X(e1), yr], [X(e1 - 3.6), yr]] }; });
+  const rim = [[-ov, top - 6], [W + ov, top - 6], [W + ov, top + 11], [-ov, top + 11]];   // v22: задней планки за пилами нет — ось видна до краёв экрана
+  const [e0, e1] = T.end, yb = gy + T.back, yl = yb + T.farLip, yr = gy + T.rim, sw = T.side;
+  const tin = [[e0, yl], [W - e0, yl], [W - e0, yr + 3], [e0, yr + 3]];                          // v18: дальняя стенка изнутри (и дно под соком); v22 — полость тёмная
+  const farRim = [[e0 - sw, yb], [W - e0 + sw, yb], [W - e0, yl], [e0, yl]];                     // верхняя грань дальней стенки
+  const farOut = [[e0 - sw, yb - 0.5], [W - e0 + sw, yb - 0.5], [W - e0 + sw, yb + 1.2], [e0 - sw, yb + 1.2]];   // v22: её наружная кромка (видна над полостью)
+  const ends = [-1, 1].map(sd => { const X = (x) => sd < 0 ? x : W - x;                          // v22: боковые стенки — внутренняя грань, верх (скос к зрителю) и наружный торец
+    return { face: [[X(e0), yl], [X(e1), yr], [X(e1), yr + 6], [X(e0), yr + 6]], top: [[X(e0 - sw), yb], [X(e0), yl], [X(e1), yr], [X(e1 - sw), yr]],
+      out: [[X(e0 - sw), yb], [X(e1 - sw), yr], [X(e1 - sw - 1.5), yr + 4], [X(e0 - sw - 1.2), yb + 3]] }; });
   const w16 = !!wood16Tex(), U16 = V16.wood;                   // v16: рисованное дерево (атлас GPT), иначе — круг 3 кодом
   // v16: порядок — сначала сцены WebGL (брусья, перед корыта) и их копии в 2D, потом 2D-работа на фоне (тень, задник, кант): копия кадра
   // WebGL ждёт очередь GPU, и если в ней уже лежат размытия задника, ждёт и их (≈ 20 мс на кадре старта уровня)
@@ -7058,10 +7138,10 @@ function wood13Bake(c){
     else add(vis[i], w16 ? pw({ kind: 'block', r: Q.r }) : undefined); });   // v16: клинья, полки, бруски уровней 11–110 — тем же деревом
   posts.forEach((P, i) => add(P, pw({ kind: 'post', dir: [0, 1], seed: 0.3 + 0.4 * i, z: 1.5 })));   // стойки чуть ближе — брусья уходят за них
   add(rim, pw({ kind: 'beam', dir: [1, 0], seed: 0.5, z: 1 }));
-  add(back, pw({ kind: 'beam', dir: [1, 0], seed: 0.9, z: -16, D: 3, shade: 0.78 }));   // задняя планка за пилами
-  add(tin, pw({ kind: 'inner', dir: [1, 0], seed: 0.2, z: -10, D: 2, shade: 0.6, r: 1 }));   // корыто изнутри (дальняя стенка и дно) — темнее
-  ends.forEach((E, i) => { add(E.face, pw({ kind: 'inner', dir: [0, 1], seed: 0.4 + i, z: -9.5, D: 1.5, shade: 0.5, r: 0.5 })); add(E.top, pw({ kind: 'inner', dir: [0, 1], seed: 0.7 + i, z: -9, D: 1.5, shade: 1.25, r: 0.5 })); });
-  add(farRim, pw({ kind: 'inner', dir: [1, 0], seed: 0.35, z: -9, D: 1.5, shade: 1.3, r: 0.6 }));   // верхняя грань дальней стенки — светлая
+  add(tin, pw({ kind: 'inner', dir: [1, 0], seed: 0.2, z: -10, D: 2, shade: T.tinShade || 0.56, r: 1 }));   // корыто изнутри (дальняя стенка и дно) — тёмная полость
+  ends.forEach((E, i) => { add(E.out, pw({ kind: 'inner', dir: [0, 1], seed: 0.9 + i, z: -9.2, D: 1.5, shade: 0.72, r: 0.5 })); add(E.face, pw({ kind: 'inner', dir: [0, 1], seed: 0.4 + i, z: -9.5, D: 1.5, shade: 0.5, r: 0.5 })); add(E.top, pw({ kind: 'inner', dir: [0, 1], seed: 0.7 + i, z: -9, D: 1.5, shade: 1.18, r: 0.5 })); });
+  add(farRim, pw({ kind: 'inner', dir: [1, 0], seed: 0.35, z: -9, D: 1.5, shade: 1.18, r: 0.6 }));   // верхняя грань дальней стенки — светлее лица на 15–20 %
+  add(farOut, pw({ kind: 'inner', dir: [1, 0], seed: 0.65, z: -9.1, D: 1.5, shade: 0.9, r: 0.4 }));
   { const ax = new THREE.Mesh(col13(new THREE.CylinderGeometry(T.axle, T.axle, W + 2 * ov, 20).rotateZ(Math.PI / 2), '#8a837d'), saw13Mat());   // ось пил — труба через диски, за края экрана
     ax.position.set(W / 2, gy + S.cy, -7); sc.add(ax); }
   r3SetCam(); if (R3.cv.width !== cv.width || R3.cv.height !== cv.height){ R3.cv.width = cv.width; R3.cv.height = cv.height; R3.ren.setSize(cv.width, cv.height, false); }
@@ -7075,10 +7155,13 @@ function wood13Bake(c){
   if (!F13.front || F13.frontKey !== fkey){ F13.frontKey = fkey;
     const fs = new THREE.Scene(), fa = (P, o) => fs.add(wood13Mesh(P, o)), yr = gy + T.rim, yf = gy + T.face, yt = yr + T.lip;
     const pt = (o) => Object.assign({ [w16 ? 'w16' : 'w15']: true, D: 4.5, bevel: 0.9, r: 2 }, o);   // круг 3: корыто — то же рисованное дерево; v16 — текстурой
+    const xa = T.x0, xb = W - T.x0;   // v22: передняя доска — от торца до торца (90,5 % W), концы видны
     for (const sd of [-1, 1]){ const X = (x) => sd < 0 ? x : W - x, x0 = T.legX, w = T.legW, o2 = T.legOut;   // v18: ножки-бруски враспор (низ — наружу)
       fa([[X(x0), yf - 4], [X(x0 + w), yf - 4], [X(x0 + w - o2), gy + T.leg], [X(x0 - o2), gy + T.leg]], pt({ kind: 'leg', dir: [0, 1], seed: 0.3 + sd * 0.17, D: 4, r: 1.2, shade: 0.72, z: -2 })); }
-    fa([[-5, yt], [W + 5, yt], [W + 5, yf], [-5, yf]], pt({ kind: 'trough', dir: [1, 0], seed: 0.15 }));   // v18: толстая передняя доска (волокна, зарубки — W17 'trough')
-    fa([[-5, yr], [W + 5, yr], [W + 5, yt + 0.6], [-5, yt + 0.6]], pt({ kind: 'inner', dir: [1, 0], seed: 0.55, D: 4.5, r: 0.6, shade: 1.42, z: 0.4 }));   // её верхняя грань — светлая
+    fa([[xa, yt], [xb, yt], [xb, yf], [xa, yf]], pt({ kind: 'trough', dir: [1, 0], seed: 0.15 }));   // v18: толстая передняя доска (волокна, зарубки — W17 'trough')
+    fa([[xa, yr], [xb, yr], [xb, yt + 0.6], [xa, yt + 0.6]], pt({ kind: 'inner', dir: [1, 0], seed: 0.55, D: 4.5, r: 0.6, shade: 1.18, z: 0.4 }));   // её верхняя грань — светлее лица на 15–20 %
+    for (const sd of [-1, 1]){ const X = (x) => sd < 0 ? x : W - x;   // v22: торцы передней доски — волокно поперёк, темнее лица
+      fa([[X(xa), yr + 0.5], [X(xa + 2.6), yr + 0.5], [X(xa + 2.6), yf - 0.3], [X(xa), yf - 0.3]], pt({ kind: 'inner', dir: [0, 1], seed: 0.25 + sd * 0.1, D: 2, r: 0.4, shade: 0.7, z: 0.6 })); }
     R3.ren.render(fs, R3.cam); dispose13(fs);
     const fy0 = Math.max(0, Math.floor((gy + T.back - 12) * K + view.oy * DPR)), fy1 = Math.min(cv.height, Math.ceil((gy + T.leg + 10) * K + view.oy * DPR)), fh = Math.max(1, fy1 - fy0);
     if (!F13.front) F13.front = document.createElement('canvas');
@@ -7090,10 +7173,10 @@ function wood13Bake(c){
     g2.globalAlpha = 1; g2.drawImage(fw, 0, 0); }
   const tF = performance.now();
   if (w16){ c.save(); vbase(c); c.shadowColor = 'rgba(13,22,10,' + L.sh[2] + ')'; c.shadowBlur = U16.shadowBlur * K; c.shadowOffsetX = (6000 + L.sh[0]) * K; c.shadowOffsetY = L.sh[1] * K;   // v16: наружная тень — мягкое размытие (без ступенек), слабая, почти без сдвига
-    c.translate(-6000, 0); c.fillStyle = '#000'; c.beginPath(); for (const P of vis.concat(posts, [rim, back], backs)) roundRect16(c, P, Q.r); c.fill(); c.restore(); }
+    c.translate(-6000, 0); c.fillStyle = '#000'; c.beginPath(); for (const P of vis.concat(posts, [rim], backs)) roundRect16(c, P, Q.r); c.fill(); c.restore(); }
   else { const d = 12, w = Math.ceil(cv.width / d), h = Math.ceil(cv.height / d), sh = F13.shCv || (F13.shCv = document.createElement('canvas'));   // тень на лес: мягкая (вниз и обратно); круг 3 — мягче, без ступенек
     sh.width = w; sh.height = h; const g = sh.getContext('2d'); g.setTransform(K / d, 0, 0, K / d, DPR * view.ox / d, DPR * view.oy / d); g.fillStyle = '#0d160a';
-    for (const P of vis.concat(posts, [rim, back], backs)){ roundPoly(g, P, Q.r); g.fill(); }
+    for (const P of vis.concat(posts, [rim], backs)){ roundPoly(g, P, Q.r); g.fill(); }
     c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.globalAlpha = L.sh[2]; c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high'; c.drawImage(sh, L.sh[0] * K, L.sh[1] * K, w * d, h * d); c.restore(); }
   if (backs.length) back15Draw(c, backs, parts.filter(st => st.role === 'wood').map((st, i) => vis[parts.indexOf(st)]));   // v15, круг 2: задняя стенка — 2D под брусом
   { c.save(); c.setTransform(1, 0, 0, 1, 0, 0); const r = (w16 ? U16.outer[0] : backs.length ? PL.ink : Q.inkW) * K;   // v15, круг 3: кант тонкий, чуть неровный («от руки»)
@@ -7114,8 +7197,8 @@ function wood13Bake(c){
       c.beginPath(); c.moveTo(a[0], a[1]); c.lineTo(b[0], b[1]); c.lineTo(b[0] + nx * 3.2, b[1] + ny * 3.2); c.lineTo(a[0] + nx * 3.2, a[1] + ny * 3.2); c.closePath();
       c.fillStyle = w16 ? 'rgba(226,170,112,0.42)' : backs.length ? 'rgba(214,158,102,0.6)' : 'rgba(255,232,190,0.7)'; c.fill(); }   // круг 3: у построек из досок — цвет светлой кромки бруса; v16 — мягче
     c.restore(); }
-  { const [dx, dy, al] = S.shadow, step = W / S.n;            // тени пил на задник, изнанку корыта и лес в щелях
-    for (let i = 0; i < S.n; i++){ const x = step * (i + 0.5) + dx, y = gy + S.cy + dy, g = c.createRadialGradient(x, y, S.R * 0.8, x, y, S.R * 1.14);
+  { const [dx, dy, al] = S.shadow;            // тени пил на задник, изнанку корыта и лес в щелях
+    for (let i = 0; i < S.n; i++){ const x = sawCx13(i) + dx, y = gy + S.cy + dy, g = c.createRadialGradient(x, y, S.R * 0.8, x, y, S.R * 1.14);
       g.addColorStop(0, 'rgba(14,16,12,' + al + ')'); g.addColorStop(1, 'rgba(14,16,12,0)'); c.fillStyle = g; c.beginPath(); c.arc(x, y, S.R * 1.14, 0, 6.29); c.fill(); } }
   if (F13.dbgFlush) c.getImageData(0, 0, 1, 1);
   F13.stats.bakeMs = +(performance.now() - t0).toFixed(1); F13.stats.bakeParts = [tR - t0, tF - tR, tI - tF, performance.now() - tI].map(v => +v.toFixed(1));   // v16: брусья (WebGL и копия), перед корыта, тень-задник-кант, кромки и тени пил
@@ -7562,7 +7645,7 @@ function woodCss13(){                                         // фактура 
 }
 // --- пилы: диск с крючковатыми зубьями и тремя прорезями, ступица, болт со шлицем; одна сетка на диск (цвет — в вершинах) ---
 function saw13Mat(row, disc){ const U = u13(), Q = V13.saw; return new THREE.ShaderMaterial({ vertexShader: S13_VS, fragmentShader: S13_FS, uniforms: Object.assign({}, U, { uR0: { value: Q.r0 }, uDim: { value: 1 }, tWet: { value: wet13().tex }, uRow: { value: row || 0 }, uRows: { value: 2 * Q.n }, uRot: { value: new THREE.Vector3(0, 1, 0) },
-  uTs: { value: new THREE.Vector2(disc ? Q.tilt : 0, disc ? Q.depth / 2 + 0.3 : 0) }, uSaw: { value: new THREE.Vector4(disc ? Q.ring * Q.R : 0, Q.R, Q.hi[0], Q.hi[1]) }, uWarm: { value: new THREE.Vector4(...Q.warm) } }), side: THREE.BackSide }); }   // v18: disc — диск пилы (толщина, кольцо, отсвет); иначе ось и штыри
+  uTs: { value: new THREE.Vector2(disc ? Q.tilt : 0, disc ? Q.depth / 2 + 0.3 : 0) }, uSaw: { value: new THREE.Vector4(disc ? Q.ring * Q.R : 0, Q.R, Q.hi[0], Q.hi[1]) }, uWarm: { value: new THREE.Vector4(...Q.warm) }, uEdge: { value: new THREE.Vector3(...Q.edge) }, uSpec: { value: Q.spec } }), side: THREE.BackSide }); }   // v18: disc — диск пилы (толщина, кольцо, отсвет); иначе ось и штыри
 function col13(geo, hex){ const c = hexRgb(hex), n = geo.attributes.position.count, A = new Float32Array(n * 3); for (let i = 0; i < n; i++){ A[3 * i] = c[0] / 255; A[3 * i + 1] = c[1] / 255; A[3 * i + 2] = c[2] / 255; } geo.setAttribute('aCol', new THREE.BufferAttribute(A, 3)); return geo; }
 function merge13(list){                                       // [{ geo, col }] → одна неиндексированная сетка (позиция, нормаль, цвет)
   const gs = list.map(q => ({ g: q.geo.index ? q.geo.toNonIndexed() : q.geo, c: hexRgb(q.col) })); let n = 0; for (const q of gs) n += q.g.attributes.position.count;
@@ -7575,7 +7658,8 @@ function merge13(list){                                       // [{ geo, col }] 
 function saw13Geo(){
   const Q = V13.saw, T = Q.teeth, R = Q.R, r0 = Q.r0, dA = 2 * Math.PI / T, sh = new THREE.Shape(), ol = new THREE.Shape();
   for (let k = 0; k < T; k++){ const a = k * dA;   // зуб: крутая передняя грань, вершина, пологая спинка, круглая впадина
-    const pts = [[a, r0 - 0.7], [a + dA * 0.06, R - 0.9], [a + dA * 0.14, R], [a + dA * 0.3, R - 0.9], [a + dA * 0.76, r0 + 1.2], [a + dA * 0.9, r0 - 0.5]];
+    const pts = Q.hook ? [[a + dA * 0.12, r0 - 0.9], [a + dA * 0.03, R - 1.3], [a + dA * 0.1, R], [a + dA * 0.36, R - 0.7], [a + dA * 0.84, r0 + 0.9], [a + dA * 0.97, r0 - 0.5]]   // v22: широкий загнутый зуб — передняя грань наклонена вперёд (крюк), широкая вершина
+      : [[a, r0 - 0.7], [a + dA * 0.06, R - 0.9], [a + dA * 0.14, R], [a + dA * 0.3, R - 0.9], [a + dA * 0.76, r0 + 1.2], [a + dA * 0.9, r0 - 0.5]];
     pts.forEach(([b, rr], j) => { const x = Math.cos(b) * rr, y = Math.sin(b) * rr, q = (rr + Q.inkW) / rr; if (!k && !j){ sh.moveTo(x, y); ol.moveTo(x * q, y * q); } else { sh.lineTo(x, y); ol.lineTo(x * q, y * q); } }); }
   sh.closePath(); ol.closePath();
   for (let k = 0; k < 4; k++){ const a0 = k * Math.PI / 2 + 0.3, a1 = a0 + Q.slotA, rm = Q.slotR * R, hw = Q.slotW, h = new THREE.Path();   // v18: четыре прорези-дуги
@@ -7602,24 +7686,24 @@ function saw13Update(){                                       // круг 3: у 
   const Q = V13.saw, on = F13.live; if (on) saw13Init(); if (!F13.sawG) return; F13.sawG.visible = on; if (!on) return;
   const base = (Q.spin[0] + (Q.spin[1] - Q.spin[0]) * FX.load) * (1 + V9.chainSpin * Math.min(6, FX.chain)), dt = R3.dt || 0, C = V13.bite;
   const DW = F13.dw || (F13.dw = new Float32Array(Q.n).fill(1)), DA = F13.da || (F13.da = new Float32Array(Q.n)), OM = F13.om || (F13.om = new Float32Array(Q.n)), DL = F13.dl, M = F13.wm;
-  const step = CFG.W / Q.n;
-  F13.saws.forEach((m, i) => { const cx = step * (i + 0.5), mir = i % 2 ? -1 : 1, tg = 1 - C.slow * Math.min(1, DL ? DL[i] : 0);
+  F13.saws.forEach((m, i) => { const cx = sawCx13(i), mir = i % 2 ? -1 : 1, tg = 1 - C.slow * Math.min(1, DL ? DL[i] : 0);
     DW[i] += (tg - DW[i]) * Math.min(1, dt * (tg < DW[i] ? 14 : 3.5)); OM[i] = (REDUCED ? 0.3 : 1) * base * DW[i]; DA[i] += OM[i] * dt;
-    m.position.set(cx, CFG.grindY + Q.cy + (FX.rollKick[i * VIEW.rollers / Q.n | 0] || 0) * 0.6, mir > 0 ? 1.6 : -1.6); m.scale.set(mir, 1, 1); m.rotation.z = -mir * DA[i] + i * 0.9;
+    m.position.set(cx, CFG.grindY + Q.cy + (FX.rollKick[clamp(cx / CFG.W * VIEW.rollers | 0, 0, VIEW.rollers - 1)] || 0) * 0.6, mir > 0 ? 1.6 : -1.6); m.scale.set(mir, 1, 1); m.rotation.z = -mir * DA[i] + Q.phase[i] * Math.PI / 180;   // v22: начальные углы разведены на 15–35°
     const U = m.material.uniforms; U.uDim.value = mir > 0 ? 1 : Q.dim; U.uRot.value.set(m.rotation.z, mir, M ? C.wet.run * Math.min(1, M.avg[i] * 2.5) * clamp(1.4 - OM[i] / 5, 0, 1) : 0); });
   if (DL) DL.fill(0);
 }
 // Круг 2: корыто — предмет, без шкалы. Сок виден сверху между задней стенкой и передней кромкой; уровень — на глаз (доля кучи из ядра,
 // как прежде), на победе — перелив через кромку. Струйки — в щелях между дисками (с мокрых пил и от догрызенных кусков).
-const juiceY13 = () => { const T = V13.trough, lv = clamp(trough9().lvl / V9.trough.full, 0, 1.25); return CFG.grindY + T.floor - (T.floor - T.full) * lv; };
+const juiceY13 = () => { const T = V13.trough, lv = clamp(trough9().lvl / V9.trough.full, 0, 1); return CFG.grindY + T.floor - (T.floor - T.full) * lv; };   // v22: не выше «полно» — до кромки остаётся 1,4 % W (было до 1,25)
 function juice13(c){
   const T = V13.trough, gy = CFG.grindY, W = CFG.W, Tr = trough9(), col = mixRgb(Tr.col, T.gold, T.gold[3]), x0 = T.end[1], x1 = W - T.end[1], yb = gy + T.back + T.farLip, yr = gy + T.rim + 2.5, yL = juiceY13();
   c.save(); c.beginPath(); c.moveTo(T.end[0], yb); c.lineTo(W - T.end[0], yb); c.lineTo(x1, yr); c.lineTo(x0, yr); c.closePath(); c.clip();   // v18: внутри корыта — трапеция (торцы видны)
-  c.beginPath(); c.moveTo(x0, yr); for (let x = x0; x < x1 + 8; x += 8){ const xx = Math.min(x, x1); c.lineTo(xx, troughSurf(xx, yL)); } c.lineTo(x1, yr); c.closePath();
+  const sf = (x) => Math.max(yb + 2.2, troughSurf(x, yL));   // v22: волна не выше 2,2 ед. под дальней кромкой — сок не ложится лентой поверх доски
+  c.beginPath(); c.moveTo(x0, yr); for (let x = x0; x < x1 + 8; x += 8){ const xx = Math.min(x, x1); c.lineTo(xx, sf(xx)); } c.lineTo(x1, yr); c.closePath();
   const g = c.createLinearGradient(0, yL - 3, 0, yr); g.addColorStop(0, rgba(mixRgb(col, [255, 248, 210], 0.3), 0.98)); g.addColorStop(0.4, rgba(col, 0.98)); g.addColorStop(1, rgba(shadeRgb(col, 0.86), 0.98));   // v18: сок светлее, без тёмного низа
   c.fillStyle = g; c.fill();
   { const h = c.createLinearGradient(0, yL - 1, 0, yL + 6); h.addColorStop(0, rgba(mixRgb(col, [255, 240, 190], 0.55), 0.85)); h.addColorStop(1, rgba(col, 0)); c.fillStyle = h; c.fill(); }   // v18: светлая полоса у поверхности — сок блестит, как на рефе
-  c.beginPath(); for (let x = x0; x < x1 + 8; x += 8){ const xx = Math.min(x, x1), y = troughSurf(xx, yL) + 0.7; if (x === x0) c.moveTo(xx, y); else c.lineTo(xx, y); }   // мениск у задней стенки
+  c.beginPath(); for (let x = x0; x < x1 + 8; x += 8){ const xx = Math.min(x, x1), y = sf(xx) + 0.7; if (x === x0) c.moveTo(xx, y); else c.lineTo(xx, y); }   // мениск у задней стенки
   c.lineWidth = 1.2; c.strokeStyle = 'rgba(255,255,255,0.72)'; c.stroke();
   c.fillStyle = 'rgba(255,255,255,0.32)';                    // отблески плывут по поверхности
   for (let i = 0; i < 8; i++){ const h = r3Hash(i * 3.7 + 0.2), x = x0 + ((h * W * 3 + G.rt * (5 + 6 * h)) % (x1 - x0)), y = yL + 2 + Math.max(0, yr - yL - 4) * r3Hash(i * 5.1 + 1.3);
@@ -7630,9 +7714,9 @@ function juice13(c){
   streams13(c, yL);
 }
 function streams13(c, yL){
-  const F = FX.film, Q = V13.saw, step = CFG.W / Q.n, gy = CFG.grindY, yi = gy + Q.cy + Q.R - 4;   // v18: струйки с низа каждого диска в сок, от них круги
+  const F = FX.film, Q = V13.saw, gy = CFG.grindY, yi = gy + Q.cy + Q.R - 4;   // v18: струйки с низа каждого диска в сок, от них круги
   c.lineCap = 'round';
-  for (let v = 0; v < Q.n; v++){ const x = step * (v + 0.5) + (v % 2 ? 2.5 : -2.5), ch = F13.vst[v] > G.rt, w = Math.max(F ? filmAt(x) : 0, ch ? 0.75 + 0.25 * Math.min(1, (F13.vst[v] - G.rt) * 3) : 0); if (w < 0.1) continue;
+  for (let v = 0; v < Q.n; v++){ const x = sawCx13(v) + (v % 2 ? 2.5 : -2.5), ch = F13.vst[v] > G.rt, w = Math.max(F ? filmAt(x) : 0, ch ? 0.75 + 0.25 * Math.min(1, (F13.vst[v] - G.rt) * 3) : 0); if (w < 0.1) continue;
     const cs = 'rgba(' + mixRgb(ch ? F13.vcol[v] : filmRgb13(x), V13.trough.gold, 0.35).map(Math.round).join(',') + ',1)', yB = Math.max(yi + 2, troughSurf(x, yL) + 1.5), al = Math.min(1, w * 1.4);
     if (w > 0.3){ c.globalAlpha = Math.min(0.95, (w - 0.3) * 2.2); c.strokeStyle = cs; c.lineWidth = 1.5 + w * 1.9;   /* v21: струйки гуще (было 1,1 + 1,2w) */ c.beginPath(); c.moveTo(x, yi); c.quadraticCurveTo(x + Math.sin(G.rt * 9 + v) * 0.6, (yi + yB) / 2, x, yB); c.stroke();
       c.globalAlpha *= 0.7; c.lineWidth = 0.9; c.strokeStyle = cs; c.beginPath(); c.ellipse(x, yB + 0.5, 2.5 + 2 * w + Math.sin(G.rt * 11 + v) * 0.6, 0.9, 0, 0, 6.29); c.stroke(); }   // круги на соке
@@ -7650,21 +7734,23 @@ function contact13(c, s){
     const cs = Math.cos(b.a), sn = Math.sin(b.a); let yb = -1e9, x0 = 1e9, x1 = -1e9;
     for (const v of b.verts) yb = Math.max(yb, b.y + sn * v[0] + cs * v[1]);
     for (const v of b.verts){ const y = b.y + sn * v[0] + cs * v[1]; if (y > yb - 6){ const x = b.x + cs * v[0] - sn * v[1]; x0 = Math.min(x0, x); x1 = Math.max(x1, x); } }
-    const rx = Math.max(6, (x1 - x0) / 2 + 5); c.drawImage(F13.blob, (x0 + x1) / 2 + 1.5 - rx, yb + 0.8 - hh, 2 * rx, 2 * hh); }
+    const rx = Math.max(6, (x1 - x0) / 2 + 5); c.drawImage(F13.blob, (x0 + x1) / 2 + V13.contact[2] - rx, yb + V13.contact[3] - hh, 2 * rx, 2 * hh); }
   c.globalAlpha = 1;
 }
 // Передний план: перед корыта (запечён), перелив на победе, трава и листья у нижнего края, виньетка по нижним углам.
 function front13(c, s, sh){
   const T = V13.trough, gy = CFG.grindY, W = CFG.W, Tr = trough9(), yr = gy + T.rim, yf = gy + T.face;
+  vbase(c, sh.x, sh.y); trough22Shadow(c, T, gy, W);   // v22: земля в тени под чашей (за ножками) — до переда корыта
   if (F13.front){ c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.drawImage(F13.front, Math.round(sh.x * K), F13.frontY + Math.round(sh.y * K)); c.restore(); }
   vbase(c, sh.x, sh.y);
-  if (Tr.spill){   // перелив: сок горбом над кромкой, потёки по передней доске, искры
+  if (Tr.spill && V22.spill){   // перелив: сок горбом над кромкой, потёки по передней доске, искры; v22 — снят (лента сока поверх доски, GPT №1 п. 6), победа — всплеском v21
     const age = G.rt - Tr.spill, a = clamp((age - 0.2) / 0.35, 0, 1), fade = clamp(1 - (age - 2.2) / 0.8, 0, 1), col = Tr.col, n = V9.trough.spillDrips;
     if (a > 0 && fade > 0){
       c.globalAlpha = fade; c.fillStyle = rgba(mixRgb(col, [255, 255, 255], 0.12), 0.97);
-      c.beginPath(); c.moveTo(4, yr + 2.5); for (let x = 4; x <= W - 4; x += 8) c.lineTo(x, yr + 1 - a * (2 + 1.2 * Math.sin(x * 0.07 + G.rt * 4))); c.lineTo(W - 4, yr + 2.5); c.closePath(); c.fill();
+      const sx0 = T.x0 + 3, sx1 = W - T.x0 - 3;   // v22: перелив — по кромке корыта, не во всю ширину
+      c.beginPath(); c.moveTo(sx0, yr + 2.5); for (let x = sx0; x <= sx1; x += 8) c.lineTo(x, yr + 1 - a * (2 + 1.2 * Math.sin(x * 0.07 + G.rt * 4))); c.lineTo(sx1, yr + 2.5); c.closePath(); c.fill();
       c.fillStyle = rgba(shadeRgb(col, 0.92), 0.9);
-      for (let i = 0; i < n; i++){ const x = 22 + (W - 44) * (i + 0.5) / n + 14 * Math.sin(i * 2.3), t = age - 0.3 - 0.09 * ((i * 7) % 5);
+      for (let i = 0; i < n; i++){ const x = sx0 + 14 + (sx1 - sx0 - 28) * (i + 0.5) / n + 10 * Math.sin(i * 2.3), t = age - 0.3 - 0.09 * ((i * 7) % 5);
         if (t <= 0) continue; const Lmax = (yf - yr) * (0.5 + 0.6 * (((i * 5) % 7) / 6)), Ln = Math.min(Lmax, t * (36 + 8 * ((i * 3) % 4))), w = 2 + ((i * 5) % 3) * 0.7;
         c.beginPath(); c.moveTo(x - w * 2, yr + 1); c.quadraticCurveTo(x - w * 0.7, yr + 3, x - w * 0.55, yr + Math.max(2, Ln - w));
         c.arc(x, yr + Math.max(2, Ln - w), w * 0.95, Math.PI, 0, true); c.quadraticCurveTo(x + w * 0.7, yr + 3, x + w * 2, yr + 1); c.closePath(); c.fill(); }
@@ -7679,20 +7765,26 @@ function front13(c, s, sh){
   const A = grass13(k); c.drawImage(A.cv, Math.round(sh.x * K), A.y + Math.round(sh.y * K));
   if (F13.from >= 0 && f < 1){ const B = grass13(F13.from); c.globalAlpha = 1 - fs; c.drawImage(B.cv, Math.round(sh.x * K), B.y + Math.round(sh.y * K)); c.globalAlpha = 1; }
   c.restore(); vbase(c, sh.x, sh.y);
-  { const [hh, al] = T.shadow, g = c.createLinearGradient(0, yf - 1, 0, yf + hh);   // v18: тень корыта на траве (под передней доской, между ножками)
-    g.addColorStop(0, 'rgba(10,16,6,' + al + ')'); g.addColorStop(1, 'rgba(10,16,6,0)'); c.fillStyle = g; c.fillRect(-8, yf - 1, W + 16, hh + 1); }
+}
+// v22: контактная тень корыта: тёмная земля между ножками под чашей (мягкие края) и пятно у основания ножек; рисуется под передом корыта
+function trough22Shadow(c, T, gy, W){
+  const [hh, al, ext] = T.shadow, y0 = gy + T.face - 2, y1 = gy + T.leg + hh, x0 = T.x0 - ext, x1 = W - T.x0 + ext;
+  const g = c.createLinearGradient(0, y0, 0, y1); g.addColorStop(0, 'rgba(14,26,12,' + (al * 1.6).toFixed(2) + ')'); g.addColorStop(0.55, 'rgba(18,32,14,' + al + ')'); g.addColorStop(1, 'rgba(18,32,14,0)');
+  c.save(); c.fillStyle = g; c.beginPath(); c.moveTo(x0 + 10, y0); c.lineTo(x1 - 10, y0); c.quadraticCurveTo(x1 + 4, (y0 + y1) / 2, x1 - 18, y1); c.lineTo(x0 + 18, y1); c.quadraticCurveTo(x0 - 4, (y0 + y1) / 2, x0 + 10, y0); c.fill(); c.restore();
 }
 // Трава переднего плана (печётся на состояние и кадр): стебли гуще и выше по углам, несколько листьев, низ углов темнее.
 function grass13(k){
   const key = k + '|' + cv.width + 'x' + cv.height + '|' + view.ox.toFixed(1) + ',' + view.oy.toFixed(1) + ',' + view.k.toFixed(4) + '|' + !!img16(V16.grass.img);
   F13.grass = F13.grass || {}; const old = F13.grass[k]; if (old && old.key === key) return old;
-  const T = V13.trough, gy = CFG.grindY, W = CFG.W, L = V13.look[V13.states[k]], [dk, lt, lf] = L.grass, [, yBot] = scrY13(), yT = gy + T.face - 8;   // v18: слой травы (и виньетка углов) — ниже передней доски, корыто не темнит
+  const T = V13.trough, gy = CFG.grindY, W = CFG.W, L = V13.look[V13.states[k]], [dk, lt, lf] = L.grass, [, yBot] = scrY13(), yT = gy + Math.min(T.face - 8, V22.grass.top);   // v18: слой травы (и виньетка углов) — ниже передней доски, корыто не темнит; v22 — выше по бокам (пучки)
   const y0 = Math.max(0, Math.floor(yT * K + view.oy * DPR)), c = document.createElement('canvas'); c.width = cv.width; c.height = Math.max(1, cv.height - y0);
   const g = c.getContext('2d'); g.setTransform(K, 0, 0, K, DPR * view.ox, DPR * view.oy - y0);
   const xL = -view.ox / view.k - 4, xR = (cv.width / DPR - view.ox) / view.k + 4, span = xR - xL, yb0 = gy + T.face + 3, gim = img16(V16.grass.img);
-  if (gim){ grass16(g, gim, k, xL, xR, gy + T.face + V16.grass.y, yBot); g.setTransform(1, 0, 0, 1, 0, 0);   // v16: рисованные пучки (GPT), повтор зеркалом
+  if (gim){ grass16(g, gim, k, xL, xR, gy + T.face + V16.grass.y, yBot, (gg) => grass22Clumps(gg, gim, gy)); g.setTransform(1, 0, 0, 1, 0, 0);   // v16: рисованные пучки (GPT), повтор зеркалом; v22 — пучки по бокам
+    g.globalCompositeOperation = 'source-atop';   // v22: виньетка — только по траве (слой выше из-за пучков, полосы по лесу нет)
     for (const cx of [0, c.width]){ const r = Math.max(c.width, c.height) * 0.75, q = g.createRadialGradient(cx, c.height, 0, cx, c.height, r);
       q.addColorStop(0, 'rgba(6,12,6,' + (L.vig + 0.12).toFixed(2) + ')'); q.addColorStop(1, 'rgba(6,12,6,0)'); g.fillStyle = q; g.fillRect(0, 0, c.width, c.height); }
+    g.globalCompositeOperation = 'source-over';
     return F13.grass[k] = { key, cv: c, y: y0 }; }
   const blade = (x, y, h, lean, w, i) => { const tx = x + lean * h, ty = y - h, gr = g.createLinearGradient(0, y, 0, ty); gr.addColorStop(0, dk); gr.addColorStop(1, lt);
     g.fillStyle = gr; g.beginPath(); g.moveTo(x - w / 2, y + 2); g.quadraticCurveTo(x - w * 0.3 + lean * h * 0.35, y - h * 0.55, tx, ty); g.quadraticCurveTo(x + w * 0.35 + lean * h * 0.5, y - h * 0.5, x + w / 2, y + 2); g.closePath(); g.fill(); };
@@ -7713,12 +7805,27 @@ function grass13(k){
 }
 // v16: полоса травы GPT от верха y0 до низа экрана: высота полосы V16.grass.h ед., ширина — по пропорции картинки, копии через одну
 // отражены (стык без шва); ниже картинки — её нижний тон; цвет состояния — заливкой поверх (туман белёсее, вечер теплее, ночь синее).
-function grass16(g, im, k, xL, xR, y0, yBot){
+function grass16(g, im, k, xL, xR, y0, yBot, more){
   const H = V16.grass.h, Wt = H * im.naturalWidth / im.naturalHeight, n = Math.ceil((xR - xL) / Wt) + 1;
   g.fillStyle = '#1f4a1c'; g.fillRect(xL - 2, y0 + H - 2, xR - xL + 4, Math.max(0, yBot - y0 - H + 44));
   for (let i = 0; i < n; i++){ const x = xL - Wt * 0.37 + i * Wt; g.save(); if (i % 2){ g.translate(x + Wt, y0); g.scale(-1, 1); g.drawImage(im, 0, 0, Wt, H); } else g.drawImage(im, x, y0, Wt, H); g.restore(); }
-  const tint = [null, 'rgba(196,212,206,0.26)', 'rgba(255,168,70,0.16)', 'rgba(8,22,48,0.55)'][k];
-  if (tint){ g.save(); g.globalCompositeOperation = 'source-atop'; g.fillStyle = tint; g.fillRect(xL - 2, y0 - 2, xR - xL + 4, yBot - y0 + 48); g.restore(); }
+  if (more) more(g);
+  const tint = [null, 'rgba(196,212,206,0.14)', 'rgba(255,168,70,0.16)', 'rgba(8,22,48,0.55)'][k];   // v22: туман — 0,14 (было 0,26: трава серела)
+  if (tint){ g.save(); g.globalCompositeOperation = 'source-atop'; g.fillStyle = tint; g.fillRect(xL - 2, gy22Top() - 2, xR - xL + 4, yBot - gy22Top() + 48); g.restore(); }
+}
+// v22 (GPT №1, п. 6): пучки травы по бокам — 5 несимметричных групп из той же картинки (вырезка кочки, низ растворяется в полосе);
+// середина спокойная; ближние к ножкам перекрывают их низ на 1–2 % W. V22.grass.clumps: [центр x, ширина, высота, низ (ед. ниже grindY),
+// кочка картинки (x0, x1 в px), зеркало]
+const gy22Top = () => CFG.grindY + V22.grass.top;
+function grass22Clumps(g, im, gy){
+  const sc = im.naturalHeight / 325;
+  for (const [cx, w, h, yb, sx0, sx1, mir] of V22.grass.clumps){
+    const sw = (sx1 - sx0) * sc, shh = 190 * sc, dh = h / 0.82, t = F13.gtmp || (F13.gtmp = document.createElement('canvas')), tw = 256, th = Math.round(256 * dh / w);
+    t.width = tw; t.height = th; const q = t.getContext('2d'); q.clearRect(0, 0, tw, th);
+    q.save(); if (mir){ q.translate(tw, 0); q.scale(-1, 1); } q.drawImage(im, sx0 * sc, 0, sw, shh, 0, 0, tw, th); q.restore();
+    q.globalCompositeOperation = 'destination-in'; const m = q.createLinearGradient(0, 0, 0, th); m.addColorStop(0, '#000'); m.addColorStop(0.62, '#000'); m.addColorStop(1, 'rgba(0,0,0,0)');
+    q.fillStyle = m; q.fillRect(0, 0, tw, th); q.globalCompositeOperation = 'source-over';
+    g.drawImage(t, cx - w / 2, gy + yb - dh, w, dh); }
 }
 // Искры — редкие и только в момент перемола; сок веером.
 function sparks13(x){
@@ -7740,8 +7847,13 @@ function sparks13Draw(c, dt){
 // 3D-осколки (одна сетка на всех) по касательной в сторону вращения низкой дугой — падают на диски и уходят в щели или налипают на зубья
 // и в прорези; стружка мякоти и короткие струи сока. Крупный кусок раскалывается на 2–3 — каждый доедается так же. Диск под куском
 // садится по скорости и мокнет соком этого фрукта (карта по углу диска — крутится вместе с ним).
-const sawTop13 = (x) => { const Q = V13.saw, st = CFG.W / Q.n; let y = 1e9;   // верх дисков над x (самый высокий из соседних), ед.
-  for (let i = Math.max(0, Math.floor(x / st) - 1); i <= Math.min(Q.n - 1, Math.floor(x / st) + 1); i++){ const dx = x - st * (i + 0.5); if (Math.abs(dx) < Q.R) y = Math.min(y, CFG.grindY + Q.cy - Math.sqrt(Q.R * Q.R - dx * dx)); }
+// v22: ряд пил ≈ 84 % W по центру (шаг CFG.sawRow.pitch), а не во всю ширину: центр диска i, ближайший диск к x, расстояние до щели
+const sawCx13 = (i) => CFG.W / 2 + (i - (V13.saw.n - 1) / 2) * V13.saw.pitch;
+const sawI13 = (x) => clamp(Math.round((x - sawCx13(0)) / V13.saw.pitch), 0, V13.saw.n - 1);
+const gapD13 = (x) => { const p = V13.saw.pitch, u = (x - sawCx13(0) - p / 2) / p; return Math.abs(u - Math.round(u)) * p; };
+const sawRow13 = () => [sawCx13(0) - V13.saw.R, sawCx13(V13.saw.n - 1) + V13.saw.R];
+const sawTop13 = (x) => { const Q = V13.saw, i0 = sawI13(x); let y = 1e9;   // верх дисков над x (самый высокий из соседних), ед.
+  for (let i = Math.max(0, i0 - 1); i <= Math.min(Q.n - 1, i0 + 1); i++){ const dx = x - sawCx13(i); if (Math.abs(dx) < Q.R) y = Math.min(y, CFG.grindY + Q.cy - Math.sqrt(Q.R * Q.R - dx * dx)); }
   return y; };
 function frag13Parts(src, n, seed, dirW){                      // src (verts, cutEdges) → n частей прямыми через центр; dirW — нормаль реза в мире (null — крест)
   let parts = [{ V: src.verts.map(v => [v[0], v[1]]), F: src.cutEdges.slice() }];
@@ -7754,8 +7866,8 @@ function frag13Parts(src, n, seed, dirW){                      // src (verts, cu
   }
   return parts;
 }
-const discAt13 = (x) => { const Q = V13.saw, st = CFG.W / Q.n, i0 = Math.floor(x / st); let y = 1e9, k = clamp(i0, 0, Q.n - 1);   // диск, чей верх выше всех над x
-  for (let i = Math.max(0, i0 - 1); i <= Math.min(Q.n - 1, i0 + 1); i++){ const dx = x - st * (i + 0.5); if (Math.abs(dx) < Q.R){ const yy = CFG.grindY + Q.cy - Math.sqrt(Q.R * Q.R - dx * dx); if (yy < y){ y = yy; k = i; } } }
+const discAt13 = (x) => { const Q = V13.saw, i0 = sawI13(x); let y = 1e9, k = i0;   // диск, чей верх выше всех над x
+  for (let i = Math.max(0, i0 - 1); i <= Math.min(Q.n - 1, i0 + 1); i++){ const dx = x - sawCx13(i); if (Math.abs(dx) < Q.R){ const yy = CFG.grindY + Q.cy - Math.sqrt(Q.R * Q.R - dx * dx); if (yy < y){ y = yy; k = i; } } }
   return k; };
 function bite13Ext(f){                                        // мировой контур куска: верх и низ (ед.)
   const cs = Math.cos(f.a), sn = Math.sin(f.a); let t = 1e9, b = -1e9;
@@ -7771,8 +7883,8 @@ function bite13Chord(f, y){                                   // где гори
 }
 const floor13 = (L, R) => { let y = 1e9; for (let k = 0; k <= 4; k++) y = Math.min(y, sawTop13(L + (R - L) * k / 4)); return y; };   // верх самых высоких зубьев под обрезом
 function bite13Target(f){                                     // щель, куда тянет диск под куском (у стенки — к стенке)
-  const st = CFG.W / V13.saw.n, i = discAt13(f.x), d = i % 2 ? 1 : -1;
-  f.tx = clamp(st * (d > 0 ? i + 1 : i), f.rad * 0.35, CFG.W - f.rad * 0.35);
+  const p = V13.saw.pitch, i = discAt13(f.x), d = i % 2 ? 1 : -1, [rL, rR] = sawRow13();   // v22: щель — между центрами дисков, в пределах ряда
+  f.tx = clamp(sawCx13(i) + d * p / 2, rL + V13.saw.R * 0.6 + f.rad * 0.35, rR - V13.saw.R * 0.6 - f.rad * 0.35);
 }
 const eatT13 = (area) => { const C = V13.bite; return C.eat[0] + (C.eat[1] - C.eat[0]) * clamp((Math.sqrt(area) - C.eatA[0]) / (C.eatA[1] - C.eatA[0]), 0, 1); };
 function eat13Init(f, imp){                                   // кусок на зубьях — пила ест его снизу (круг 3): обрез, высота, скорость съедания, щель
@@ -7866,13 +7978,13 @@ function churn13Burst(f, x, y){                                // конец: т
   churnEnd21(f, x, y); Sound.playRL('squish', 0.05, Math.round(f.A0)); rumble(0.6, 0.15); F13.stats.churnEnd = (F13.stats.churnEnd || 0) + 1;
 }
 function churn13Step(f, dt, sr, DL){                           // тело в пилах: рывки, доворот, дрожь; обрез поднимается по телу → [] съеден, [части] раскол, null — живёт
-  const C = V13.bite, U = C.churn, st = CFG.W / V13.saw.n, di = discAt13(f.x), sp = F13.dw ? F13.dw[di] : 1, fast = F13.fastK || 1;
+  const C = V13.bite, U = C.churn, st = V13.saw.pitch, di = discAt13(f.x), sp = F13.dw ? F13.dw[di] : 1, fast = F13.fastK || 1;
   if (sr && sr.ph){ const P = Math.round(sr.ph / (2 * Math.PI)) * 2 * Math.PI; sr.ph += (P - sr.ph) * (1 - Math.exp(-16 * dt)); if (Math.abs(P - sr.ph) < 0.02) sr.ph = P; }
   if (f.t >= f.nj){ f.jd = -f.jd; f.ox = f.jd * 0.5 * st * (U.jerk[0] + (U.jerk[1] - U.jerk[0]) * R()); f.w += f.jd * (U.turn[0] + (U.turn[1] - U.turn[0]) * R()) * (R() < 0.75 ? 1 : -1); f.jk = 1;   // рывок туда-сюда вокруг щели
     f.nj = f.t + (U.gap[0] + (U.gap[1] - U.gap[0]) * R()) / Math.max(0.75, sp) / fast; F13.stats.jerks = (F13.stats.jerks || 0) + 1;
     Sound.playRL('tear', 0.08, Math.round(f.area * 10 + f.t * 100)); rumble(0.2 + 0.3 * clamp(Math.sqrt(f.A0) / 60, 0, 1), 0.08); }
   f.jk *= Math.exp(-dt * U.jkFade);
-  const tx = clamp(f.tx + f.ox, f.rad * 0.45, CFG.W - f.rad * 0.45), x0 = f.x; f.x += (tx - f.x) * Math.min(1, U.snap * dt);
+  const [rL, rR] = sawRow13(), tx = clamp(f.tx + f.ox, rL + f.rad * 0.45, rR - f.rad * 0.45), x0 = f.x;   // v22: мотает в пределах ряда f.x += (tx - f.x) * Math.min(1, U.snap * dt);
   F13.stats.jerkX = Math.max(F13.stats.jerkX || 0, Math.round(Math.abs(f.x - f.tx)));
   f.a += f.w * dt; f.w *= Math.exp(-dt * 9);
   const v = (f.vs * (U.vs[0] + (U.vs[1] - U.vs[0]) * f.jk) + Math.max(0, f.imp - f.vs) * Math.exp(-f.t / C.imp)) * fast; f.y += v * dt;   // поглощение: на рывке быстрее
@@ -7885,7 +7997,7 @@ function churn13Step(f, dt, sr, DL){                           // тело в п
   const e = clamp(1 - (f.clip - f.top) / f.H0, 0, 1), cc = bite13Chord(f, f.clip - 0.4);
   if (cc){ const cL = cc[0], cR = cc[1], n = V13.saw.n, Rr = V13.saw.R, cy = CFG.grindY + V13.saw.cy;
     churn13Emit(f, cL, cR, f.clip, (1 + U.boost * f.jk) * (e > U.end[0] ? U.end[1] : 1) * Math.min(2, fast), dt);
-    for (let d = Math.max(0, Math.floor((cL - Rr) / st)); d <= Math.min(n - 1, Math.floor((cR + Rr) / st)); d++){ const cx = st * (d + 0.5), a = Math.max(cL, cx - Rr), b = Math.min(cR, cx + Rr); if (b <= a) continue;
+    for (let d = 0; d < n; d++){ const cx = sawCx13(d), a = Math.max(cL, cx - Rr), b = Math.min(cR, cx + Rr); if (b <= a) continue;
       DL[d] += (b - a) / (2 * Rr); const xm = (a + b) / 2, ym = cy - Math.sqrt(Math.max(0, Rr * Rr - (xm - cx) * (xm - cx)));
       wet13Stamp(d, xm, ym, Math.max(0.25, (b - a) / Rr), f.kind, C.wet.rate * dt * Math.min(1, (b - a) / 20)); } }
   if (f.splitE && e >= f.splitE && F13.bud >= 2 && F13.frags.length + 2 <= V13.frag.max && (!sr || !sr.ph)){   // редкий раскол без подлёта: части так же мотает
@@ -7967,7 +8079,7 @@ function shard13Stick(di, x, y, fl, rd, slot){                // налип: н�
 }
 function shard13Update(dt){
   const S = F13.shd; if (!S || !F13.shM) return; F13.shM.visible = F13.live; if (dt <= 0 && S.length) { shard13Write(); return; }
-  const Q = V13.bite.shard, Rr = V13.saw.R, st = CFG.W / V13.saw.n, OM = F13.om;
+  const Q = V13.bite.shard, Rr = V13.saw.R, OM = F13.om;
   for (let i = S.length - 1; i >= 0; i--){ const q = S[i]; q.t += dt;
     if (q.ph === 0){ q.vy += Q.g * dt; q.x += q.vx * dt; q.y += q.vy * dt; q.ang += q.w * dt; q.z = 5;
       if (q.x < 2 && q.vx < 0 || q.x > CFG.W - 2 && q.vx > 0) q.vx *= -0.3;
@@ -7976,7 +8088,7 @@ function shard13Update(dt){
           q.la = Math.atan2(q.y - m.position.y, q.x - m.position.x) - m.rotation.z; q.lr = Rr - 1.2; q.s *= 0.85; }
         else { q.ph = 1; q.T = Q.ride[0] + (Q.ride[1] - Q.ride[0]) * R(); } }
       if (q.t > 1.6 || q.y > CFG.grindY + 80) S.splice(i, 1); }
-    else if (q.ph === 1){ const di = discAt13(q.x), d = di % 2 ? 1 : -1, v = Math.min(95, (OM ? OM[di] : 6) * Rr * 0.5), vx = Math.abs(q.x - st * Math.round(q.x / st)) < 3.5;   // едет к щели по верху диска
+    else if (q.ph === 1){ const di = discAt13(q.x), d = di % 2 ? 1 : -1, v = Math.min(95, (OM ? OM[di] : 6) * Rr * 0.5), vx = gapD13(q.x) < 3.5;   // едет к щели по верху диска
       q.x += d * v * dt; const e = Math.max(0, q.t / q.T - 0.55) / 0.45; q.y = sawTop13(q.x) - q.s * 0.35 + e * e * 10; q.k = 1 - e * 0.85; q.z = 5 - 9 * e; q.ang += q.w * 0.25 * dt;
       if (vx && q.t < q.T * 0.55) q.t = q.T * 0.55; if (q.t >= q.T) S.splice(i, 1); }
     else { const m = F13.saws[q.disc], ph = q.la + m.rotation.z; q.x = m.position.x + Math.cos(ph) * q.lr; q.y = m.position.y + Math.sin(ph) * q.lr; q.z = m.position.z + (q.slot ? 0 : 1.7); q.ang = q.a0 + m.rotation.z;
@@ -8032,7 +8144,7 @@ function bite13Update(dt){
   F13.bud = bud + 4; F13.zt = zone13(); mist13Update(dt);   // круг 5: зона полёта мелочи — ниже кучи и опор
   const CH = F13.frags.filter(f => f.ph === 'churn').sort((a, b) => a.x - b.x);   // тела в пилах не слипаются: видно, какое где мотает
   for (let i = 1; i < CH.length; i++){ const a = CH[i - 1], b = CH[i], need = (a.rad + b.rad) * C.churn.sep, d = b.x - a.x; if (d < need){ const m = (need - d) * Math.min(1, 6 * dt) * 0.5; a.x -= m; b.x += m; } }
-  const DL = F13.dl || (F13.dl = new Float32Array(n)), st = CFG.W / n, Rr = V13.saw.R, cy = CFG.grindY + V13.saw.cy;
+  const DL = F13.dl || (F13.dl = new Float32Array(n)), Rr = V13.saw.R, cy = CFG.grindY + V13.saw.cy;
   for (let i = F13.frags.length - 1; i >= 0; i--){ const f = F13.frags[i], sr = R3.st.get(f.id); f.t += dt;
     if (f.ph === 'churn'){ const r = churn13Step(f, dt, sr, DL); eating++; kmax = Math.max(kmax, clamp(Math.sqrt(f.area) / 50, 0.2, 1));   // круг 5: тело в пилах
       if (Array.isArray(r)){ F13.frags.splice(i, 1, ...r); if (!r.includes(f)){ R3.st.delete(f.id); R3.etool.delete(f.id); }
@@ -8055,7 +8167,7 @@ function bite13Update(dt){
     eating++; const k = clamp(Math.sqrt(f.area) / 50, 0.2, 1); kmax = Math.max(kmax, k);
     const cc = bite13Chord(f, f.clip - 0.4); if (cc){ const cL = cc[0], cR = cc[1], wC = cR - cL;
       bite13Emit(f, cL, cR, f.clip, clamp(C.rate[0] * wC * v, C.rate[1], C.rate[2]), dt);
-      for (let d = Math.max(0, Math.floor((cL - Rr) / st)); d <= Math.min(n - 1, Math.floor((cR + Rr) / st)); d++){ const cx = st * (d + 0.5), a = Math.max(cL, cx - Rr), b = Math.min(cR, cx + Rr); if (b <= a) continue;
+      for (let d = 0; d < n; d++){ const cx = sawCx13(d), a = Math.max(cL, cx - Rr), b = Math.min(cR, cx + Rr); if (b <= a) continue;
         DL[d] += (b - a) / (2 * Rr); const xm = (a + b) / 2, ym = cy - Math.sqrt(Math.max(0, Rr * Rr - (xm - cx) * (xm - cx)));
         wet13Stamp(d, xm, ym, Math.max(0.25, (b - a) / Rr), f.kind, C.wet.rate * dt * Math.min(1, (b - a) / 20)); } }
     const e = 1 - (f.clip - f.top) / f.H0;                     // раскол крупного: половинки расходятся, каждую доедают
@@ -8072,7 +8184,7 @@ function bite13Update(dt){
 }
 const idle13 = (s) => !F13.frags.length && s.grinding.every(g => F13.split.has(g.id)) && !s.bodies.some(b => b.flags.swept);   // v13 круг 5: пилы пусты
 function chew13Gap(x, kind, k){                                // сок уходит в щель между дисками: струйка в корыто, круги на соке
-  const Q = V13.saw, st = CFG.W / Q.n, v = clamp(Math.floor(x / st), 0, Q.n - 1), c = hexRgb(juiceHex(kind)), xs = st * (v + 0.5);   // v18: струйка — с низа диска (как на рефе)
+  const v = sawI13(x), c = hexRgb(juiceHex(kind)), xs = sawCx13(v);   // v18: струйка — с низа диска (как на рефе)
   F13.vst[v] = Math.max(F13.vst[v] || 0, G.rt + 0.35 + 0.3 * k); F13.vcol[v] = c; filmAdd(xs, 0.08 * k, c, 10);
   const T = trough9(); T.waves.push({ x: xs, t0: G.rt, a: 0.9 * k }); if (T.waves.length > 8) T.waves.shift();
   return xs;
