@@ -1399,7 +1399,11 @@ function levelData(n, attempt){
     return Object.assign({ tier: 0, tpl: 'clear', theme: 0, specials: [], mode: 'clear', set: 'v7', v11: true }, n.form ? build11(n.form) : null, n, { n: n.n || 1, idx: n.idx || 1 });
   if (CFG.goalMode === 'clear' && CFG.clearSet === 'v19' && CLEAR19.length){   // v24: срез девяти уровней (#slice19): победа по массе, кормушка, ящик и ляда
     const T = CLEAR19, k = (((n - 1) % T.length) + T.length) % T.length;
-    return Object.assign({ tier: 0, tpl: 'clear', theme: 0, specials: [], mode: 'clear', mass: true }, T[k], { n, idx: k + 1, set: 'v7', v11: true, v19: true });
+    return Object.assign({ tier: 0, tpl: 'clear', theme: 0, specials: [], mode: 'clear', mass: true }, T[k], { n, idx: k + 1, set: 'v7', v11: true, v19: true });   // v25: lab19 и тесты (CLEAR19 целиком, с образцами среза 31–62)
+  }
+  if (CFG.goalMode === 'clear' && CFG.clearSet === 'v15'){   // v25: прежние десять из досок (CLEAR15) — только для lab15 и тестов, в линейке их нет
+    const T = CLEAR15, k = (((n - 1) % T.length) + T.length) % T.length;
+    return Object.assign({ tier: 0, tpl: 'clear', theme: 0, specials: [], mode: 'clear' }, T[k], { n, idx: k + 1, set: 'v7', v11: true });
   }
   if (CFG.goalMode === 'clear' && CFG.clearSet !== 'v7' && LINE11.length){   // v11: линейка (v15: 110 уровней); после последнего — по кругу с CFG.loop11
     const T = LINE11, N = T.length, a = Math.max(0, Math.min(N, CFG.loop11) - 1); let k = Math.max(0, n - 1); if (k >= N) k = a + ((k - N) % (N - a));
@@ -1464,17 +1468,19 @@ function placePile(L, polys, gaps){
     let best = null;
     for (let x = Math.ceil(ext + 1); x <= CFG.W - ext - 1; x += CFG.placeStep){
       if (x - ext < xlo || x + ext > xhi) continue;
-      let y = Infinity, bad = false;
-      const hit = (t, b, oy) => { t -= oy; b -= oy; if (b < from) return; if (t < from){ bad = true; return; } if (t < y) y = t; };
+      let y = Infinity, bad = false, under = it[10] ? [] : null;   // v25: under — ярус под навесом: деталь выше from пропускается, если плод её не касается
+      const hit = (t, b, oy, q) => { t -= oy; b -= oy; if (b < from) return; if (t < from){ if (under && q){ if (t < y) y = t; return; } if (under) under.push(b); else bad = true; return; } if (t < y) y = t; };   // v25: под навесом на соседей можно лечь и выше from
       for (const c of C){
         const cx = x + c[0], cr = c[2];
         y = Math.min(y, floorY - cr - c[1]);
         for (const P of polys){ const sp = polySpanAt(P, cx, cr); if (sp) hit(sp[0], sp[1], c[1]); }
-        for (const q of circles){ const dx = cx - q[0], rr = cr + q[2]; if (Math.abs(dx) < rr){ const h = Math.sqrt(rr * rr - dx * dx); hit(q[1] - h, q[1] + h, c[1]); } }
+        for (const q of circles){ const dx = cx - q[0], rr = cr + q[2]; if (Math.abs(dx) < rr){ const h = Math.sqrt(rr * rr - dx * dx); hit(q[1] - h, q[1] + h, c[1], 1); } }
       }
       if (bad) continue;
+      if (under && under.some(b => y < b + 1)) continue;
       y -= CFG.placeGap;
       if (y - top < CFG.pileTop) continue;
+      if (it[9] != null && y + bot > it[9]) continue;   // v25: ярус — предмет ложится не ниже to (иначе плоды верхней камеры уходят в нижнюю)
       for (const g of gaps) if (width < g.w + (g.float ? 2 : 8) && Math.abs(x - g.x) < g.w / 2 + ext && y + bot > g.y - 2 && !(g.float && y - top > g.yb)) bad = true;   // v3: под щелью камеры в воздухе — можно
       if (bad) continue;
       if (!best || y > best.y + 2 || (Math.abs(y - best.y) <= 2 && Math.abs(x - px) < Math.abs(best.x - px))) best = { x, y };
@@ -3303,7 +3309,6 @@ const CLEAR11 = [
   { /*S11_100*/ solution: [{"w":"mace","pts":[[259.3,532],[376.3,298]]},{"w":"knife","pts":[[371.4,489.9],[111.6,639.9]]},{"w":"knife","pts":[[163.9,432.9],[313.9,692.7]]},{"w":"knife","pts":[[216.1,184.3],[66.1,444.1]]},{"w":"knife","pts":[[45.3,528.1],[345.3,528.1]]},{"w":"mace","pts":[[312.4,484.5],[312.4,744.5]]}], /*END*/name: "One Hundred", role: 'p', form: ["G", 10002, "N", {n: 38, top: "CB"}], loadout: {mace: 3, knife: 4} },
 /* END CLEAR11 */
 ];
-const LINE11 = CLEAR15.concat(CLEAR11);   // v15: линейка игры — десять из досок, затем 100 уровней v11 (11–110, те же записи)
 // ------------------------------------------------------------------ v24: срез ста уровней из досок (CLEAR19, хеш #slice19)
 // Девять уровней-проб расписания (№ 1, 3, 9, 19, 24, 31, 38, 54, 62): волна-досыпка из кормушки, ящик на верёвке, гнездо, доска
 // с нагелями, песочные часы, ляда в досках, поздняя смесь. Победа — по массе (L.mass, massCheck), запас — по инструментам.
@@ -3334,29 +3339,197 @@ const W19 = {
     return res;
   },
 };
+// v25: мелочь ≈ 6,3 % W (≈ 25 ед.) — масштаб по виду (поперечник FILL11 × масштаб); прочие крупные — 16–20 % W, герой один — 26–29 % W
+const SZ25 = { grape: 1.04, cherry: 0.9, berry: 0.7, lime: 0.66, plum: 0.63, lemon: 0.58, apple: 0.5, orange: 0.47 };
+// Начинка v25: как fill15, но масштаб по виду (SZ25 × k) — мелочь одного поперечника любого цвета
+function fill25(kinds, cnt, x0, x1, from, k, to){
+  const out = []; let row = 0;
+  while (cnt > 0 && row < 24){
+    const kd = kinds[row % kinds.length], f = FILL11.find(q => q[0] === kd), sc = +((SZ25[kd] || 0.63) * (k || 1)).toFixed(3), d = (f ? f[1] : 40) * sc + 5, off = (row % 2) * d / 2;
+    for (let x = x0 + d / 2 + off; x <= x1 - d / 2 && cnt > 0; x += d, cnt--) out.push([kd, Math.round(x), sc, 0, null, from == null ? null : from, Math.round(x0), Math.round(x1), null, to == null ? null : to, from == null ? 0 : 1]);
+    row++;
+  }
+  return out;
+}
+// v25: пробка точно на щели: центр над щелью cx, на кромках y шириной gap (пробка шире щели на 2–4 ед. — половинки после реза не встают аркой)
+const SEAT = (kind, cx, y, gap, sc, tag, ang) => { const r = polyRadius(kindVerts(kind, sc || 1)); return AT19(kind, cx, +(y - Math.sqrt(Math.max(0, r * r - gap * gap / 4)) - 0.5).toFixed(1), sc, tag, ang); };
+// v25: ярус предмета — сыпать в полосе [from, to] по высоте (from — выше этого не ложится и сквозь детали выше проходит, to — ниже не ложится)
+const TIER = (it, from, to) => { it[5] = from == null ? it[5] : from; while (it.length < 9) it.push(null); it[9] = to == null ? null : to; it[10] = from == null ? 0 : 1; return it; };
+const W25 = {
+  // корыто: стенки — внутренние грани x0 и x1 от yt вниз, в полу щели slots [[cx, w], …] (слева направо); дно у стенок — доска скатом к
+  // крайней щели (выше на drop), между щелями — столб-конёк (верх на rise над дном, скаты capA°): что легло на конёк, скатывается в щель.
+  // Задняя стенка — доски, балка по верху (o.beam === false — без неё)
+  trough(x0, x1, yt, yb, slots, o){
+    o = o || {}; const t = o.t || W15.tf, tw = o.tw || W15.tw, drop = o.drop == null ? 30 : o.drop, rise = o.rise == null ? 40 : o.rise, out = [];
+    const S = slots.map(([cx, w]) => [cx - w / 2, cx + w / 2]);
+    out.push(['wood', 'floor', W15.floor([x0 - tw, yb - drop], [S[0][0], yb], t)], ['wood', 'floor', W15.floor([S[S.length - 1][1], yb], [x1 + tw, yb - drop], t)]);
+    for (let k = 0; k + 1 < S.length; k++){ const b1 = S[k][1], a2 = S[k + 1][0], mx = (b1 + a2) / 2, cap = (a2 - b1) / 2 * Math.tan((o.capA || 50) * Math.PI / 180), ry = yb - rise;
+      out.push(['wood', 'post', [[b1, yb + t], [b1, ry + cap], [mx, ry], [a2, ry + cap], [a2, yb + t]].map(v => [+v[0].toFixed(2), +v[1].toFixed(2)])]); }
+    for (const [cx, w] of slots) out.push(['slot', cx, yb, w, yb + t]);
+    out.push(['wood', 'side', W15.rect(x0 - tw, yt, x0, yb - drop + t)], ['wood', 'side', W15.rect(x1, yt, x1 + tw, yb - drop + t)]);
+    out.push(['back', W15.rect(x0 - tw, yt, x1 + tw, yb + t * 0.6)]);
+    if (o.beam !== false) out.push(...W15.beam(yt, [[o.bx0 || 0, x0 - tw], [x1 + tw, o.bx1 == null ? CFG.W : o.bx1]], o.bh));
+    return out;
+  },
+};
 const CLEAR19 = [
-  // 1 · i · бункер-воронка, M · K3. Крупный арбуз открывает всю видимую кучку одним широким свайпом (First Cut, перенос композиции)
-  { num: 1, name: 'First Cut', role: 'i', hint: ['Cut the melon!'], loadout: { knife: 3 }, solution: [{"w":"knife","pts":[[117.5,402.7],[267.5,662.5]]}],
-    parts: [...W15.hopper(200, 626, 104, 52, 348, 435, { ch: 24, sh: 8, lipA: 60 })], holds: [[40, 420, 360, 652]],
-    pile: [TG(P7('melon', 200, 1), 'M'), ...fill15(['plum', 'lime'], 19, 66, 334, null, 0.72)] },
+  // ---- v25: уровни 1–25 (PLAN19 в tools/plan19.mjs). Все плоды лежат в постройках с начала, падают по физике; досыпки нет.
+  // 1 · i · бункер-воронка, M · K3. Крупный арбуз открывает всю видимую гору одним широким свайпом
+  { num: 1, name: 'First Cut', role: 'i', hint: ['Cut the melon!'], loadout: { knife: 3 }, solution: [{"w":"knife","pts":[[149.8,693.5],[249.8,520.3]]}],
+    parts: [...W15.hopper(200, 626, 104, 44, 356, 372, { ch: 24, sh: 8, lipA: 60 })], holds: [[30, 360, 370, 652]],
+    pile: [TG(P7('melon', 200, 1), 'M'), ...fill25(['plum', 'lime', 'cherry', 'apple'], 22, 60, 340, null, 1.3)] },
+  // 2 · n · короб с боковой дверцей, M>M · K4. Тот же рез выпускает фрукты вбок; второй арбуз скатывается в дверцу — второй рез
+  { num: 2, name: 'Side Spill', role: 'n', loadout: { knife: 4 }, solution: [{"w":"knife","pts":[[296,673.9],[244.3,480.7]]},{"w":"knife","pts":[[300.9,646.8],[269.9,530.9]]}],
+    parts: [...W15.box(40, 318, 360, 640, { slot: ['side', 'R', 78], drop: 56 })], holds: [[30, 350, 360, 650]],
+    pile: [TG(P7('melon', 262, 0.92, 560, 0, 4), 'M1'), TG(P7('melon', 120, 0.76, null, 0, 10), 'M2'), ...fill25(['apple', 'lemon', 'orange'], 18, 46, 312, null, 1.3)] },
   // 3 · n · короб со щелью в полу, D · K3. Два арбуза столбиком над щелью — одна длинная прямая проходит оба
-  { num: 3, name: 'One Line', role: 'n', loadout: { knife: 3 }, solution: [{"w":"knife","pts":[[200,380],[200,690]]}],
-    parts: [...W15.box(70, 330, 400, 624, { slot: ['floor', 200, 97], drop: 48 })], holds: [[50, 380, 350, 645]],
-    pile: [TG(P7('melon', 200, 0.92, null, 0, 4), 'D1'), TG(P7('melon', 200, 0.86, null, 0, 4), 'D2'), ...fill15(['plum', 'lime'], 14, 76, 324, null, 0.8)] },
-  // 9 · i · бункер-воронка, M → M, волна ×1 · K4. Открытая чаша получает видимую вторую порцию с такой же мягкой пробкой
-  { num: 9, name: 'Second Helping', role: 'i', hint: ['Cut the melon!'], loadout: { knife: 4 }, solution: [{"w":"knife","pts":[[117.5,412],[267.5,672]]},{"w":"knife","pts":[[117.5,412],[267.5,672]]}],
-    parts: [...W15.hopper(200, 626, 104, 44, 356, 460, { ch: 24, sh: 8, lipA: 60 }), ...W19.feeder(200, 404, 116, 56, 344, 302, { bh: 26 }).parts], holds: [[36, 448, 364, 652]],
-    feed: { x: 200, y: 404, w: 116, box: [56, 344, 302], zone: [36, 448, 364, 652], portions: [{ key: 'M1', plugs: ['M'], items: [['melon', 0.96, 'M2'], ...[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(k => [k % 2 ? 'lime' : 'plum', 0.72])] }] },
-    pile: [AT19('melon', 200, 590, 1, 'M1'), ...fill15(['plum', 'lime'], 12, 60, 340, 420, 0.72)] },
-  // 19 · i · ящик на верёвке, M · K4. Одна доступная верёвка выпускает груз в открытый приёмник с одним мягким выходом
-  { num: 19, name: 'Pull the Thread', role: 'i', hint: ['Cut the rope!'], loadout: { knife: 4 }, solution: [{"w":"knife","pts":[[120,365],[230,365]]},{"w":"knife","pts":[[117.5,412],[267.5,672]]}],
-    parts: [...W15.hopper(190, 626, 104, 14, 386, 478, { ch: 24, sh: 8, lipA: 60 }), ...W19.ropeBox(388, 402, 200, 'R', 330, 330)], holds: [[10, 470, 390, 652], [230, 318, 400, 402]],
-    pile: [TG(P7('melon', 190, 1, 478), 'M'), ...fill15(['plum', 'lime'], 8, 30, 236, 436, 0.72), ...fill15(['apple', 'orange'], 6, 241, 400, null, 0.85)] },
-  // 24 · i · бункер-воронка, N · H2 A2. Булава раскрывает единственное гнездо, топор завершает знакомую твёрдую часть
-  { num: 24, name: 'Nest Break', role: 'i', hint: ['Smash the nest!'], pick: 'mace', loadout: { mace: 2, axe: 2 }, solution: [{"w":"mace","pts":[[202.9,483.4],[46.9,691.4]]},{"w":"axe","pts":[[152.8,691.8],[242.8,511.8]]}],
-    parts: [...W15.hopper(200, 612, 62, 40, 360, 452, { ch: 30, sh: 6, lipA: 45 })], holds: [[36, 440, 364, 645]],
+  { num: 3, name: 'One Line', role: 'n', hint: ['One cut, two!'], loadout: { knife: 3 }, solution: [{"w":"knife","pts":[[200,472.7],[200,752.7]]}],
+    parts: [...W15.box(60, 340, 360, 630, { slot: ['floor', 200, 96], drop: 100 })], holds: [[44, 350, 356, 650]],
+    pile: [SEAT('melon', 200, 630, 96, 0.92, 'D1'), TG(P7('melon', 200, 0.8, null, 0, 4), 'D2'), ...fill25(['plum', 'lime', 'grape'], 20, 66, 334, null, 1.3)] },
+  // 4 · m · лоток с двумя горлами, M>M + M>M · K6. Два горла, над каждым ещё арбуз — сторону начала выбирает игрок
+  { num: 4, name: 'Twin Streams', role: 'm', loadout: { knife: 6 }, solution: [{"w":"knife","pts":[[179.2,662.9],[39.2,420.4]]},{"w":"knife","pts":[[59.7,320.3],[132.2,590.8]]},{"w":"knife","pts":[[340.9,624.6],[240.9,451.4]]},{"w":"knife","pts":[[234,592.1],[334,418.9]]}],
+    parts: [...W15.twin(114, 82, 286, 84, 618, 36, 364, 300, 480, { ch: 28 })], holds: [[0, 290, 200, 650], [200, 290, 400, 650]],
+    pile: [TG(P7('melon', 114, 0.82, null, 0, 2), 'M1'), TG(P7('melon', 286, 0.84, null, 0, 2), 'M2'), ...fill25(['plum', 'lime'], 14, 40, 196), ...fill25(['cherry', 'grape'], 14, 204, 360),
+      TG(P7('melon', 110, 0.76, null, 0, 20), 'M3'), TG(P7('melon', 290, 1.0, null, 0, 20), 'M4'), ...fill25(['plum', 'lime', 'cherry', 'grape'], 12, 40, 360, null, 1.2)] },
+  // 5 · n · полка-развал, L>M + M · K5. Длинный огурец поперёк щели между двумя скатами; арбузы скатываются в ту же щель
+  { num: 5, name: 'Long Bridge', role: 'n', hint: ['Cut the cucumber!'], loadout: { knife: 5 }, solution: [{"w":"knife","pts":[[181.7,620.3],[281.7,447.1]]},{"w":"knife","pts":[[125.3,559],[225.3,385.8]]},{"w":"knife","pts":[[306.2,635.9],[166.2,393.4]]}],
+    parts: [['wood', 'floor', W15.floor([0, 470], [196, 552])], ['wood', 'floor', W15.floor([276, 552], [400, 510])], ['slot', 236, 552, 80, 569],
+      ['back', [[0, 330], [400, 360], [400, 520], [272, 566], [200, 566], [0, 480]]], ...W15.brace(0, 1, (x) => 470 + 82 / 200 * x + 18, 60), ...W15.brace(400, -1, (x) => 510 + 42 / 128 * (400 - x) + 18, 44)],
+    holds: [[0, 300, 400, 580]],
+    pile: [TG(P7('cuke', 236, 1.3, null, 0, 2), 'L'), ...fill25(['plum', 'lemon', 'lime', 'cherry'], 36, 4, 396, null, 1.15), TG(P7('melon', 140, 0.77, null, 0, 6), 'M1'), TG(P7('melon', 320, 1.0, null, 0, 6), 'M2')] },
+  // 6 · r · длинный жёлоб с двумя выходами, M+M · K5. Щель посредине и щель у стенки — две струи, порядок любой
+  { num: 6, name: 'Sunny Slide', role: 'r', loadout: { knife: 5 }, solution: [{"w":"knife","pts":[[183.9,424.5],[235.6,617.7]]},{"w":"knife","pts":[[384.7,491.9],[299,640.3]]},{"w":"knife","pts":[[143.1,615.6],[283.1,373.1]]}],
+    parts: [['wood', 'floor', W15.floor([0, 470], [170, 528])], ['wood', 'floor', W15.floor([246, 538], [314, 568])], ['wood', 'lip', W15.rect(386, 562, 400, 600)], ['slot', 208, 533, 76, 550], ['slot', 350, 565, 72, 582],
+      ['back', [[0, 320], [400, 400], [400, 578], [314, 580], [246, 550], [170, 538], [0, 480]]], ...W15.brace(0, 1, (x) => 470 + 58 / 170 * x + 18, 60)],
+    holds: [[0, 300, 400, 600]],
+    pile: [TG(P7('melon', 208, 0.73, null, 0, 2), 'M1'), TG(P7('melon', 350, 0.69, null, 0, 2), 'M2'), TG(P7('melon', 70, 1.0, null, 0, 6), 'M3'), ...fill25(['orange', 'apple', 'lemon'], 34, 4, 386, null, 1.25)] },
+  // 7 · i · короб со щелью в полу, C>M>C · A4 K3. Один явно твёрдый кокос знакомит с топором; дальше в щель приезжают арбуз и кокос
+  { num: 7, name: 'Coconut Chop', role: 'i', hint: ['Axe the coconut!'], pick: 'axe', loadout: { knife: 3, axe: 4 }, solution: [{"w":"axe","pts":[[200,722.7],[200,591.5]]},{"w":"knife","pts":[[198.6,448.8],[98.6,622]]},{"w":"axe","pts":[[224.1,673.2],[224.1,551.6]]}],
+    parts: [...W15.box(56, 344, 330, 632, { slot: ['floor', 200, 80], drop: 96 })], holds: [[40, 320, 360, 650]],
+    pile: [TG(P7('coco', 200, 1.6, null, 0, 4), 'C1'), ...fill25(['cherry', 'berry'], 14, 62, 338, null, 1.1), TG(P7('melon', 140, 0.76, null, 0, 14), 'M'), TG(P7('coco', 262, 1.3, null, 0, 14), 'C2'), ...fill25(['cherry', 'berry', 'plum'], 22, 62, 338, null, 1.1)] },
+  // 8 · n · корыто с двумя щелями, C>M + M>C · A4 K4. Разные пробки по сторонам, над каждой — наоборот
+  { num: 8, name: 'Hard Soft', role: 'n', loadout: { knife: 4, axe: 4 }, solution: [{"w":"axe","pts":[[120.1,678.7],[120.1,555.2]]},{"w":"knife","pts":[[271.2,443.1],[323,636.3]]},{"w":"knife","pts":[[72.6,603.6],[145.1,333.2]]},{"w":"axe","pts":[[297.9,656.6],[297.9,533]]}],
+    parts: [...W15.twin(126, 76, 290, 72, 612, 14, 392, 316, 470, { ch: 30 })], holds: [[0, 300, 208, 650], [208, 300, 400, 650]],
+    pile: [TG(P7('coco', 126, 1.36, null, 0, 2), 'C1'), TG(P7('melon', 290, 0.78, null, 0, 2), 'M1'), ...fill25(['plum', 'grape'], 16, 30, 204), ...fill25(['lime', 'lemon'], 16, 212, 372),
+      TG(P7('melon', 116, 0.98, null, 0, 20), 'M2'), TG(P7('coco', 300, 1.36, null, 0, 20), 'C2'), ...fill25(['plum', 'lime', 'lemon', 'grape'], 8, 30, 372, null, 1.2)] },
+  // 9 · n · корыто с тремя щелями, M+C+M>M · K5 A3. Большая куча на всю ширину: три выхода на три трети ряда
+  { num: 9, name: 'Full Basket', role: 'n', loadout: { knife: 5, axe: 3 }, solution: [{"w":"knife","pts":[[124.3,500.9],[24.3,674.1]]},{"w":"axe","pts":[[200.1,687.1],[200.1,563.6]]},{"w":"knife","pts":[[275.8,674],[375.8,500.8]]},{"w":"knife","pts":[[77.7,651.2],[77.7,451.2]]}],
+    parts: [...W25.trough(22, 378, 330, 616, [[80, 78], [200, 78], [320, 78]], { drop: 40, rise: 50 })], holds: [[10, 320, 390, 640]],
+    pile: [TG(P7('melon', 80, 0.8, null, 0, 2), 'M1'), TG(P7('coco', 200, 1.36, null, 0, 2), 'C'), TG(P7('melon', 320, 0.8, null, 0, 2), 'M2'), ...fill25(['plum', 'lime', 'cherry', 'apple'], 36, 26, 374, null, 1.1), TG(P7('melon', 200, 1.02, null, 0, 40), 'M3')] },
+  // 10 · m · два кармана на разной высоте, дверцы наружу, C>M + M>C · A4 K4. Верхний слева сыплет мимо нижнего справа
+  { num: 10, name: 'Side by Side', role: 'm', loadout: { knife: 4, axe: 4 }, solution: [{"w":"axe","pts":[[76,700],[76,560]]},{"w":"knife","pts":[[250,520],[384.7,663.6]]},{"w":"axe","pts":[[300,700],[280,560]]},{"w":"knife","pts":[[16,480],[136,700]]}],
+    parts: [...W15.box(36, 176, 300, 622, { slot: ['floor', 76, 76], drop: 70, bx1: 200 }), ...W15.box(224, 364, 300, 622, { slot: ['floor', 324, 76], drop: 70, bx0: 200 })], holds: [[15, 290, 195, 650], [205, 290, 385, 650]],
+    pile: [TG(P7('coco', 76, 1.32, null, 0, 6), 'C1'), TG(P7('melon', 324, 0.8, null, 0, 6), 'M1'), TG(P7('melon', 120, 0.78, null, 0, 10), 'M2'), TG(P7('coco', 280, 1.32, null, 0, 10), 'C2'),
+      ...fill25(['plum', 'grape', 'cherry'], 15, 40, 172), ...fill25(['lime', 'lemon', 'apple'], 15, 228, 360)] },
+  // 11 · i · башня из этажей, M>M / M+C>M · K6 A3. Впервые верхняя камера кормит нижнюю; все пробки видны до первого реза
+  { num: 11, name: 'Two Floors', role: 'i', hint: ['Upstairs first?'], loadout: { knife: 6, axe: 3 }, solution: [{"w":"knife","pts":[[200,520.4],[200,320.4]]},{"w":"knife","pts":[[167.7,490],[167.7,290]]},{"w":"knife","pts":[[178.3,475.5],[38.3,718]]},{"w":"axe","pts":[[289.6,734.1],[289.6,606.1]]}],
+    parts: [...W15.box(110, 290, 282, 436, { slot: ['floor', 200, 88], drop: 36 }), ...W25.trough(34, 366, 470, 640, [[118, 92], [286, 88]], { drop: 40, rise: 80, beam: false })],
+    holds: [[90, 270, 310, 460], [20, 460, 380, 660]],
+    pile: [TIER(TG(P7('melon', 118, 1.0, null, 0, 2), 'M2'), 461), TIER(TG(P7('coco', 286, 1.5, null, 0, 2), 'C1'), 461), TIER(TG(P7('melon', 300, 0.8, null, 0, 10), 'M4'), 461), ...fill25(['plum', 'lime', 'cherry'], 28, 40, 360, 461),
+      SEAT('melon', 200, 436, 88, 0.84, 'M1'), TG(P7('melon', 150, 0.84, null, 0, 6), 'M3'), ...fill25(['apple', 'lemon', 'grape'], 10, 116, 284, null, 1, 453)] },
+  // 12 · r · две полки каскадом, L / M>M · K5. Верхняя полка с огурцом поперёк щели у бортика; нижняя — обратно, с арбузом
+  { num: 12, name: 'Gentle Shelf', role: 'r', loadout: { knife: 5 }, solution: [{"w":"knife","pts":[[313.2,467.9],[313.2,279.4]]},{"w":"knife","pts":[[70.2,463.2],[170.2,636.4]]},{"w":"knife","pts":[[103.4,639.6],[155.2,446.4]]}],
+    parts: [...W15.shelf(0, 320, 352, 404, { gap: [316, 72], lip: 50, wall: 70, brace: 50 }),
+      ['wood', 'floor', W15.floor([0, 506], [80, 572])], ['wood', 'floor', W15.floor([160, 572], [400, 446])], ['slot', 120, 572, 80, 589],
+      ['back', [[0, 430], [400, 410], [400, 456], [160, 586], [80, 586], [0, 516]]], ...W15.brace(400, -1, (x) => 446 + 126 / 246 * (400 - x) + 18, 50)],
+    holds: [[0, 230, 400, 410], [0, 420, 400, 580]],
+    pile: [TIER(TG(P7('melon', 316, 0.69, null, 0, 2), 'M1'), null, 460), ...fill25(['orange', 'apple', 'lemon'], 18, 4, 300, null, 1.05, 420),
+      TIER(TG(P7('cuke', 120, 1.3, null, 0, 2), 'L'), 425), TIER(TG(P7('melon', 240, 0.77, null, 0, 10), 'M2'), 425), ...fill25(['plum', 'lime', 'cherry', 'grape'], 30, 4, 396, 425)] },
+  // 13 · n · серпантин: два жёлоба ≈ 20° зигзагом, на концах — горла со щёчками, M>M>M / M>M · K7. Верхний сыплет справа мимо нижнего, нижний — слева
+  { num: 13, name: 'Left Right', role: 'n', loadout: { knife: 8 }, solution: [{"w":"knife","pts":[[15.5,448],[88,718.5]]},{"w":"knife","pts":[[121.7,462],[15.3,646.1]]},{"w":"knife","pts":[[280.2,315.3],[384.7,496.2]]},{"w":"knife","pts":[[280,317.9],[384.7,499.1]]}],
+    parts: [...W15.chute(0, 318, 300, 414, { wall: 60, brace: 40, slot: false }), ...W15.hopper(350, 450, 78, 300, 400, 414, { ch: 18, sh: 8, lipA: 60, beam: false }),
+      ...W15.chute(296, 486, 110, 562, { wall: 60, brace: false, slot: false }), ['wood', 'side', W15.rect(279, 426, 296, 503)], ...W15.hopper(52, 598, 84, 0, 110, 562, { ch: 18, sh: 8, lipA: 60, beam: false })],
+    holds: [[0, 250, 400, 460], [0, 460, 300, 620]],
+    pile: [TIER(TG(P7('melon', 350, 0.74, null, 0, 2), 'M1'), null, 490), TIER(TG(P7('melon', 220, 0.74, null, 0, 20), 'M2'), null, 490),
+      TIER(TG(P7('melon', 52, 0.8, null, 0, 2), 'M3'), 464, 680), TIER(TG(P7('melon', 160, 0.8, null, 0, 20), 'M4'), 464, 680), TIER(TG(P7('melon', 250, 0.8, null, 0, 20), 'M6'), 464, 680), TIER(TG(P7('melon', 150, 0.74, null, 0, 20), 'M5'), null, 490),
+      ...fill25(['cherry', 'lemon', 'plum'], 21, 60, 276, 464, 1, 610), ...fill25(['apple', 'grape', 'lime'], 15, 4, 330, null, 1, 440)] },
+  // 14 · m · три кармана над общей воронкой, M>M + C>M + M>C, воронка M · K6 A3. Три струи сходятся в одну
+  { num: 14, name: 'Pocket Parade', role: 'm', loadout: { knife: 7, axe: 4 }, solution: [{"w":"knife","pts":[[149.8,699.5],[249.8,526.3]]},{"w":"knife","pts":[[106.2,293.3],[33.8,563.8]]},{"w":"axe","pts":[[200,530.5],[200,419.8]]},{"w":"knife","pts":[[157.6,505.7],[209.4,312.5]]},{"w":"knife","pts":[[384.7,523.1],[260,307.3]]},{"w":"axe","pts":[[329.7,529.4],[329.7,417.4]]}],
+    parts: [...W15.box(20, 120, 292, 440, { slot: ['floor', 70, 58], drop: 22, bx1: 137 }), ...W15.box(150, 250, 292, 440, { slot: ['floor', 200, 58], drop: 22, beam: false }), ...W15.box(280, 380, 292, 440, { slot: ['floor', 330, 58], drop: 22, bx0: 263 }),
+      ...W15.hopper(200, 632, 104, 16, 384, 490, { ch: 22, sh: 8, lipA: 60, beam: false })],
+    holds: [[0, 280, 400, 460], [0, 480, 400, 652]],
+    pile: [TIER(TG(P7('melon', 200, 1.0, null, 0, 2), 'M0'), 465), ...fill25(['plum', 'lime', 'cherry'], 22, 30, 370, 465),
+      SEAT('melon', 70, 440, 58, 0.56, 'M1'), SEAT('coco', 200, 440, 58, 0.96, 'C1'), SEAT('melon', 330, 440, 58, 0.56, 'M2'),
+      TIER(TG(P7('melon', 70, 0.6, null, 0, 2), 'M3'), null, 457), TIER(TG(P7('melon', 200, 0.6, null, 0, 2), 'M4'), null, 457), TIER(TG(P7('coco', 330, 1.0, null, 0, 2), 'C2'), null, 457),
+      ...fill25(['grape', 'cherry'], 4, 24, 116, null, 1, 457), ...fill25(['lemon', 'apple'], 4, 154, 246, null, 1, 457), ...fill25(['lime', 'plum'], 4, 284, 376, null, 1, 457)] },
+  // 15 · i · зигзаг заторов: воронка слева сверху и воронка справа снизу; в каждом горле — крупный апельсин-затор, O>M / O>M>M · S3 K6.
+  // Заторы не на одной прямой: пила одной кривой через оба (нож — по резу на каждый); дальше ножом арбузы, приехавшие в горла
+  { num: 15, name: 'Saw Through', role: 'i', hint: ['Saw through!'], pick: 'saw', loadout: { knife: 5, saw: 3 }, solution: [{"w":"saw","pts":[[60,390],[130,414],[130,470],[230,590],[276,624],[300,680]]},{"w":"knife","pts":[[167.1,479],[67.1,305.8]]},{"w":"knife","pts":[[372.6,452.5],[232.6,695]]}],
+    parts: [...W15.hopper(130, 430, 80, 16, 250, 300, { ch: 18, sh: 8, lipA: 60, bx1: 0 }), ...W15.hopper(276, 640, 80, 90, 392, 486, { ch: 20, sh: 8, lipA: 60, beam: false })],
+    holds: [[0, 280, 260, 460], [80, 470, 400, 665]],
+    pile: [TIER(TG(P7('orange', 276, 1.62, null, 0, 2), 'O2'), 466), TIER(TG(P7('melon', 330, 0.77, null, 0, 20), 'M2'), 466), TIER(TG(P7('melon', 210, 0.77, null, 0, 20), 'M3'), 466), TIER(TG(P7('melon', 360, 0.77, null, 0, 20), 'M4'), 466),
+      ...fill25(['plum', 'lime', 'cherry'], 20, 100, 388, 466),
+      TG(P7('orange', 130, 1.62, null, 0, 2), 'O1'), TG(P7('melon', 80, 0.77, null, 0, 20), 'M1'),
+      ...fill25(['apple', 'grape', 'lemon'], 11, 30, 236, null, 1, 470)] },
+  // 16 · n · воронка с затором и боковыми карманами, O>M>M + M + M · S3 K6
+  { num: 16, name: 'Orange Release', role: 'n', loadout: { knife: 6, saw: 3 }, solution: [{"w":"saw","pts":[[200,470],[200,690]]},{"w":"knife","pts":[[162.4,685],[262.4,511.8]]},{"w":"knife","pts":[[15.3,473.2],[128.7,277]]},{"w":"knife","pts":[[340,495.9],[340,295.9]]}],
+    parts: [...W15.hopper(200, 630, 92, 6, 394, 446, { ch: 24, sh: 8, lipA: 60, beam: false }), ...W15.box(14, 106, 310, 410, { slot: ['floor', 60, 76], drop: 26, bx1: 106 }), ...W15.box(294, 386, 310, 410, { slot: ['floor', 340, 76], drop: 26, bx0: 294 })],
+    holds: [[60, 410, 340, 652], [0, 280, 120, 410], [280, 280, 400, 410]],
+    pile: [TIER(TG(P7('orange', 200, 1.78, null, 0, 2), 'O'), 430), TIER(TG(P7('orange', 200, 1.3, null, 0, 6), 'O'), 430), TIER(TG(P7('melon', 130, 0.78, null, 0, 10), 'M1'), 430), TIER(TG(P7('melon', 270, 0.8, null, 0, 10), 'M2'), 430), ...fill25(['plum', 'lime', 'cherry'], 24, 50, 350, 430),
+      SEAT('melon', 60, 410, 76, 0.73, 'M3'), ...fill25(['grape', 'lemon'], 8, 18, 102, null, 1, 427), SEAT('melon', 340, 410, 76, 0.73, 'M4'), ...fill25(['apple', 'cherry'], 8, 298, 382, null, 1, 427)] },
+  // 17 · m · длинный маршрут: жёлоб справа налево с горлом слева, под ним — жёлоб слева направо с кокосовым горлом справа, M>M / C>C>M · K5 A4.
+  // Поток пересекает кадр дважды; нижнее горло держит кокос — топор, потом ещё кокос и арбуз-герой
+  { num: 17, name: 'Long Delivery', role: 'm', loadout: { knife: 5, axe: 4 }, solution: [{"w":"axe","pts":[[344.1,704.2],[344.1,579.4]]},{"w":"axe","pts":[[343.9,704.4],[343.9,579.6]]},{"w":"knife","pts":[[294.7,669.2],[384.7,513.4]]},{"w":"knife","pts":[[15.3,496.8],[100.1,350]]},{"w":"knife","pts":[[15.3,499],[100,352.4]]}],
+    parts: [...W15.chute(400, 318, 100, 414, { wall: 60, brace: 40, slot: false }), ...W15.hopper(50, 450, 78, 0, 100, 414, { ch: 18, sh: 8, lipA: 60, beam: false }),
+      ...W15.chute(104, 486, 290, 562, { wall: 60, brace: false, slot: false }), ['wood', 'side', W15.rect(104, 426, 121, 503)], ...W15.hopper(344, 598, 86, 290, 400, 562, { ch: 18, sh: 8, lipA: 60, beam: false })],
+    holds: [[0, 250, 400, 460], [100, 460, 400, 625]],
+    pile: [TIER(TG(P7('melon', 50, 0.74, null, 0, 2), 'M1'), null, 490), TIER(TG(P7('melon', 180, 0.74, null, 0, 20), 'M2'), null, 490),
+      TIER(TG(P7('coco', 344, 1.4, null, 0, 2), 'C1'), 464, 680), TIER(TG(P7('coco', 250, 1.4, null, 0, 10), 'C2'), 464, 680), TIER(TG(P7('melon', 200, 0.82, null, 0, 20), 'M3'), 464, 680),
+      ...fill25(['cherry', 'lemon', 'plum'], 18, 124, 340, 464, 1, 610), ...fill25(['apple', 'grape', 'lime'], 18, 70, 396, null, 1, 440)] },
+  // 18 · r · два фруктовых моста, L + L (+M) · K5. Два широких огурца поперёк двух щелей, гора сверху, два залпа
+  { num: 18, name: 'Bridge Picnic', role: 'r', loadout: { knife: 5 }, solution: [{"w":"knife","pts":[[139.4,362.4],[66.9,632.9]]},{"w":"knife","pts":[[301.7,637.8],[301.7,357.8]]},{"w":"knife","pts":[[54.2,563.4],[154.2,390.2]]}],
+    parts: [['wood', 'floor', W15.floor([0, 450], [70, 520])], ['wood', 'floor', W15.floor([138, 520], [200, 470])], ['wood', 'floor', W15.floor([200, 470], [262, 520])], ['wood', 'floor', W15.floor([330, 520], [400, 450])],
+      ['slot', 104, 520, 68, 537], ['slot', 296, 520, 68, 537], ['back', [[0, 290], [400, 290], [400, 460], [330, 534], [262, 534], [200, 484], [138, 534], [70, 534], [0, 460]]],
+      ...W15.brace(0, 1, (x) => 450 + x + 18, 40), ...W15.brace(400, -1, (x) => 450 + (400 - x) + 18, 40)],
+    holds: [[0, 280, 200, 560], [200, 280, 400, 560]],
+    pile: [TG(P7('cuke', 104, 1.12, null, 0, 2), 'L1'), TG(P7('cuke', 296, 1.12, null, 0, 2), 'L2'), ...fill25(['orange', 'apple', 'lemon', 'plum', 'lime', 'cherry'], 52, 4, 396), TG(P7('melon', 200, 1.0, null, 0, 30), 'M')] },
+  // 19 · i · ящик на верёвке над открытой воронкой, R / M>M + M · K7. Верёвка выпускает груз в открытый приёмник
+  { num: 19, name: 'Pull the Thread', role: 'i', hint: ['Cut the rope!'], loadout: { knife: 7 }, solution: [{"w":"knife","pts":[[150,350],[260,350]]},{"w":"knife","pts":[[280,488.3],[140,730.8]]},{"w":"knife","pts":[[41.1,494.6],[92.9,301.5]]}],
+    parts: [...W19.ropeBox(386, 392, 190, 'R', 296, 296, { beam: false }), ...W15.beam(266, [[150, 214]]), ...W15.hopper(210, 632, 100, 20, 390, 470, { ch: 24, sh: 8, lipA: 60, beam: false }), ...W15.box(14, 120, 300, 410, { slot: ['floor', 67, 60], drop: 20, bx1: 137 })],
+    holds: [[0, 440, 400, 652], [200, 280, 400, 400], [0, 290, 130, 420]],
+    pile: [TIER(TG(P7('melon', 210, 1.0, null, 0, 2), 'M1'), 430), TIER(TG(P7('melon', 300, 0.8, null, 0, 10), 'M2'), 430), ...fill25(['plum', 'lime', 'grape'], 21, 40, 380, 430),
+      ...fill25(['apple', 'orange', 'lemon'], 13, 214, 384, null, 1.1, 392), SEAT('melon', 67, 410, 60, 0.58, 'M3'), TIER(TG(P7('melon', 67, 0.58, null, 0, 2), 'M5'), null, 427), ...fill25(['cherry', 'berry'], 2, 18, 116, null, 1, 427)] },
+  // 20 · p · развилка инструментов: два мягких кармана и твёрдый, общий низ с двумя горлами, M + C + L / M + C · K6 A4
+  { num: 20, name: 'Small Workshop', role: 'p', loadout: { knife: 6, axe: 4 }, solution: [{"w":"knife","pts":[[15.3,429.4],[191.2,327.9]]},{"w":"axe","pts":[[200,501.2],[200,389.2]]},{"w":"knife","pts":[[330,537.9],[330,296.7]]},{"w":"knife","pts":[[83.8,642.6],[143.8,538.7]]},{"w":"axe","pts":[[284.6,714.9],[284.6,591.3]]},{"w":"knife","pts":[[255.5,619],[315.5,515.1]]}],
+    parts: [...W15.box(16, 124, 290, 410, { slot: ['floor', 70, 62], drop: 20, bx1: 140 }), ...W15.box(156, 244, 290, 410, { slot: ['floor', 200, 60], drop: 20, beam: false }), ...W15.box(276, 384, 290, 410, { slot: ['floor', 330, 62], drop: 20, bx0: 260 }),
+      ...W15.twin(118, 82, 282, 82, 624, 14, 386, 460, 540, { ch: 24, beam: false })],
+    holds: [[0, 280, 140, 430], [140, 280, 260, 430], [260, 280, 400, 430], [0, 450, 200, 652], [200, 450, 400, 652]],
+    pile: [TIER(TG(P7('melon', 118, 0.82, null, 0, 2), 'M2'), 430), TIER(TG(P7('coco', 282, 1.36, null, 0, 2), 'C2'), 430), TIER(TG(P7('melon', 200, 1.0, null, 0, 30), 'M3'), 430), ...fill25(['plum', 'lime', 'cherry', 'grape'], 20, 24, 376, 430),
+      SEAT('melon', 70, 410, 62, 0.6, 'M1'), SEAT('coco', 200, 410, 60, 1.0, 'C1'), SEAT('melon', 330, 410, 62, 0.6, 'M4'),
+      ...fill25(['apple', 'lemon'], 8, 20, 120, null, 1, 427), ...fill25(['cherry', 'berry'], 7, 160, 240, null, 1, 427), ...fill25(['orange', 'lime'], 8, 280, 380, null, 1, 427)] },
+  // 21 · m · лестница из трёх карманов: воронка слева сверху → короб с огурцом поперёк щели → воронка с кокосом справа внизу, M>M / L / C>M · K5 A3
+  { num: 21, name: 'Three Stops', role: 'm', loadout: { knife: 5, axe: 2 }, solution: [{"w":"axe","pts":[[262.3,747.6],[262.3,624.1]]},{"w":"knife","pts":[[272.9,648.8],[372.9,475.6]]},{"w":"knife","pts":[[109.9,585],[209.9,411.8]]},{"w":"knife","pts":[[166.2,279.8],[26.2,522.3]]}],
+    parts: [...W15.hopper(96, 416, 80, 8, 184, 312, { ch: 16, sh: 8, lipA: 60, bx1: 0 }), ...W15.hopper(160, 522, 72, 64, 256, 440, { ch: 16, sh: 8, lipA: 60, beam: false }),
+      ...W15.hopper(262, 642, 84, 40, 394, 560, { ch: 20, sh: 8, lipA: 60, beam: false })],
+    holds: [[0, 280, 200, 430], [60, 430, 260, 550], [140, 550, 400, 665]],
+    pile: [TIER(TG(P7('coco', 262, 1.36, null, 0, 2), 'C1'), 545, 700), TIER(TG(P7('melon', 340, 0.8, null, 0, 10), 'M3'), 545, 700), ...fill25(['plum', 'lime', 'cherry'], 23, 140, 390, 545, 1, 680),
+      AT19('cuke', 160, 510, 1.05, 'L'), ...fill25(['apple', 'lemon', 'grape'], 10, 84, 236, 440, 1, 545),
+      TG(P7('melon', 96, 0.77, null, 0, 2), 'M1'), TG(P7('melon', 150, 0.7, null, 0, 6), 'M2'), ...fill25(['orange', 'plum', 'lime'], 3, 20, 176, null, 1, 436)] },
+  // 22 · n · два бункера сверху над общим низом, M>M + C / M · K5 A3
+  { num: 22, name: 'Upper Company', role: 'n', loadout: { knife: 5, axe: 2 }, solution: [{"w":"knife","pts":[[150,702.5],[250,529.3]]},{"w":"knife","pts":[[174,530.9],[34,288.4]]},{"w":"axe","pts":[[296,523.9],[296,405.5]]},{"w":"knife","pts":[[309.8,489.9],[309.8,289.9]]}],
+    parts: [...W15.hopper(104, 430, 70, 8, 196, 300, { ch: 22, sh: 6, lipA: 50, bx1: 0 }), ...W15.hopper(296, 430, 70, 204, 392, 300, { ch: 22, sh: 6, lipA: 50, bx0: 400 }), ...W25.trough(30, 370, 488, 644, [[200, 96]], { drop: 70, beam: false })],
+    holds: [[0, 280, 200, 450], [200, 280, 400, 450], [10, 460, 390, 660]],
+    pile: [TIER(TG(P7('melon', 200, 1.02, null, 0, 2), 'M3'), 460), ...fill25(['plum', 'lime', 'cherry', 'grape'], 18, 36, 364, 460),
+      TIER(TG(P7('melon', 104, 0.74, null, 0, 2), 'M1'), null, 452), TIER(TG(P7('coco', 296, 1.2, null, 0, 2), 'C'), null, 452), TIER(TG(P7('melon', 60, 0.7, null, 0, 20), 'M2'), null, 452), TIER(TG(P7('melon', 340, 0.7, null, 0, 20), 'M4'), null, 452),
+      ...fill25(['apple', 'lemon'], 11, 14, 192, null, 1, 452), ...fill25(['orange', 'berry'], 11, 208, 388, null, 1, 452)] },
+  // 23 · r · веер на семь пил: широкое корыто с тремя щелями, в каждой — огурец поперёк, сверху гора и арбуз-герой, L+L+L>M · K6. Три лёгких реза — залп по всему ряду
+  { num: 23, name: 'Juice Fan', role: 'r', loadout: { knife: 6 }, solution: [{"w":"knife","pts":[[159.5,466.4],[19.5,708.8]]},{"w":"knife","pts":[[135.8,468],[275.8,710.5]]},{"w":"knife","pts":[[260.7,674.2],[360.7,501]]},{"w":"knife","pts":[[157,467.8],[57,641]]}],
+    parts: [...W25.trough(16, 384, 330, 602, [[90, 70], [200, 70], [310, 70]], { drop: 20, rise: 8, capA: 40 })],
+    holds: [[0, 300, 400, 625]],
+    pile: [AT19('cuke', 92, 586, 1.15, 'L1'), AT19('cuke', 200, 586, 1.15, 'L2'), AT19('cuke', 308, 586, 1.15, 'L3'), ...fill25(['plum', 'lime', 'cherry', 'lemon', 'apple', 'orange'], 56, 20, 380), TG(P7('melon', 200, 1.0, null, 0, 30), 'M')] },
+  // 24 · i · воронка с гнездом, N>M>M · H2 A3 K4 (+ карман C). Булава раскрывает гнездо, топор — кокос в горле, дальше ножом
+  { num: 24, name: 'Nest Break', role: 'i', hint: ['Smash the nest!'], pick: 'mace', loadout: { knife: 4, axe: 2, mace: 2 }, solution: [{"w":"mace","pts":[[200,500.5],[200,615.4]]},{"w":"axe","pts":[[213.7,687],[213.7,572.1]]},{"w":"knife","pts":[[200,430],[200,700]]},{"w":"knife","pts":[[196,430],[204,700]]},{"w":"knife","pts":[[200,430],[200,700]]}],
+    parts: [...W15.hopper(200, 620, 62, 30, 370, 340, { ch: 30, sh: 6, lipA: 45 })],
+    holds: [[20, 330, 380, 645]],
     pile: [TG(P7('coco', 200, 1.09, null, 0, 6), 'N'), TG(P7('coco', 162, 1.09, null, 0, 14), 'N'), TG(P7('coco', 238, 1.09, null, 0, 14), 'N'), TG(P7('coco', 200, 1.09, null, 0, 14), 'N'),
-      ...fill15(['plum', 'lime'], 14, 50, 350, null, 0.72)] },
+      ...fill25(['plum', 'lime', 'cherry'], 20, 40, 360), TG(P7('melon', 150, 0.6, null, 0, 20), 'M1'), TG(P7('melon', 260, 0.6, null, 0, 20), 'M2'), ...fill25(['apple', 'lemon', 'grape', 'plum'], 16, 40, 360), TG(P7('melon', 200, 0.6, null, 0, 40), 'M3')] },
+  // 25 · n · лоток с двумя горлами, N + M>M · H2 A2 K4. Гнездо и мягкий сосед — в любом порядке
+  { num: 25, name: 'Nest Next Door', role: 'n', loadout: { knife: 4, axe: 2, mace: 2 }, solution: [{"w":"mace","pts":[[118.8,495.7],[118.8,609.7]]},{"w":"knife","pts":[[221.6,676.4],[361.6,433.9]]},{"w":"axe","pts":[[288,711.1],[288,591.5]]},{"w":"knife","pts":[[239.7,672.3],[339.7,499.1]]},{"w":"knife","pts":[[144.7,606.2],[93,413]]}],
+    parts: [...W15.twin(120, 64, 286, 76, 618, 14, 390, 320, 490, { ch: 30 })],
+    holds: [[0, 300, 205, 650], [205, 300, 400, 650]],
+    pile: [TG(P7('coco', 120, 1.06, null, 0, 6), 'N'), TG(P7('coco', 86, 1.06, null, 0, 10), 'N'), TG(P7('coco', 154, 1.06, null, 0, 10), 'N'), TG(P7('melon', 286, 0.8, null, 0, 2), 'M1'), TG(P7('coco', 320, 1.24, null, 0, 6), 'C2'),
+      ...fill25(['plum', 'grape', 'cherry'], 18, 30, 200), ...fill25(['lime', 'lemon', 'apple'], 18, 212, 372), TG(P7('melon', 300, 1.0, null, 0, 20), 'M2'), ...fill25(['plum', 'lime'], 8, 30, 372), TG(P7('melon', 330, 0.74, null, 0, 20), 'M4')] },
+  // ---- образцы среза v24 (этап 3: 31, 38, 54, 62) — в линейку игры не входят
   // 31 · i · доска с нагелями, M+M · K3. Нагели держат целый арбуз и отпускают его половинки
   { num: 31, name: 'Wooden Pegs', role: 'i', hint: ['Cut a melon!'], loadout: { knife: 3 }, solution: [{"w":"knife","pts":[[180.8,448.6],[330.8,708.4]]},{"w":"knife","pts":[[68.8,448.6],[218.8,708.4]]}],
     parts: [...W15.hopper(200, 590, 236, 18, 382, 444, { ch: 0, sh: 0 }).filter(p => p[0] !== 'slot'), ['peg', 88, 600, 8], ['peg', 200, 600, 8], ['peg', 312, 600, 8],
@@ -3382,6 +3555,9 @@ const CLEAR19 = [
       AT19('orange', 359, 530, 1.5, 'O'), AT19('orange', 290, 500, 1.16, 'O'), AT19('apple', 262, 502, 0.85), AT19('lemon', 220, 494, 0.85), AT19('apple', 178, 485, 0.85), AT19('plum', 142, 482, 0.85), AT19('lemon', 106, 470, 0.85), AT19('plum', 66, 466, 0.85),
       AT19('coco', 110, 392, 1.06, 'N'), AT19('coco', 66, 370, 1.06, 'N'), AT19('coco', 154, 370, 1.06, 'N'), ...fill15(['grape', 'lime', 'grape', 'plum'], 4, 12, 224, null, 0.74)] },
 ];
+// v25: линейка игры — уровни 1–25 сотни из досок (CLEAR19, победа по массе), затем прежние клинья v11 с 16-го по 100-й (26–110 игры, номера
+// и записи прежние), пока этапы 3+ не заменят их. CLEAR15 (прежние десять из досок) из линейки ушли, запись осталась для lab15 и тестов (clearSet 'v15').
+const LINE11 = CLEAR19.slice(0, 25).map(L => Object.assign({ mass: true, v19: true }, L)).concat(CLEAR11.slice(15));
 
 // Цель одна — пропихнуть всю кучу в жернова. Куча лежит на клиньях и полках со щелями (детали v1–v3: funnel, twin, bin, shelf,
 // plate, peg); пролезает то, что уже щели. Помехи: крупное (шире щели), твёрдое (кокос: нож отскакивает, пила глохнет), длинное
@@ -4945,8 +5121,8 @@ function onContact(ct){                       // удар кусков: силь
 // Экраны: DOM-оверлеи, любой открывается кодом или хешем (§6, §11). Победа — без карточки: конфетти, фраза, следующий уровень.
 // =====================================================================================================
 const $ = (id) => document.getElementById(id);
-const levelTable = () => CFG.clearSet === 'v19' ? CLEAR19 : LINE11;   // v24: в срезе (#slice19) — девять уровней CLEAR19   // v15: 110 уровней «развали» — десять из досок и 100 уровней v11 (дальше — по кругу в ядре)
-const okey = () => CFG.clearSet === 'v19' ? 'slice19' : 'olevel11';   // v24: прогресс среза — отдельно, линейка игры не меняется   // ключ прогресса линейки v11 в сейве
+const levelTable = () => LINE11;   // v25: срез #slice19 убран — уровни 1–25 сотни в линейке игры;   // v24: в срезе (#slice19) — девять уровней CLEAR19   // v15: 110 уровней «развали» — десять из досок и 100 уровней v11 (дальше — по кругу в ядре)
+const okey = () => 'olevel11';   // v25: срез убран;   // v24: прогресс среза — отдельно, линейка игры не меняется   // ключ прогресса линейки v11 в сейве
 const curLevel = () => (G.save[okey()] || 1);
 function isOpen(n){ return G.save.unlockAll || n <= curLevel(); }
 function setUnlockAll(on){ G.save.unlockAll = !!on; save(); log('event', 'cheat', 'unlockAll=' + G.save.unlockAll); }
@@ -5015,7 +5191,6 @@ window.addEventListener('hashchange', () => { const h = location.hash.slice(1); 
   if (h === 'menu' || h === 'help' || h === 'win' || h === 'lose'){ if (h !== G.screen) goto(h); return; }
   if (h === 'unlock'){ setUnlockAll(true); goto('menu'); return; }
   if (sampleHash(h)){ sample16(sampleHash(h)); return; }      // v16.1: образец дерева
-  if (/^slice19\b/.test(h)){ slice19(+(h.split('=')[1] || 1)); return; }   // v24: срез девяти уровней
   if (!G.s) startLevel(curLevel()); else if (G.screen !== 'game') goto('game'); });   // v14: прежние хеши режимов (#v3…#v7old, #order, #tank, #2d, #style=…) — обычная игра
 
 let toastUntil = 0;
@@ -6803,7 +6978,7 @@ const V13 = {
   // juice — капли (в с, высота, размер), liq — струй жидкости в с и их высота; chips — стружки в с; mist — туман (в с, радиус, жизнь, сила, потолок);
   // split — раскол: доля тел, от площади, на какой доле съедания, на 3 части от площади; sep — тела в пилах не ближе (доля суммы радиусов); zone — зазор под кучей (ед.);
   // burst — всплеск в конце: кусочков, капель, струй; win — на победе: с какой с после победы ускорять, во сколько, потолок ожидания пустых пил (с)
-  churn: { minA: 600, T: [[24, 0.55], [40, 0.85], [51, 1.1], [60, 2.2], [80, 2.6]], first: 0.06, jerk: [0.5, 1.0], gap: [0.15, 0.28], snap: 15, turn: [2.2, 4.4],
+  churn: { minA: 400, T: [[24, 0.55], [40, 0.85], [51, 1.1], [60, 2.2], [80, 2.6]], first: 0.06, jerk: [0.5, 1.0], gap: [0.15, 0.28], snap: 15, turn: [2.2, 4.4],
     jit: [1.8, 1.0], jkFade: 5, vs: [0.65, 1.4], rate: [22, 64], boost: 1.6, end: [0.82, 2.2], bit: { size: [2.0, 5.2], h: [55, 175], vx: [40, 190], rind: 0.4 },
     juice: { rate: 46, h: [45, 150], size: 1.25 }, liq: 7, liqH: [40, 110], chips: 28, mist: { rate: 7, r: [5, 22], T: [0.45, 0.85], a: 0.32, max: 26 },
     split: [0.25, 2000, [0.3, 0.55], 4200], sep: 0.62, zone: 14, burst: [16, 20, 6], win: { fast: [1.4, 3.2], cap: 3.3 } } },
@@ -9480,7 +9655,6 @@ window.PULP_DROP = {
   play(n){ G.sample = false; startLevel(n || 1); return this.state(); },
   // v16.1: образец дерева — пустой уровень n (без фруктов, подсказки, руки, названия), игра стоит; sample(0) — выйти. Хеш: #sample=N
   sample(n){ return sample16(n); },
-  slice19(i){ return slice19(i == null ? 1 : i); },   // v24: срез девяти уровней (i — номер в срезе 1–9; 0 — обратно к линейке)
   // slab() — счётчики: долек, кувыркаются, капель висит, пятен, кромки по инструментам
   // v12: r3ready() / r3tready() — Promise, когда three собран / модели уровня готовы; r3tstats() — загрузка моделей;
   // debug3d(on) — контур тел физики поверх 3D; bevel3(град) — угол фаски (сетки пересобираются); r3stats() — сетки, треугольники, время.
@@ -9674,9 +9848,6 @@ const sampleHash = (h) => { const m = /^sample=(\d+)/.exec(h); return m ? +m[1] 
 // v10: юзер-тест — сразу с уровня из сейва, без меню
 function setUserTest(){ CFG.userTest = true; document.body.classList.add('ut'); log('event', 'userTest', 'on'); }
 if (CFG.userTest){ setUserTest(); startHash = 'game'; }
-// v24: срез сотни из досок — девять уровней CLEAR19 (#slice19 или #slice19=i, PULP_DROP.slice19(i); slice19(0) — обратно к линейке игры)
-function slice19(i){ G.prep = null; if (i === 0){ CFG.clearSet = 'v11'; startLevel(curLevel()); return 0; } CFG.clearSet = 'v19'; startLevel(Math.max(1, i || 1)); return G.s.n; }
-if (/^slice19\b/.test(startHash)){ CFG.clearSet = 'v19'; startHash = 'slice'; startLevel(+(location.hash.split('=')[1] || 1)); }
 if (startHash === '' || startHash === 'menu' || startHash === 'help'){ startLevel(curLevel()); goto(startHash || 'menu'); }   // v14: меню — поверх уровня в лесу
 else if (startHash === 'win' || startHash === 'lose'){ startLevel(curLevel()); goto(startHash); }
 else if (sampleHash(startHash)) sample16(sampleHash(startHash));   // v16.1: #sample=N — образец дерева
