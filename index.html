@@ -368,6 +368,16 @@ const CFG = {
   smartRollout: 120,    // умный: шагов прогона на кандидата (1 с)
   smartPot: 0.35,       // умный: вес «опустилось ниже» против «стало соком»
   smartCrack: 0.4,      // умный: трещина в скорлупе стоит такую долю площади кокоса (полпути к соку)
+  // --- v24: волна-досыпка (кормушка) и победа по массе (срез CLEAR19; старые линейки этого не видят) ---
+  feedReady: 0.1,       // приёмная зона готова: в ней осталось не больше этой доли исходной массы
+  feedCalm: 0.25,       // и так подряд столько секунд (проход свободен)
+  feedBlock: 3,         // зона не освободилась за столько секунд — событие feed.blocked (помеха), мир больше не держится «в движении»
+  feedRate: 5,          // плодов в секунду внутри порции (длинный маршрут — 3, в записи порции rate)
+  feedDelay: [0.35, 0.7, 0.5],   // пауза от готовности зоны до первого плода: пределы и значение по умолчанию
+  feedWhole: 28,        // одновременно целых плодов в сцене не больше — иначе выпуск ждёт
+  massWin: 0.995,       // победа: перемолото не меньше этой доли всей массы (поле + невыпущенное)
+  massFrag: 0.005,      // и нет обломка (и камеры) с массой не меньше этой доли
+  massValve: 1.5,       // всё прочее выполнено, мир спокоен столько секунд, остались только крошки (< massFrag каждая) — уборка и победа
 };
 
 // Детерминированный генератор случайных чисел (PROTO-BASE §5). Math.random() не используется.
@@ -621,10 +631,11 @@ const GATE_T = 12, GATE_LIP = 14;
 // и доска проворачивается свободно (с петлёй у самого стекла угол торца упирался в стенку уже на 0,25 рад).
 const GATE_HINGE = 12;
 function gateShape(p){
-  const [, side, y, len, ropeY, hookX] = p, dir = side === 'R' ? -1 : 1, hx = side === 'R' ? CFG.W - GATE_HINGE : GATE_HINGE, h = GATE_T / 2, L = len - GATE_HINGE;
+  // v24: p[6] — x петли (по умолчанию у стенки поля), p[7] — толщина доски, p[8] — высота бортика на свободном конце (0 — без него)
+  const [, side, y, len, ropeY, hookX, hx0, gt, lip] = p, dir = side === 'R' ? -1 : 1, hx = hx0 != null ? hx0 : side === 'R' ? CFG.W - GATE_HINGE : GATE_HINGE, h = (gt || GATE_T) / 2, L = len - GATE_HINGE;
   const box = (x0, y0, x1, y1) => convexHull([[dir * x0, y0], [dir * x1, y0], [dir * x1, y1], [dir * x0, y1]]);
-  const local = [box(-(GATE_HINGE - 2), -h, L, h), box(L - 10, -h - GATE_LIP, L, -h)];
-  return { hinge: [hx, y + h], local, attach: [dir * (L - 5), -h - GATE_LIP], anchor: [hookX == null ? hx + dir * (L - 5) : hookX, ropeY], dir };
+  const lp = lip == null ? GATE_LIP : lip, local = lp > 0 ? [box(-(GATE_HINGE - 2), -h, L, h), box(L - 10, -h - lp, L, -h)] : [box(-(GATE_HINGE - 2), -h, L, h)];
+  return { hinge: [hx, y + h], local, attach: [dir * (L - 5), -h - lp], anchor: [hookX == null ? hx + dir * (L - 5) : hookX, ropeY], dir };
 }
 function spinShape(p){
   const [, x, y, L, arms, , phase] = p, local = [], hub = [];
@@ -1386,6 +1397,10 @@ function levelData(n, attempt){
   let L;
   if (n && typeof n === 'object')   // v11: запись уровня целиком (генератор tools/gen11.mjs, стенды) — правила «развали»
     return Object.assign({ tier: 0, tpl: 'clear', theme: 0, specials: [], mode: 'clear', set: 'v7', v11: true }, n.form ? build11(n.form) : null, n, { n: n.n || 1, idx: n.idx || 1 });
+  if (CFG.goalMode === 'clear' && CFG.clearSet === 'v19' && CLEAR19.length){   // v24: срез девяти уровней (#slice19): победа по массе, кормушка, ящик и ляда
+    const T = CLEAR19, k = (((n - 1) % T.length) + T.length) % T.length;
+    return Object.assign({ tier: 0, tpl: 'clear', theme: 0, specials: [], mode: 'clear', mass: true }, T[k], { n, idx: k + 1, set: 'v7', v11: true, v19: true });
+  }
   if (CFG.goalMode === 'clear' && CFG.clearSet !== 'v7' && LINE11.length){   // v11: линейка (v15: 110 уровней); после последнего — по кругу с CFG.loop11
     const T = LINE11, N = T.length, a = Math.max(0, Math.min(N, CFG.loop11) - 1); let k = Math.max(0, n - 1); if (k >= N) k = a + ((k - N) % (N - a));
     return Object.assign({ tier: 0, tpl: 'clear', theme: 0, specials: [], mode: 'clear' }, T[k].form ? build11(T[k].form) : null, T[k], { n, idx: k + 1, set: 'v7', v11: true });
@@ -1442,6 +1457,7 @@ function placePile(L, polys, gaps){
     const kind = it[0], px = it[1], sc = it[2] || 1, ang = (it[3] || 0) * Math.PI / 180, tag = it[4] || null, from = it[5] == null ? -Infinity : it[5];
     const xlo = it[6] == null ? -Infinity : it[6], xhi = it[7] == null ? Infinity : it[7];
     const C = placeCircles(kind, sc, ang);
+    if (it[8] != null){ out.push({ kind, x: px, y: it[8], a: ang, sc, tag }); for (const c of C) circles.push([px + c[0], it[8] + c[1], c[2]]); continue; }   // v24: точное место (it[8] — y), дальше доосадка
     let ext = 0, bot = 0, top = 0;
     for (const c of C){ ext = Math.max(ext, Math.abs(c[0]) + c[2]); bot = Math.max(bot, c[1] + c[2]); top = Math.max(top, c[2] - c[1]); }
     const width = 2 * ext;
@@ -1694,6 +1710,7 @@ function createEnd(s){
   s.total = s.bodies.reduce((a, b) => a + b.area, 0);
   s.goal = (s.mode === 'clear' ? 1 - CFG.sweepAt : CFG.goalShare) * s.total;   // v7: остатки меньше sweepAt сметает само
   s.swept = false; s.ground = 0;
+  if (s.level.mass) feedInit(s);                             // v24: кормушка; масса уровня = поле + невыпущенные порции
   if (s.mode === 'order') initOrder(s);
   if (s.level.loadout) initAmmo(s);                          // v6: набор оружия вместо ходов
   ev(s, { type: 'start', n: s.n, bodies: s.bodies.length, moves: s.moves, mode: s.mode });
@@ -1776,8 +1793,9 @@ function checkShort(s, only){
 function cloneState(s){
   const c = newState(s.level);
   for (const k of ['n', 't', 'steps', 'quiet', 'juice', 'total', 'goal', 'moves', 'used', 'refunds', 'peakNet', 'won', 'lost', 'lastCutT', 'nextId', 'settleLoss', 'escaped', 'crumbs',
-    'charge', 'offRow', 'frenzy', 'frenzies', 'firstGrind', 'selfGone', 'ground', 'swept'])
+    'charge', 'offRow', 'frenzy', 'frenzies', 'firstGrind', 'selfGone', 'ground', 'swept', 'feedLeft', 'lostMass', 'massNear', 'valve'])
     c[k] = s[k];
+  if (s.feeds) c.feeds = s.feeds.map(f => Object.assign({}, f, { out: f.out.slice(), seen: f.seen.slice(), arm: f.arm.slice() }));   // v24
   if (s.deflOn) deflectWake(c);
   c.grinding = s.grinding.map(g => Object.assign({}, g, { flags: Object.assign({}, g.flags) }));
   c.juiceBy = Object.assign({}, s.juiceBy); c.cutWin = s.cutWin ? Object.assign({}, s.cutWin) : null; c.cutLog = s.cutLog.slice();
@@ -1809,6 +1827,7 @@ function cloneState(s){
 // extra (v2) — добавка к скорости { vx, vy, w }: толчок по ходу лезвия и кувырок.
 function spawnPiece(s, P, part, kick, nx, ny, keepId, at, extra){
   const cp = cleanPoly(part.V, part.F);
+  if (s.level && s.level.mass){ const d = Math.abs(polyArea(part.V)) - (cp ? Math.abs(polyArea(cp.V)) : 0); if (d > 0.01) s.juice += d; }   // v24: обрезки чистки многоугольника — в сок (баланс массы ± 0,1 %)
   if (!cp) return null;
   const area = polyArea(cp.V);
   if (area < CFG.crumbArea || polyThick(cp.V) < CFG.minThick) return null;
@@ -1879,7 +1898,7 @@ function step(s){
     if (pb.isAwake()){ const v = pb.getLinearVelocity(), v2 = (v.x * v.x + v.y * v.y) * ppm * ppm;
       if (v2 > CFG.maxSpeed * CFG.maxSpeed){ const k = CFG.maxSpeed / Math.sqrt(v2); pb.setLinearVelocity(planck.Vec2(v.x * k, v.y * k)); } }
     if (b.y > CFG.H + 200 || b.x < -CFG.wallT || b.x > CFG.W + CFG.wallT){   // страховка: вылетело из короба
-      s.escaped++; removeBody(s, b); addJuice(s, b.kind, b.area + (b.juiceX || 0), Math.max(0, Math.min(CFG.W, b.x))); continue;
+      s.escaped++; removeBody(s, b); if (s.level.mass) s.lostMass = (s.lostMass || 0) + b.area + (b.juiceX || 0); else addJuice(s, b.kind, b.area + (b.juiceX || 0), Math.max(0, Math.min(CFG.W, b.x))); continue;   // v24: за экраном — не сок
     }
     if (!moving && pb.isAwake()){
       const v = pb.getLinearVelocity();
@@ -1904,6 +1923,7 @@ function step(s){
       }
     } else if (sp.turning){ sp.turning = false; sp.pb.setAngularVelocity(0); sp.pb.setTransform(sp.pb.getPosition(), sp.target); }
   }
+  if (s.feeds && s.feeds.length && feedStep(s)) moving = true;   // v24: кормушка — пока порция разрешена и идёт, мир «в движении»
   s.quiet = moving ? 0 : s.quiet + CFG.dt;
   const W = s.cutWin;
   if (W && !W.refunded && CFG.refund && s.total > 0 && s.juice - W.j0 >= CFG.avalancheShare * s.total){
@@ -1912,12 +1932,12 @@ function step(s){
   }
   if (W && isSettled(s)) closeWindow(s);
   if (s.mode === 'order' && s.quiet >= CFG.restHold && s.quiet < CFG.restHold + CFG.dt * 1.5) checkShort(s);   // v3: на покое — проверка запаса
-  if (s.mode === 'clear' && !s.won && !s.lost && !s.flight && s.total > 0) clearCheck(s);   // v7: осталось меньше sweepAt — сметает само
+  if (s.mode === 'clear' && !s.won && !s.lost && !s.flight && s.total > 0){ if (s.level.mass) massCheck(s); else clearCheck(s); }   // v7: осталось меньше sweepAt — сметает само; v24 — победа по массе
   if (!s.won && s.mode !== 'order' && s.mode !== 'clear' && s.total > 0 && s.juice >= s.goal){
     s.won = true; s.winUsed = s.used; s.winPeak = s.peakNet;   // winPeak: сколько ходов понадобилось бы при бюджете
     ev(s, { type: 'win', juice: +(s.juice / s.total).toFixed(3), moves: s.moves });
   }
-  if (!s.won && !s.lost && s.moves <= 0 && s.total > 0 && !s.cutWin && s.frenzy <= 0 && !s.stroke && !s.flight && (isSettled(s) || s.t - s.lastCutT > CFG.loseWait)){
+  if (!s.won && !s.lost && s.moves <= 0 && s.total > 0 && !s.cutWin && s.frenzy <= 0 && !s.stroke && !s.flight && !s.massNear && (isSettled(s) || s.t - s.lastCutT > CFG.loseWait)){
     s.lost = true; s.loseReason = 'cuts'; ev(s, { type: 'lose', reason: 'cuts', juice: +(s.juice / s.total).toFixed(3) });
   }
   if (!s.won && !s.lost && s.moves <= 0 && s.cutWin && s.t - s.lastCutT > CFG.loseWait) closeWindow(s);
@@ -3284,6 +3304,84 @@ const CLEAR11 = [
 /* END CLEAR11 */
 ];
 const LINE11 = CLEAR15.concat(CLEAR11);   // v15: линейка игры — десять из досок, затем 100 уровней v11 (11–110, те же записи)
+// ------------------------------------------------------------------ v24: срез ста уровней из досок (CLEAR19, хеш #slice19)
+// Девять уровней-проб расписания (№ 1, 3, 9, 19, 24, 31, 38, 54, 62): волна-досыпка из кормушки, ящик на верёвке, гнездо, доска
+// с нагелями, песочные часы, ляда в досках, поздняя смесь. Победа — по массе (L.mass, massCheck), запас — по инструментам.
+// Запись: num — номер в будущей линейке, role, name, loadout, solution; parts — сборщики W15/W19; pile; feed — кормушка; holds — камеры.
+const TG = (it, tag) => { it[4] = tag; return it; };
+const AT19 = (kind, x, y, sc, tag, ang) => [kind, x, sc || 1, ang || 0, tag || null, null, null, null, y];   // предмет на точном месте (центр x, y)          // пробка-ключ: тег предмета кучи (по нему кормушка узнаёт открытие)
+const W19 = {
+  // кормушка: неглубокий бункер из досок наверху, горло шириной w (середина x, низ горла на yb), верх досок на top, края xl…xr.
+  // Плоды порции — данные ядра; вид рисует остаток в чаше. → { parts, x, y } (y — низ горла: оттуда выпадают плоды)
+  feeder(x, yb, w, xl, xr, top, o){ o = o || {}; const ch = o.ch == null ? 12 : o.ch, gy = yb - ch;
+    return { parts: W15.hopper(x, gy, w, xl, xr, top, Object.assign({ ch, sh: 4, lipA: 40 }, o)), x, y: yb }; },
+  // ящик на верёвке (и ляда): дно — доска на петле (деталь gate ядра, новой динамики нет): петля у hx, свободный конец через len (side 'L' —
+  // петля слева, конец вправо; 'R' — наоборот), верх доски на y. Стенка у свободного конца стоит на доске (зазор gap — уже мелочи), конец
+  // доски выходит за стенку на out: там крепится верёвка к крюку (hookY) — её видно и можно перерезать, не задевая груз. Вторая стенка —
+  // o.wall (x внутренней грани) или стенка поля. Перерезал — доска падает на петле, груз выезжает под стенкой. Задняя стенка — доски.
+  ropeBox(hx, y, len, side, top, hookY, o){
+    o = o || {}; const dir = side === 'L' ? 1 : -1, gt = o.gt || 16, tw = W15.tw, out = o.out == null ? 24 : o.out, xe = hx + dir * (len - GATE_HINGE), res = [];
+    const xa = xe - dir * 5;                                     // крепление верёвки (gateShape: L − 5 от петли)
+    res.push(['gate', side, y, len, hookY, xa, hx, gt, 0]);
+    const xo = xe - dir * out, xi = xo - dir * tw, wy1 = y - (o.gap == null ? 3 : o.gap);
+    res.push(['wood', 'side', W15.rect(Math.min(xo, xi), top, Math.max(xo, xi), wy1)]);
+    const xb = o.wall != null ? o.wall : side === 'L' ? 0 : CFG.W;
+    if (o.wall != null) res.push(['wood', 'side', W15.rect(Math.min(xb, xb - dir * tw), top, Math.max(xb, xb - dir * tw), y + gt)]);
+    res.push(['back', W15.rect(Math.min(xb, xo), top, Math.max(xb, xo), y + gt * 0.8)]);
+    // балка — по верху стенки у конца и дальше к стенке поля за ней (над полостью ящика её нет: груз видно, ящик открыт сверху); крюк — под балкой
+    if (o.beam !== false){ const bh = o.bh || W15.bh; res.push(...W15.beam(top - bh, [side === 'R' ? [0, Math.max(xo, xi)] : [Math.min(xo, xi), CFG.W]], bh)); }
+    res.box = { x0: Math.min(xb, xi), x1: Math.max(xb, xi), xe, xa, y, top };
+    return res;
+  },
+};
+const CLEAR19 = [
+  // 1 · i · бункер-воронка, M · K3. Крупный арбуз открывает всю видимую кучку одним широким свайпом (First Cut, перенос композиции)
+  { num: 1, name: 'First Cut', role: 'i', hint: ['Cut the melon!'], loadout: { knife: 3 }, solution: [{"w":"knife","pts":[[117.5,402.7],[267.5,662.5]]}],
+    parts: [...W15.hopper(200, 626, 104, 52, 348, 435, { ch: 24, sh: 8, lipA: 60 })], holds: [[40, 420, 360, 652]],
+    pile: [TG(P7('melon', 200, 1), 'M'), ...fill15(['plum', 'lime'], 19, 66, 334, null, 0.72)] },
+  // 3 · n · короб со щелью в полу, D · K3. Два арбуза столбиком над щелью — одна длинная прямая проходит оба
+  { num: 3, name: 'One Line', role: 'n', loadout: { knife: 3 }, solution: [{"w":"knife","pts":[[200,380],[200,690]]}],
+    parts: [...W15.box(70, 330, 400, 624, { slot: ['floor', 200, 97], drop: 48 })], holds: [[50, 380, 350, 645]],
+    pile: [TG(P7('melon', 200, 0.92, null, 0, 4), 'D1'), TG(P7('melon', 200, 0.86, null, 0, 4), 'D2'), ...fill15(['plum', 'lime'], 14, 76, 324, null, 0.8)] },
+  // 9 · i · бункер-воронка, M → M, волна ×1 · K4. Открытая чаша получает видимую вторую порцию с такой же мягкой пробкой
+  { num: 9, name: 'Second Helping', role: 'i', hint: ['Cut the melon!'], loadout: { knife: 4 }, solution: [{"w":"knife","pts":[[117.5,412],[267.5,672]]},{"w":"knife","pts":[[117.5,412],[267.5,672]]}],
+    parts: [...W15.hopper(200, 626, 104, 44, 356, 460, { ch: 24, sh: 8, lipA: 60 }), ...W19.feeder(200, 404, 116, 56, 344, 302, { bh: 26 }).parts], holds: [[36, 448, 364, 652]],
+    feed: { x: 200, y: 404, w: 116, box: [56, 344, 302], zone: [36, 448, 364, 652], portions: [{ key: 'M1', plugs: ['M'], items: [['melon', 0.96, 'M2'], ...[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(k => [k % 2 ? 'lime' : 'plum', 0.72])] }] },
+    pile: [AT19('melon', 200, 590, 1, 'M1'), ...fill15(['plum', 'lime'], 12, 60, 340, 420, 0.72)] },
+  // 19 · i · ящик на верёвке, M · K4. Одна доступная верёвка выпускает груз в открытый приёмник с одним мягким выходом
+  { num: 19, name: 'Pull the Thread', role: 'i', hint: ['Cut the rope!'], loadout: { knife: 4 }, solution: [{"w":"knife","pts":[[120,365],[230,365]]},{"w":"knife","pts":[[117.5,412],[267.5,672]]}],
+    parts: [...W15.hopper(190, 626, 104, 14, 386, 478, { ch: 24, sh: 8, lipA: 60 }), ...W19.ropeBox(388, 402, 200, 'R', 330, 330)], holds: [[10, 470, 390, 652], [230, 318, 400, 402]],
+    pile: [TG(P7('melon', 190, 1, 478), 'M'), ...fill15(['plum', 'lime'], 8, 30, 236, 436, 0.72), ...fill15(['apple', 'orange'], 6, 241, 400, null, 0.85)] },
+  // 24 · i · бункер-воронка, N · H2 A2. Булава раскрывает единственное гнездо, топор завершает знакомую твёрдую часть
+  { num: 24, name: 'Nest Break', role: 'i', hint: ['Smash the nest!'], pick: 'mace', loadout: { mace: 2, axe: 2 }, solution: [{"w":"mace","pts":[[202.9,483.4],[46.9,691.4]]},{"w":"axe","pts":[[152.8,691.8],[242.8,511.8]]}],
+    parts: [...W15.hopper(200, 612, 62, 40, 360, 452, { ch: 30, sh: 6, lipA: 45 })], holds: [[36, 440, 364, 645]],
+    pile: [TG(P7('coco', 200, 1.09, null, 0, 6), 'N'), TG(P7('coco', 162, 1.09, null, 0, 14), 'N'), TG(P7('coco', 238, 1.09, null, 0, 14), 'N'), TG(P7('coco', 200, 1.09, null, 0, 14), 'N'),
+      ...fill15(['plum', 'lime'], 14, 50, 350, null, 0.72)] },
+  // 31 · i · доска с нагелями, M+M · K3. Нагели держат целый арбуз и отпускают его половинки
+  { num: 31, name: 'Wooden Pegs', role: 'i', hint: ['Cut a melon!'], loadout: { knife: 3 }, solution: [{"w":"knife","pts":[[180.8,448.6],[330.8,708.4]]},{"w":"knife","pts":[[68.8,448.6],[218.8,708.4]]}],
+    parts: [...W15.hopper(200, 590, 236, 18, 382, 444, { ch: 0, sh: 0 }).filter(p => p[0] !== 'slot'), ['peg', 88, 600, 8], ['peg', 200, 600, 8], ['peg', 312, 600, 8],
+      ['slot', 144, 596, 96, 608], ['slot', 256, 596, 96, 608], ['back', W15.rect(70, 578, 330, 616)]], holds: [[16, 430, 384, 640]],
+    pile: [TG(P7('melon', 144, 0.94, null, 0, 4), 'M1'), TG(P7('melon', 256, 0.94, null, 0, 4), 'M2'), ...fill15(['plum', 'lime'], 16, 40, 360, null, 0.75)] },
+  // 38 · i · песочные часы, M+M · K3. Два мягких затвора — последовательное горло между камерами
+  { num: 38, name: 'Narrow Passage', role: 'i', loadout: { knife: 3 }, solution: [{"w":"knife","pts":[[15.3,516.8],[262.8,659.7]]},{"w":"knife","pts":[[199.8,299.3],[199.8,585.3]]}],
+    parts: [...W15.hopper(200, 450, 84, 62, 338, 336, { ch: 18, sh: 6, lipA: 50 }), ...W15.hopper(200, 626, 104, 30, 370, 506, { ch: 24, sh: 8, lipA: 60 })],
+    holds: [[56, 330, 344, 470], [24, 500, 376, 652]],
+    pile: [TG(P7('melon', 200, 1, 560), 'M2'), ...fill15(['plum', 'lime'], 8, 50, 350, 540, 0.72), TG(P7('melon', 200, 0.8), 'M1'), ...fill15(['apple', 'orange'], 9, 70, 330, null, 0.78)] },
+  // 54 · i · ляда на верёвке, M · K3. Знакомая верёвка держит дно основной камеры: сначала мягкий выход внизу справа, потом груз.
+  // Ляда короче расстояния до горла: падая, ложится на верхний край левой доски бункера и сама становится скатом к горлу
+  { num: 54, name: 'Lower Hatch', role: 'i', loadout: { knife: 3 }, solution: [{"w":"knife","pts":[[225,475.8],[375,735.6]]},{"w":"knife","pts":[[300,380],[212,380]]}],
+    parts: [...W19.ropeBox(12, 432, 230, 'L', 336, 336), ...W15.hopper(300, 626, 100, 112, 394, 506, { ch: 24, sh: 8, lipA: 60 })], holds: [[0, 330, 196, 432], [100, 500, 398, 652]],
+    pile: [AT19('melon', 300, 596, 0.98, 'M'), ...fill15(['plum', 'lime'], 6, 140, 390, 462, 0.72), ...fill15(['apple', 'orange', 'lemon'], 10, 0, 189, null, 0.85)] },
+  // 62 · p · серпантин из желобов, N+O+B · H2 A1 S2 K2. Гнездо кокосов в верхнем бункере (булава сверху), затор апельсинов в конце жёлоба
+  // у правой стенки (пила вдоль), перец у арбуза в нижнем бункере (нож сбоку под жёлобом) — каждая камера держит сама, порядок любой.
+  // Жёлоб 12° (целые плоды по нему катятся; при 7° стояли). Компактное гнездо из трёх берёт одна булава; топор — пара булаве на остаток
+  { num: 62, name: 'All Together', role: 'p', loadout: { mace: 2, axe: 1, saw: 2, knife: 2 }, solution: [{"w":"mace","pts":[[110,300],[110,450]]},{"w":"saw","pts":[[240,476],[291,500],[360,519],[364,590]]},{"w":"knife","pts":[[190,578],[383,659]]}],
+    parts: [...W15.hopper(110, 404, 62, 8, 228, 334, { ch: 22, sh: 6, lipA: 45 }), ...W15.chute(0, 470, 326, 539, { wall: 46, brace: 36 }), ...W15.hopper(300, 648, 100, 196, 398, 572, { ch: 24, sh: 8, lipA: 60, beam: false })],
+    holds: [[4, 316, 240, 426], [0, 440, 400, 560], [190, 560, 400, 674]],
+    pile: [AT19('melon', 300, 626, 0.95, 'B'), AT19('pepper', 236, 606, 1.1, 'B', -40), ...fill15(['plum', 'lime', 'cherry'], 7, 206, 394, 578, 0.72),
+      AT19('orange', 359, 530, 1.5, 'O'), AT19('orange', 290, 500, 1.16, 'O'), AT19('apple', 262, 502, 0.85), AT19('lemon', 220, 494, 0.85), AT19('apple', 178, 485, 0.85), AT19('plum', 142, 482, 0.85), AT19('lemon', 106, 470, 0.85), AT19('plum', 66, 466, 0.85),
+      AT19('coco', 110, 392, 1.06, 'N'), AT19('coco', 66, 370, 1.06, 'N'), AT19('coco', 154, 370, 1.06, 'N'), ...fill15(['grape', 'lime', 'grape', 'plum'], 4, 12, 224, null, 0.74)] },
+];
 
 // Цель одна — пропихнуть всю кучу в жернова. Куча лежит на клиньях и полках со щелями (детали v1–v3: funnel, twin, bin, shelf,
 // plate, peg); пролезает то, что уже щели. Помехи: крупное (шире щели), твёрдое (кокос: нож отскакивает, пила глохнет), длинное
@@ -3366,6 +3464,85 @@ function clearCheck(s){
     const v = b.pb.getLinearVelocity(); b.pb.setAwake(true); b.pb.setLinearVelocity(planck.Vec2(v.x * 0.3, Math.max(v.y, 90 / CFG.ppm))); }
   ev(s, { type: 'sweep', n, area: +a.toFixed(0), share: +(a / s.total).toFixed(3) });
   ev(s, { type: 'win', juice: +(s.juice / s.total).toFixed(3), moves: s.moves, sweep: n > 0 });
+  return true;
+}
+// ------------------------------------------------------------------ v24: волна-досыпка (кормушка) и победа по массе
+// Кормушка L.feed = { x, y, w, zone: [x0, y0, x1, y1], lane, portions: [{ key, items: [[вид, масштаб, tag, угол°], …], rate, delay, plugs }] }:
+// видимая неподвижная постройка наверху; порции — данные (в мире их нет, масса — в s.total). Порция i разрешается открытием своей
+// пробки-ключа key (тег плода: целых с этим тегом стало меньше, чем было видно), ровно один раз. Выпуск ждёт готовности приёмной
+// зоны zone (осталось ≤ feedReady её исходной массы, проход lane свободен, feedCalm с подряд), затем пауза delay (feedDelay) и плоды
+// по одному из горла (x, y — середина низа горла, w — ширина) с частотой rate (feedRate). Место занято / целых ≥ feedWhole — ждёт.
+const itemArea = (it) => polyArea(kindVerts(it[0], it[1] || 1));
+function zoneMass(s, Z){ let m = 0; for (const b of s.bodies) if (b.x >= Z[0] && b.x <= Z[2] && b.y >= Z[1] && b.y <= Z[3]) m += b.area + (b.juiceX || 0); return m; }
+const isWholeBody = (b) => !b.cutEdges.some(Boolean);
+function wholeTagged(s, tag){ let n = 0; for (const b of s.bodies) if (b.flags.tag === tag && isWholeBody(b)) n++; return n; }
+function feedLane(D){ return D.lane || [D.x - D.w / 2, D.y, D.x + D.w / 2, D.zone[1]]; }
+function feedInit(s){
+  const L = s.level; s.feeds = []; s.lostMass = 0; s.massNear = false; s.valve = 0;
+  if (L.feed){ const D = L.feed, m0 = zoneMass(s, D.zone);
+    s.feeds.push({ def: D, i: 0, ph: 'idle', t0: 0, ok: 0, k: 0, next: 0, out: D.portions.map(() => 0), seen: D.portions.map(() => 0), arm: D.portions.map(() => -1),
+      m0: m0 > 0 ? m0 : D.portions[0].items.reduce((a, it) => a + itemArea(it), 0), blocked: false }); }
+  s.feedLeft = feedLeftOf(s); s.total += s.feedLeft;
+}
+function feedLeftOf(s){ let a = 0; for (const f of s.feeds || []) f.def.portions.forEach((P, i) => { for (let k = i < f.i ? P.items.length : i === f.i ? f.k : 0; k < P.items.length; k++) a += itemArea(P.items[k]); }); return a; }
+const feedsDone = (s) => !s.feeds || s.feeds.every(f => f.i >= f.def.portions.length);
+function laneClear(s, D){ const [x0, y0, x1, y1] = feedLane(D);
+  for (const b of s.bodies) if (b.x + b.rad > x0 && b.x - b.rad < x1 && b.y + b.rad > y0 && b.y - b.rad < y1) return false; return true; }
+function feedStep(s){
+  let busy = false;
+  s.feeds.forEach((f, fi) => {
+    const D = f.def;
+    for (let i = f.i; i < D.portions.length; i++){ if (f.arm[i] >= 0) continue;   // ключи: целых с тегом стало меньше, чем было видно — порция разрешена
+      const n = wholeTagged(s, D.portions[i].key); if (n > f.seen[i]) f.seen[i] = n; else if (f.seen[i] > 0 && n < f.seen[i]){ f.arm[i] = +s.t.toFixed(4); ev(s, { type: 'feed.arm', f: fi, i }); } }
+    const P = D.portions[f.i]; if (!P) return;
+    if (f.ph === 'idle' && f.arm[f.i] >= 0){ f.ph = 'wait'; f.t0 = s.t; f.ok = 0; f.blocked = false; }
+    if (f.ph === 'wait'){
+      const ready = zoneMass(s, D.zone) <= CFG.feedReady * f.m0 + 1e-6 && laneClear(s, D);
+      f.ok = ready ? f.ok + CFG.dt : 0;
+      if (f.ok >= CFG.feedCalm - 1e-9){ f.ph = 'delay'; f.t0 = s.t; ev(s, { type: 'feed.open', f: fi, i: f.i }); }
+      else if (s.t - f.t0 < CFG.feedBlock) busy = true;
+      else if (!f.blocked){ f.blocked = true; ev(s, { type: 'feed.blocked', f: fi, i: f.i }); }
+    }
+    if (f.ph === 'delay'){ busy = true; const [lo, hi, d0] = CFG.feedDelay; if (s.t - f.t0 >= Math.max(lo, Math.min(hi, P.delay == null ? d0 : P.delay)) - 1e-9){ f.ph = 'pour'; f.next = s.t; } }
+    if (f.ph === 'pour'){
+      busy = true;
+      if (s.t >= f.next - 1e-9){
+        const it = P.items[f.k], kind = it[0], sc = it[1] || 1, r = polyRadius(kindVerts(kind, sc)), off = [0, -0.55, 0.55, -0.3, 0.3, -0.8, 0.8][f.k % 7];
+        const x = D.x + off * Math.max(0, D.w / 2 - r), y = D.y + r + 2;
+        let free = true, whole = 0;
+        for (const b of s.bodies){ if (isWholeBody(b)) whole++; if (Math.hypot(b.x - x, b.y - y) < b.rad + r - 2) free = false; }
+        if (free && whole < CFG.feedWhole){
+          const rec = makeFruit(s, kind, x, y, (it[3] || 0) * Math.PI / 180, sc, it[2] || null); rec.fed = [fi, f.i];
+          rec.pb.setLinearVelocity(planck.Vec2(0, (D.vy == null ? 90 : D.vy) / CFG.ppm));
+          s.feedLeft = Math.max(0, s.feedLeft - rec.area); f.out[f.i]++; f.k++; f.next = s.t + 1 / (P.rate || CFG.feedRate);
+          ev(s, { type: 'feed', f: fi, i: f.i, k: f.k, id: rec.id, kind, x: +x.toFixed(1), y: +y.toFixed(1), r: +r.toFixed(1) });
+          if (f.k >= P.items.length){ ev(s, { type: 'feed.done', f: fi, i: f.i }); f.i++; f.k = 0; f.ph = 'idle'; }
+        }
+      }
+    }
+  });
+  return busy;
+}
+// Масса, уже ушедшая в сок (с тем, что жуют пилы).
+function massDone(s){ let a = s.juice; for (const g of s.grinding) a += g.area - g.done; return a; }
+// Победа по массе (L.mass): источники исчерпаны, камеры L.holds пройдены (в каждой < massFrag массы), нет целого плода и обломка ≥ massFrag,
+// перемолото ≥ massWin. Если остались только крошки (каждая < massFrag) и мир спокоен massValve с — тоже победа (s.valve — сколько было
+// списано; lab19 считает это сигналом). Остаток проваливается сквозь детали в пилы (как clearCheck).
+function massCheck(s){
+  const tot = s.total, frag = CFG.massFrag * tot; s.massNear = false;
+  if (!feedsDone(s)) return false;
+  for (const Z of s.level.holds || []) if (zoneMass(s, Z) >= frag) return false;
+  for (const b of s.bodies) if (isWholeBody(b) || b.area + (b.juiceX || 0) >= frag) return false;
+  s.massNear = true;
+  const left = heapLeft(s), ok = massDone(s) >= CFG.massWin * tot - 1e-6;
+  if (!ok && !(s.quiet >= CFG.massValve)) return false;
+  if (!ok) s.valve = left;
+  s.won = true; s.swept = true; s.winUsed = s.used; s.winPeak = s.peakNet;
+  const n = s.bodies.length;
+  for (const b of s.bodies){ b.flags.swept = true; for (let f = b.pb.getFixtureList(); f; f = f.getNext()) f.setFilterMaskBits(0);
+    const v = b.pb.getLinearVelocity(); b.pb.setAwake(true); b.pb.setLinearVelocity(planck.Vec2(v.x * 0.3, Math.max(v.y, 90 / CFG.ppm))); }
+  ev(s, { type: 'sweep', n, area: +left.toFixed(0), share: +(left / tot).toFixed(4), valve: !ok });
+  ev(s, { type: 'win', juice: +(massDone(s) / tot).toFixed(4), moves: s.moves, sweep: n > 0, mass: true });
   return true;
 }
 /* КОНЕЦ ЯДРА */
@@ -3942,10 +4119,74 @@ function drawRopesV4(c, s){
     const [P, Q] = ropeEnds(r), L0 = r.L0 || (r.L0 = Math.hypot(Q[0] - P[0], Q[1] - P[1])), seg = r.kind === 'rope' ? (a, b, e, f) => ropeTex(c, a, b, e, f, 6) : (a, b, e, f) => stemSeg(c, a, b, e, f, r.kind);
     if (!r.cut) seg(P[0], P[1], Q[0], Q[1]);
     else { const age = G.rt - (FX.ropeAt[i] || 0), sw = 10 * Math.exp(-age * 1.4) * Math.sin(age * 7), la = Math.max(6, r.cutF * L0 * 0.96);
-      seg(P[0], P[1], P[0] + sw, P[1] + la); if (r.pb && (1 - r.cutF) * L0 > 3) seg(Q[0], Q[1], Q[0] - sw * 0.5, Q[1] - Math.min(30, (1 - r.cutF) * L0)); }
+      if (r.kind === 'rope' && s.level.v19){ ropeDangle24(c, P[0], P[1], la, age, 1); if (r.pb && (1 - r.cutF) * L0 > 3) ropeDangle24(c, Q[0], Q[1], Math.min(46, (1 - r.cutF) * L0), age + 0.4, -1); }   // v24: оба конца висят вниз и качаются
+      else { seg(P[0], P[1], P[0] + sw, P[1] + la); if (r.pb && (1 - r.cutF) * L0 > 3) seg(Q[0], Q[1], Q[0] - sw * 0.5, Q[1] - Math.min(30, (1 - r.cutF) * L0)); } }
     if (r.ea.k === 'static' && !(s.level.parts.some(p => p[0] === 'branch'))) drawHookV4(c, P[0], P[1], 0.8);
   }
   c.fillStyle = '#4e5d22'; for (const q of s.knots){ if (q.gone) continue; const p = q.pb.getPosition(); c.beginPath(); c.arc(p.x * CFG.ppm, p.y * CFG.ppm, 3.4, 0, 6.29); c.fill(); }
+}
+// =====================================================================================================
+// v24: срез сотни из досок (#slice19, PULP_DROP.slice19()) — вид кормушки и верёвки. Только вид: ядро решает, когда и что выпадает.
+//   кормушка: плоды невыпущенных порций лежат в чаше (те же модели 3D, в мире их нет), снизу — деревянная заслонка горла (открыта, пока
+//   идёт порция), на доске — плашка с числом оставшихся порций; плод порции выпадает из горла (тело ядра рождается под заслонкой)
+//   верёвка ящика и ляды: натянута прямой, рвётся (волокна, щелчок — ropeFX), оба конца болтаются кривой с затухающим качанием
+// =====================================================================================================
+const V24 = {
+  flap: { t: 9, over: 5, open: 1.35, k: 10 },     // заслонка: толщина, вылет за края горла, угол открытия (рад), скорость доводки (1/с)
+  badge: { r: 12, dx: -20, dy: 18, font: 15 },    // плашка «×N»: радиус (ед.), место от правого верхнего края чаши
+  rope: { t: 6, sag: 0.18, swing: 10, damp: 1.3, w: 6.5 },   // верёвка: толщина; концы: провис кривой, качание (ед.), затухание (1/с), частота
+};
+const F24 = { s: null, items: [], flap: null, flapA: 0 };
+const slice19On = () => CFG.clearSet === 'v19';
+// Раскладка плодов в чаше: по одному тем же placePile ядра (горло закрыто заслонкой), снизу — те, что выпадут первыми.
+function feedLay24(s){
+  if (F24.s === s) return F24.items;
+  F24.s = s; F24.items = []; F24.flapA = 0;
+  const D = s.level.feed; if (!D) return F24.items;
+  const polys = s.statics.filter(st => st.role !== 'wall' && !st.lazy && Math.max(...st.poly.map(p => p[1])) <= D.y + 1).map(st => st.poly);
+  polys.push([[D.x - D.w / 2 - 6, D.y - 3], [D.x + D.w / 2 + 6, D.y - 3], [D.x + D.w / 2 + 6, D.y + 8], [D.x - D.w / 2 - 6, D.y + 8]]);
+  const box = D.box || [D.x - D.w, D.x + D.w], fixed = []; let j = 0;
+  D.portions.forEach((P, pi) => P.items.forEach((it, k) => {
+    const sc = it[1] || 1, try1 = placePile({ pile: fixed.concat([[it[0], D.x + ((j % 5) - 2) * 16, sc, it[3] || 0, null, null, box[0], box[1]]]) }, polys, []);
+    const q = try1[try1.length - 1], V = kindVerts(it[0], sc), id = -1000 - j;
+    if (q && try1.length === fixed.length + 1){ fixed.push([it[0], q.x, sc, it[3] || 0, null, null, null, null, q.y]);
+      F24.items.push({ j, pi, k, id, root: id, kind: it[0], x: q.x, y: q.y, a: q.a, sc, verts: V, cutEdges: V.map(() => false), artFrame: [0, 0], area: polyArea(V), rad: polyRadius(V), flags: {} }); }
+    j++; }));
+  return F24.items;
+}
+const feedOut24 = (f) => f.def.portions.slice(0, f.i).reduce((a, P) => a + P.items.length, 0) + f.k;
+// Плоды в чаше для r3Draw: только ещё не выпавшие (первый выпадает снизу)
+function feedShow24(s){ if (!s.feeds || !s.feeds.length) return []; const L = feedLay24(s), n = feedOut24(s.feeds[0]); return L.filter(q => q.j >= n); }
+function feedKinds24(s){ const D = s && s.level.feed; return D ? D.portions.flatMap(P => P.items.map(it => it[0])) : []; }
+// Заслонка горла — брус 3D (как ляда), петля у левого края горла
+function flap24Sync(s){
+  const D = s.level.feed, f = s.feeds && s.feeds[0];
+  if (!D || !f || !F13.live){ if (F24.flap){ R3.scene.remove(F24.flap); dispose13(F24.flap); F24.flap = null; } return; }
+  const V = V24.flap, w = D.w + 2 * V.over;
+  if (!F24.flap || F24.flap.s !== s){ if (F24.flap){ R3.scene.remove(F24.flap); dispose13(F24.flap); }
+    const m = new THREE.Group(); m.add(wood13Mesh([[0, 0], [w, 0], [w, V.t], [0, V.t]], Object.assign({ D: 6, bevel: 1.6, r: 2.5 }, wood16Tex() ? { w16: true, kind: 'gate', local: true, seed: 0.73 } : {})));
+    const pin = new THREE.Mesh(col13(new THREE.CylinderGeometry(3.4, 3.8, 3, 14).rotateX(Math.PI / 2).translate(3, V.t / 2, 6.5), '#9ea6ae'), saw13Mat()); pin.frustumCulled = false; m.add(pin);
+    m.matrixAutoUpdate = false; m.s = s; R3.scene.add(m); F24.flap = m; }
+  const open = f.ph === 'delay' || f.ph === 'pour', want = open ? V.open : 0;
+  F24.flapA += (want - F24.flapA) * Math.min(1, (R3.dt || 0.016) * V.k);
+  const M = F24.flap.matrix; M.makeRotationZ(F24.flapA); M.setPosition(D.x - w / 2, D.y, 0); F24.flap.matrixWorldNeedsUpdate = true;
+}
+// Плашка «×N» — сколько порций ещё в кормушке (текущая, пока не начала сыпаться, тоже считается)
+function feedBadge24(c, s){
+  const D = s.level.feed, f = s.feeds && s.feeds[0]; if (!D || !f) return;
+  const n = D.portions.length - f.i - (f.ph === 'pour' || f.ph === 'delay' ? 1 : 0); if (n <= 0) return;
+  const B = V24.badge, box = D.box || [D.x - D.w, D.x + D.w, D.y - 60], x = box[1] + B.dx, y = box[2] + B.dy;
+  c.save(); c.beginPath(); c.arc(x, y, B.r, 0, 6.29); c.fillStyle = '#5b3a1e'; c.fill(); c.lineWidth = 2; c.strokeStyle = '#e8c58f'; c.stroke();
+  c.font = `800 ${B.font}px system-ui, sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.lineWidth = 3; c.strokeStyle = '#2a1608'; c.strokeText('×' + n, x, y + 1); c.fillStyle = '#fff6e0'; c.fillText('×' + n, x, y + 1);
+  c.restore();
+}
+// Плод порции родился под заслонкой — лёгкий хлопок (без слов)
+function feedFX24(e){ log('event', 'feed', 'i=' + e.i + ' k=' + e.k + ' ' + e.kind); if (e.k === 1) Sound.play('drop', 3); else Sound.playRL('bump', 0.05, 1); }
+// Конец оборванной верёвки — кривая из коротких кусков текстуры: от (x0, y0) вниз на len, кончик качается
+function ropeDangle24(c, x0, y0, len, age, dir){
+  const R = V24.rope, sw = R.swing * Math.exp(-age * R.damp) * Math.sin(age * R.w) * dir, n = 4;
+  let px = x0, py = y0;
+  for (let k = 1; k <= n; k++){ const t = k / n, x = x0 + sw * t * t + R.sag * len * Math.sin(Math.PI * t) * 0.25 * dir, y = y0 + len * t; ropeTex(c, px, py, x, y, R.t); px = x; py = y; }
 }
 // v5: цвета игрушечного набора — пластик чаши (коралл), прутья — кремовый пластик, валики — лимонный пластик.
 // =====================================================================================================
@@ -4671,6 +4912,8 @@ function onEvent(e){
     case 'explode': explodeFX(e); break;
     case 'crack': crackFX(e); break;
     case 'rope': ropeFX(e); break;
+    case 'feed': feedFX24(e); break;                 // v24: плод порции выпал из кормушки
+    case 'feed.open': case 'feed.arm': case 'feed.done': case 'feed.blocked': log('event', e.type, 'i=' + e.i); break;
     case 'net': netFX(e); break;
     case 'plank': Sound.play('thud', 1); shake(0, 1, 3); break;
     case 'spin': Sound.playRL('ratchet', 0.15); log('event', 'spin', 'turn=' + e.turn); break;
@@ -4701,8 +4944,8 @@ function onContact(ct){                       // удар кусков: силь
 // Экраны: DOM-оверлеи, любой открывается кодом или хешем (§6, §11). Победа — без карточки: конфетти, фраза, следующий уровень.
 // =====================================================================================================
 const $ = (id) => document.getElementById(id);
-const levelTable = () => LINE11;   // v15: 110 уровней «развали» — десять из досок и 100 уровней v11 (дальше — по кругу в ядре)
-const okey = () => 'olevel11';   // ключ прогресса линейки v11 в сейве
+const levelTable = () => CFG.clearSet === 'v19' ? CLEAR19 : LINE11;   // v24: в срезе (#slice19) — девять уровней CLEAR19   // v15: 110 уровней «развали» — десять из досок и 100 уровней v11 (дальше — по кругу в ядре)
+const okey = () => CFG.clearSet === 'v19' ? 'slice19' : 'olevel11';   // v24: прогресс среза — отдельно, линейка игры не меняется   // ключ прогресса линейки v11 в сейве
 const curLevel = () => (G.save[okey()] || 1);
 function isOpen(n){ return G.save.unlockAll || n <= curLevel(); }
 function setUnlockAll(on){ G.save.unlockAll = !!on; save(); log('event', 'cheat', 'unlockAll=' + G.save.unlockAll); }
@@ -4722,7 +4965,7 @@ function goto(screen){
   if (screen === 'menu'){
     let lv = '';
     const top = levelTable().length, cl = curLevel();
-    for (let n = 1; n <= top; n++) lv += `<button data-act="lvl" data-n="${n}" class="${isOpen(n) ? '' : 'locked'} ${n === cl ? 'cur' : ''}">${isOpen(n) ? n : '🔒'}</button>`;
+    for (let n = 1; n <= top; n++) lv += `<button data-act="lvl" data-n="${n}" class="${isOpen(n) ? '' : 'locked'} ${n === cl ? 'cur' : ''}">${isOpen(n) ? (levelTable()[n - 1].num || n) : '🔒'}</button>`;   // v24: в срезе — номер в будущей линейке
     card.innerHTML = `<h1>PULP DROP</h1><p>Break the pile · drop it all in</p>
       <div class="row"><button class="btn big" data-act="play">Play · Level ${cl}</button></div>
       <div class="row"><button class="btn plain" data-act="help">How to play</button></div>
@@ -4771,6 +5014,7 @@ window.addEventListener('hashchange', () => { const h = location.hash.slice(1); 
   if (h === 'menu' || h === 'help' || h === 'win' || h === 'lose'){ if (h !== G.screen) goto(h); return; }
   if (h === 'unlock'){ setUnlockAll(true); goto('menu'); return; }
   if (sampleHash(h)){ sample16(sampleHash(h)); return; }      // v16.1: образец дерева
+  if (/^slice19\b/.test(h)){ slice19(+(h.split('=')[1] || 1)); return; }   // v24: срез девяти уровней
   if (!G.s) startLevel(curLevel()); else if (G.screen !== 'game') goto('game'); });   // v14: прежние хеши режимов (#v3…#v7old, #order, #tank, #2d, #style=…) — обычная игра
 
 let toastUntil = 0;
@@ -4800,7 +5044,7 @@ function startLevel(n){
   fxr = mulberry32(n * 9973 + 17); resetFX();
   r3Level();                                                  // v12, этап 2: 3D Tripo в линейке v11
   G.heapTop = heapTop(G.s);                                   // v12 круг 6: масштаб «развали» — от кучи этого уровня
-  setLayout(); applyTheme(); buildBackground();
+  setLayout(); applyTheme(); if (!fit()) buildBackground();   // v24: кадр под кучу нового уровня — до запекания (раньше fit в конце запекал второй раз: смена уровня 30–50 мс)
   G.s.world.on('begin-contact', onContact);
   const order = G.s.bodies.slice().sort((p, q) => q.y - p.y), N = order.length;      // въезд: нижние предметы первыми
   order.forEach((b, i) => FX.intro.set(b.id, VIEW.introSpread * (N > 1 ? i / (N - 1) : 0)));
@@ -4815,7 +5059,7 @@ function startLevel(n){
 const HUDV = { level: -1, moves: -1, low: null, muted: null };
 function bumpEl(el){ if (REDUCED) return; el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); }
 function hud(){
-  const s = G.s, lv = s ? s.n : G.save.level;
+  const s = G.s, lv = s ? (s.level.num || s.n) : G.save.level;   // v24: срез — номер уровня в будущей линейке
   if (lv !== HUDV.level){ $('hud-level').textContent = lv; HUDV.level = lv; }
   trayUpdate();                                              // v6: лоток оружия
   if (G.save.muted !== HUDV.muted){ $('mute-use').setAttribute('href', G.save.muted ? '#i-mute' : '#i-sound'); HUDV.muted = G.save.muted; }
@@ -4930,6 +5174,7 @@ function fit(){
   const changed = cv.width !== cw || cv.height !== ch || Math.abs(nv.k - view.k) > 1e-6 || Math.abs(nv.ox - view.ox) > 0.01 || Math.abs(nv.oy - view.oy) > 0.01;
   view = nv;
   if (changed){ cv.width = cw; cv.height = ch; K = DPR * nv.k; buildBackground(); }
+  return changed;
 }
 let fitTimer = 0;
 const refit = () => { clearTimeout(fitTimer); fitTimer = setTimeout(fit, 140); };
@@ -5929,7 +6174,7 @@ function r3Draw(c, s, sh){
   const res = r3Res(t0), W = Math.max(1, Math.round(cv.width * res)), H = Math.max(1, Math.round(cv.height * res));
   if (R3.cv.width !== W || R3.cv.height !== H){ R3.cv.width = W; R3.cv.height = H; R3.ren.setSize(W, H, false); }
   r3SetCam(sh);
-  const tu = performance.now(); saw13Update(); if (F13.live || F13.gates.length) gate13Sync(s); if (F13.frags.length) bite13Update(R3.dt); shard13Update(R3.dt); wet13Update(R3.dt); R3.stats.updMs = +(performance.now() - tu).toFixed(2);   // v13: пилы, ляды; круг 3: пила ест куски, осколки, сок на дисках
+  const tu = performance.now(); saw13Update(); if (F13.live || F13.gates.length) gate13Sync(s); if (s.level.feed || F24.flap) flap24Sync(s); if (F13.frags.length) bite13Update(R3.dt); shard13Update(R3.dt); wet13Update(R3.dt); R3.stats.updMs = +(performance.now() - tu).toFixed(2);   // v13: пилы, ляды; круг 3: пила ест куски, осколки, сок на дисках
   const live = new Set(), flat = []; let built = 0, tris = 0, nb = 0; const tv = !!R3.tready;
   if (tv !== R3.lastTv){ for (const e of R3.ents.values()) r3Drop(e); R3.ents.clear(); R3.lastTv = tv; }
   const tgv = Math.tan(V12.tilt * Math.PI / 180), tbv = Math.tan(V12.bevel * Math.PI / 180);
@@ -5961,6 +6206,7 @@ function r3Draw(c, s, sh){
     return true;
   };
   for (const b of s.bodies){ if (!K3[b.kind] || !R3T.fr[b.kind]){ flat.push(b); continue; } if (!put(b, null)) flat.push(b); }
+  if (s.feeds && s.feeds.length && tv) for (const d of feedShow24(s)) if (K3[d.kind] && R3T.fr[d.kind]) put(d, null);   // v24: плоды в чаше кормушки
   R3.ghosts = 0;
   if (tv) for (const gr of s.grinding){ if (!R3T.fr[gr.kind]) continue; if (F13.split.has(gr.id)){ R3.ghosts++; continue; } if (put(gr, gr)) R3.ghosts++; }
   if (tv && F13.frags.length){ let nn = 0; for (const f of F13.frags){ const e0 = R3.ents.get(f.id), fresh = !e0 || e0.verts !== f.verts; if (fresh && !e0 && nn >= V13.frag.perFrame) continue; if (fresh) nn++;   // v13: куски на пилах (новых сеток — не больше perFrame за кадр; круг 4: тело после укуса — сразу, иначе старая сетка пропала бы на кадр)
@@ -6005,7 +6251,7 @@ function r3Level(){                                             // новый у
   reset13();                                                  // v13: части от пил, искры, ляды
   if (R3.ents.size) r3Reset(); else { R3.st.clear(); R3.etool.clear(); R3.hits.clear(); R3.lastSplit = null; }
   if (G.s && V13.on) img13(state13(G.s.n));                  // v14: лес уровня — первым в очередь (фон заглушки загрузки)
-  R3.need = G.s ? [...new Set(G.s.bodies.map(b => b.kind))] : []; R3.lastTv = undefined; delete R3.marks.level3d; R3.stats.peakTris = 0; R3.stats.peakBodies = 0;
+  R3.need = G.s ? [...new Set(G.s.bodies.map(b => b.kind).concat(feedKinds24(G.s)))] : [];   // v24: и плоды кормушки R3.lastTv = undefined; delete R3.marks.level3d; R3.stats.peakTris = 0; R3.stats.peakBodies = 0;
   if (r3Game()) r3Load();
 }
 // =====================================================================================================
@@ -7143,7 +7389,8 @@ function wood13Bake(c){
   // v16: порядок — сначала сцены WebGL (брусья, перед корыта) и их копии в 2D, потом 2D-работа на фоне (тень, задник, кант): копия кадра
   // WebGL ждёт очередь GPU, и если в ней уже лежат размытия задника, ждёт и их (≈ 20 мс на кадре старта уровня)
   const sc = new THREE.Scene(), add = (P, o) => sc.add(wood13Mesh(P, o)), PL = V15.plank, pw = (o) => Object.assign(w16 ? { w16: true, D: PL.D, bevel: PL.bevel, r: PL.r } : { w15: true, D: PL.D, bevel: PL.bevel, r: PL.r }, o);   // круг 3: рисованное дерево; v16 — текстурой GPT
-  parts.forEach((st, i) => { if (st.role === 'peg'){ let cx = 0, cy = 0; for (const v of st.poly){ cx += v[0] / st.poly.length; cy += v[1] / st.poly.length; } add(st.poly, { peg: true, cx, cy, r: 2 }); }
+  parts.forEach((st, i) => { if (st.role === 'peg'){ let cx = 0, cy = 0; for (const v of st.poly){ cx += v[0] / st.poly.length; cy += v[1] / st.poly.length; }
+      const k = s.level.v19 ? 1.3 : 1; add(st.poly.map(v => [cx + (v[0] - cx) * k, cy + (v[1] - cy) * k]), { peg: true, cx, cy, r: 2 }); }   // v24: нагель среза — торец крупнее (тело то же)
     else if (st.role === 'wood') add(vis[i], pw(v17 && v17[i] ? { kind: st.kind, dir: v17[i].dir, e17: v17[i].e17, z: v17[i].z, r: 0.4 } : { kind: st.kind, dir: st.kind === 'cheek' || st.kind === 'side' || st.kind === 'post' ? [0, 1] : undefined }));   // v15: брус построек; v17 — форма и сечение
     else add(vis[i], w16 ? pw({ kind: 'block', r: Q.r }) : undefined); });   // v16: клинья, полки, бруски уровней 11–110 — тем же деревом
   posts.forEach((P, i) => add(P, pw({ kind: 'post', dir: [0, 1], seed: 0.3 + 0.4 * i, z: 1.5 })));   // стойки чуть ближе — брусья уходят за них
@@ -8581,6 +8828,7 @@ function render(){
   ctx.save(); vbase(ctx, sh.x, sh.y); juice13(ctx); contact13(ctx, s); ctx.restore();   // v13: сок в корыте за пилами (пилы — в 3D); круг 2: тени-контакты на дереве
   r3Draw(ctx, s, sh);
   if (intro) ctx.restore();
+  if (s.level.feed){ vbase(ctx, sh.x, sh.y); feedBadge24(ctx, s); }   // v24: плашка порций кормушки
   vbase(ctx, sh.x, sh.y);
   drawSlabFX(ctx, s);                            // v8: капли свежей дольки (блик — в шейдере)
   drawRings(ctx);
@@ -8680,7 +8928,7 @@ function fxUpdate(gdt, rdt){
   updateHint();
   if (s.won && G.winAt){ const W = V13.bite.churn.win, t = G.rt - G.winAt; F13.fastK = 1 + (W.fast[1] - 1) * clamp((t - W.fast[0]) / 0.5, 0, 1); } else F13.fastK = 1;   // v13 круг 5: на победе пилы доедают быстрее
   if (G.screen === 'win' && G.nextAt && G.rt >= G.nextAt && (idle13(s) || G.rt >= G.winAt + V13.bite.churn.win.cap)){   // смена уровня ждёт пустых пил, но не дольше win.cap после победы
-    F13.stats.winDelay = +(G.rt - G.winAt).toFixed(2); F13.stats.winLeft = F13.frags.length + s.bodies.length; G.nextAt = 0; startLevel(s.n + 1); }
+    F13.stats.winDelay = +(G.rt - G.winAt).toFixed(2); F13.stats.winLeft = F13.frags.length + s.bodies.length; G.nextAt = 0; startLevel(s.n + 1); G.skipDraw = true; }   // v24: кадр смены уровня — без отрисовки (запекание и первая сборка сеток — в разных кадрах)
 }
 let lastFrame = 0;
 function tick(){
@@ -8689,7 +8937,7 @@ function tick(){
   if (G.pend && F13.live && G.s && G.screen === 'game' && G.rt >= G.introUntil){ const q = G.pend; G.pend = null; throwDown(q.x, q.y, q.id); }   // v14: касание во время загрузки — бросок, как только можно
   Music.tick();
   if (toastUntil && now > toastUntil){ $('toast').classList.add('hide'); toastUntil = 0; }
-  render();
+  if (G.skipDraw) G.skipDraw = false; else render();
 }
 function frame(){ if (!G.liveBench) tick(); requestAnimationFrame(frame); }
 setInterval(() => { if (performance.now() - lastFrame > 120 && !G.paused && !G.liveBench) tick(); }, 40);
@@ -8712,6 +8960,7 @@ window.PULP_DROP = {
   play(n){ G.sample = false; startLevel(n || 1); return this.state(); },
   // v16.1: образец дерева — пустой уровень n (без фруктов, подсказки, руки, названия), игра стоит; sample(0) — выйти. Хеш: #sample=N
   sample(n){ return sample16(n); },
+  slice19(i){ return slice19(i == null ? 1 : i); },   // v24: срез девяти уровней (i — номер в срезе 1–9; 0 — обратно к линейке)
   // slab() — счётчики: долек, кувыркаются, капель висит, пятен, кромки по инструментам
   // v12: r3ready() / r3tready() — Promise, когда three собран / модели уровня готовы; r3tstats() — загрузка моделей;
   // debug3d(on) — контур тел физики поверх 3D; bevel3(град) — угол фаски (сетки пересобираются); r3stats() — сетки, треугольники, время.
@@ -8869,7 +9118,7 @@ function liveAuto(from, to, maxSec){
       const now = performance.now(); iv.push(now - last); last = now; const w0 = performance.now(); tick(); const wk = performance.now() - w0; work.push(wk);
       if (wk > 12){ const s0 = G.s; worst.push({ ms: +wk.toFixed(1), n: s0 && s0.n, t: s0 && +s0.t.toFixed(2), screen: G.screen, flight: s0 && s0.flight ? s0.flight.w : '', bodies: s0 && s0.bodies.length, intro: G.rt < G.introUntil }); }
       liqMax = Math.max(liqMax, LIQ.n); ptMax = Math.max(ptMax, PT.n);
-      const s = G.s; if (s){ if (!per[s.n]) per[s.n] = 'play'; if (s.served || s.won) per[s.n] = 'won'; if (s.lost) per[s.n] = 'lost'; }
+      const s = G.s; if (s){ if (!per[s.n]) per[s.n] = 'play'; if (s.served || s.won) per[s.n] = 'won'; if (s.lost) per[s.n] = 'lost'; (G.off24 || (G.off24 = {}))[s.n] = s.offRow || 0; }   // v24: «упало мимо пил» по уровням
       if ((s && s.n > to) || now - t0 > maxSec * 1000 || (s && s.lost && G.screen === 'lose')){
         G.liveBench = false; G.auto = ''; const v = iv.slice(5), w = work.slice(5);
         done({ frames: v.length, sec: +((now - t0) / 1000).toFixed(1), ivMed: q(v, 0.5), ivMax: q(v, 1), over20: v.filter(x => x > 20).length, over33: v.filter(x => x > 33.4).length,
@@ -8905,10 +9154,13 @@ const sampleHash = (h) => { const m = /^sample=(\d+)/.exec(h); return m ? +m[1] 
 // v10: юзер-тест — сразу с уровня из сейва, без меню
 function setUserTest(){ CFG.userTest = true; document.body.classList.add('ut'); log('event', 'userTest', 'on'); }
 if (CFG.userTest){ setUserTest(); startHash = 'game'; }
+// v24: срез сотни из досок — девять уровней CLEAR19 (#slice19 или #slice19=i, PULP_DROP.slice19(i); slice19(0) — обратно к линейке игры)
+function slice19(i){ G.prep = null; if (i === 0){ CFG.clearSet = 'v11'; startLevel(curLevel()); return 0; } CFG.clearSet = 'v19'; startLevel(Math.max(1, i || 1)); return G.s.n; }
+if (/^slice19\b/.test(startHash)){ CFG.clearSet = 'v19'; startHash = 'slice'; startLevel(+(location.hash.split('=')[1] || 1)); }
 if (startHash === '' || startHash === 'menu' || startHash === 'help'){ startLevel(curLevel()); goto(startHash || 'menu'); }   // v14: меню — поверх уровня в лесу
 else if (startHash === 'win' || startHash === 'lose'){ startLevel(curLevel()); goto(startHash); }
 else if (sampleHash(startHash)) sample16(sampleHash(startHash));   // v16.1: #sample=N — образец дерева
-else startLevel(curLevel());   // #game и прежние хеши режимов (#v3…#v7old, #order, #tank, #direct, #aim, #2d, #3d, #style=…, #pieces=…, #cutlab) — обычная игра
+else if (startHash !== 'slice') startLevel(curLevel());   // #game и прежние хеши режимов (#v3…#v7old, #order, #tank, #direct, #aim, #2d, #3d, #style=…, #pieces=…, #cutlab) — обычная игра
 loadAssets();   // спрайты инструментов, рука, верёвка и крюк
 requestAnimationFrame(frame);
 log('event', 'boot', 'levels=' + LEVELS.length + '+gen planck=1.4.2');
