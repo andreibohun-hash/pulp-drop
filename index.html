@@ -4320,8 +4320,6 @@ const SFX = {
   // v3: заказ
   // v6: оружие
   'w.pick'(S, t){ S.tone(t, 'triangle', 700, 1100, 0.06, 0.12); S.noise(t, 'highpass', 4000, 4000, 0.8, 0.03, 0.05); },                // выбрал оружие в лотке
-  'win.splat'(S, t){ S.tone(t, 'sine', 700, 150, 0.045, 0.4); S.noise(t, 'bandpass', 1500, 520, 2.4, 0.06, 0.42); S.tone(t + 0.01, 'sine', 96, 38, 0.19, 0.66);   // v28.3: «чпок» — мокрый щелчок и низкий «плюх»
-    S.noise(t + 0.008, 'lowpass', 760, 150, 1.3, 0.15, 0.38); S.noise(t + 0.04, 'highpass', 3200, 2300, 1, 0.05, 0.07); },
   'aim.lock'(S, t, n){ const f = 1900 * Math.pow(1.06, Math.min(8, (n || 1) - 1)); S.tone(t, 'sine', f, f * 1.25, 0.05, 0.035); S.noise(t, 'highpass', 7000, 7000, 0.7, 0.03, 0.015); },   // v27: плод взят в прицел — тихий тик, выше с числом целей
   'w.draw'(S, t, w){ const f = { knife: 2800, axe: 1500, saw: 900, mace: 600 }[w] || 1500;                                            // оружие появилось под пальцем
     S.noise(t, 'bandpass', f, f * 1.4, 2, 0.06, 0.08); S.tone(t, 'sine', f / 4, f / 3, 0.05, 0.06); },
@@ -4709,17 +4707,13 @@ function ropeDangle24(c, x0, y0, len, age, dir){
 }
 // v5: цвета игрушечного набора — пластик чаши (коралл), прутья — кремовый пластик, валики — лимонный пластик.
 // =====================================================================================================
-// v9: сок на пилах — плёнка вдоль ряда (растекается, смешивает цвета, сохнет, стекает струйками между дисками) и корыто:
-// уровень = доля кучи, дошедшей до пил, волна от каждого куска, перелив на победе. Только вид.
+// v9: сок на пилах — плёнка вдоль ряда (растекается, смешивает цвета, сохнет, стекает струйками между дисками). Только вид.
+// v31: корыта (уровень, волны, перелив) нет — сок с дисков капает в траву (блок v31).
 // =====================================================================================================
 const V9 = {
   film: { n: 50, D: 9, dry: 4.5, max: 1.25, a: 0.82 },   // плёнка сока: ячеек вдоль ряда; растекание, ячеек²/с; сохнет за ≈ dry с; потолок; непрозрачность
   tear: [0.5, 34, 46],       // кусок в жерновах мочит: влаги (+ до столько же от размера); разброс, ед. (+ до …)
   dropWet: 0.03,             // каждая жидкая капля, упавшая на валики, добавляет столько влаги (× радиус / 3)
-  // жёлоб: верх и низ от grindY, скругление; уровень от доли кучи; волна, ед.; потолок пузырей. v10 — единственный показатель прогресса:
-  // кромка видна под валиками (верх 37 > низ зубьев 34), выше (38 ед. вместо 25), уровень от lvl[0] до метки «полный» full у кромки,
-  // на победе (spill) — до верха и через край: потёки по стеклу spillDrips, искры sparks (за spillT с), метка зеленеет
-  trough: { y0: 62, y1: 58, r: 9, lvl: [0.08, 0.86], full: 0.86, wave: 2.6, bubbles: 22, spillDrips: 8, sparks: 0, spillT: 1.3, tag: [34, 13] },   // v12 круг 5: 22 ед. вместо 38 — поле во всю ширину
   chainSpin: 0.14,           // цепочка: валики быстрее на 14% за кусок (до 6)
 };
 // Фонтан из жерновов: скорость вверх урезается так, чтобы капля взлетала не выше VIEW.fountH (выше при длинной цепочке).
@@ -4763,32 +4757,6 @@ function filmUpdate(dt){
 const filmAt = (x) => { const F = FX.film; if (!F) return 0; const n = V9.film.n, i = clamp(Math.floor(x / CFG.W * n), 0, n - 1); return F.w[i]; };
 const filmRgb13 = (x) => { const F = FX.film, n = V9.film.n, i = clamp(Math.floor(x / CFG.W * n), 0, n - 1); return F ? [F.r[i], F.g[i], F.b[i]] : [236, 166, 58]; };   // v18: цвет плёнки для струйки
 const filmCol = (x, al) => { const F = FX.film, n = V9.film.n, i = clamp(Math.floor(x / CFG.W * n), 0, n - 1); return 'rgba(' + Math.round(F.r[i]) + ',' + Math.round(F.g[i]) + ',' + Math.round(F.b[i]) + ',' + al.toFixed(3) + ')'; };
-// --- жёлоб под валиками: уровень сока, цвет — смесь последних фруктов, волны и пузыри ---
-function trough9(){ return FX.tr || (FX.tr = { lvl: V9.trough.lvl[0], col: [255, 196, 120], has: false, waves: [], bub: [], spill: 0, sp: [], spN: 0 }); }
-function troughFeed(x, kind, amt, k){
-  const T = trough9(), c = hexRgb(juiceHex(kind));
-  T.col = T.has ? mixRgb(T.col, c, clamp(amt, 0.15, 0.6)) : c; T.has = true;
-  T.waves.push({ x, t0: G.rt, a: V9.trough.wave * (0.45 + 0.7 * k) * (1 + 0.18 * Math.min(6, FX.chain)) }); if (T.waves.length > 8) T.waves.shift();
-  for (let i = 0; i < 2 + Math.round(4 * k); i++) if (T.bub.length < V9.trough.bubbles) T.bub.push({ x: clamp(x + (R() - 0.5) * 50, 12, CFG.W - 12), d: 0, r: 0.8 + R() * 1.5, v: 7 + R() * 10, ph: R() * 6.28 });
-}
-// v10: уровень = доля кучи, дошедшей до жерновов, от lvl[0] до метки «полный»; на победе — выше кромки (перелив), искры со всей ширины.
-function troughUpdate(s, rdt){
-  const T = trough9(), Q = V9.trough, left = heapLeft(s), done = (s.ground || 0) / Math.max(1, (s.ground || 0) + left);
-  const target = T.spill ? 1.08 : Q.lvl[0] + (Q.lvl[1] - Q.lvl[0]) * clamp(done, 0, 1);
-  T.lvl += (target - T.lvl) * Math.min(1, rdt * (T.spill ? 3.2 : 1.6));
-  for (let i = T.waves.length - 1; i >= 0; i--) if (G.rt - T.waves[i].t0 > 2.2) T.waves.splice(i, 1);
-  for (let i = T.bub.length - 1; i >= 0; i--){ const b = T.bub[i]; b.d += b.v * rdt; if (b.d > 40) T.bub.splice(i, 1); }
-  if (T.spill){ const age = G.rt - T.spill, want = Math.round(Q.sparks * clamp((age - 0.25) / Q.spillT, 0, 1));
-    while (T.spN < want){ T.spN++; T.sp.push({ x: 8 + R() * (CFG.W - 16), y: CFG.grindY + Q.y0 + 1, vx: (R() - 0.5) * 50, vy: -(110 + R() * 150), t0: G.rt, life: 0.6 + R() * 0.55, r: 4.6 + R() * 4.4, ph: R() * 6.28 }); }
-    for (let i = T.sp.length - 1; i >= 0; i--){ const q = T.sp[i]; if (G.rt - q.t0 > q.life){ T.sp.splice(i, 1); continue; } q.x += q.vx * rdt; q.y += q.vy * rdt; q.vy += 120 * rdt; } }
-}
-function troughSurf(x, top){
-  const T = FX.tr; let y = top + 0.6 * Math.sin(x * 0.05 + G.rt * 2.2) + 0.4 * Math.sin(x * 0.11 - G.rt * 3.1);
-  for (const w of T.waves){ const t = G.rt - w.t0, d = Math.abs(x - w.x); y -= w.a * Math.exp(-t * (w.k || 2.4)) * Math.exp(-d / 110) * Math.cos((w.kx || 0.09) * (d - 150 * t)); }   // v23.2: бугорки разной длины (w.kx)
-  return y;
-}
-// Звёздочка-искра (4 луча): перелив жёлоба на победе.
-function drawSpark(c, x, y, r, al){ const k = r * 0.22; c.globalAlpha = al; c.beginPath(); c.moveTo(x, y - r); c.quadraticCurveTo(x + k, y - k, x + r, y); c.quadraticCurveTo(x + k, y + k, x, y + r); c.quadraticCurveTo(x - k, y + k, x - r, y); c.quadraticCurveTo(x - k, y - k, x, y - r); c.fill(); }
 const polyPath2D = (P) => { const q = new Path2D(); P.forEach((v, i) => i ? q.lineTo(v[0], v[1]) : q.moveTo(v[0], v[1])); q.closePath(); return q; };
 
 // =====================================================================================================
@@ -4819,7 +4787,7 @@ const FX = {
 function resetFX(){
   PT.n = 0; for (const k of ['drips', 'stamps', 'slashes', 'words', 'wq', 'confetti', 'streams', 'rings', 'cracks', 'gateW', 'rollKick', 'trail', 'rwet']) FX[k].length = 0;
   FX.chain = 0; FX.gpop.clear(); if (typeof LIQ !== 'undefined') LIQ.n = 0;
-  FX.film = null; FX.tr = null; FX.stampTok = undefined;   // v9: плёнка на валиках, жёлоб, ведро пятен
+  FX.film = null; FX.stampTok = undefined;   // v9: плёнка на валиках, ведро пятен (v31: жёлоба нет)
   FX.w6.landed.length = 0; FX.w6.fizzle = null; FX.w6.bounced = null; FX.sweepAt = 0; FX.clang = null; FX.shiver.clear(); if (Sound.saw) Sound.sawOff(); G.autoThrow = null;
   FX.wet = 0; FX.frenzyAt = -9; FX.frenzyEnd = -9; FX.frenzyGlow = 0; FX.chargeShow = 0;
   FX.ropeAt = {}; FX.netAt = {};
@@ -4950,12 +4918,12 @@ function liqTear(e, k, w){
 }
 // Лопнул в жерновах: клякса в обе стороны и вверх, сок вниз в сборник.
 function liqPop(g, own){
-  if (own){ const m = Math.sqrt(g.area); filmAdd(g.x, 0.45, hexRgb(juiceHex(g.kind)), 42); troughFeed(g.x, g.kind, 0.35, clamp(m / 60, 0, 1)); return; }   // v13 круг 3: только сок в корыто
+  if (own){ const m = Math.sqrt(g.area); filmAdd(g.x, 0.45, hexRgb(juiceHex(g.kind)), 42); return; }   // v13 круг 3: только сок на диски (v31: корыта нет)
   if (!LIQ.on) return;
   const lk = F13.live ? V13.liqK : [1, 1], hex = juiceHex(g.kind), m = Math.sqrt(g.area), n = Math.round(clamp(m * 0.28, 5, 14) * (VIEW.fountLiq[0]) * lk[0]), boost = chainBoost(), rz = (VIEW.fountLiq[1]) * lk[1];
   for (let i = 0; i < n; i++){ const side = i % 2 ? 1 : -1, a = -Math.PI / 2 + side * (0.35 + R() * 0.9), sp = (180 + R() * 380) * boost, f = fountClamp(Math.cos(a) * sp, Math.sin(a) * sp);
     liqSpawn(L_FOUNT, g.x + side * 4, CFG.grindY + 4, f[0], f[1], 0.8, (3.2 + R() * 2.6) * rz, hex); }
-  filmAdd(g.x, 0.45, hexRgb(hex), 42); troughFeed(g.x, g.kind, 0.35, clamp(m / 60, 0, 1));   // v9: лопнул — плёнка и волна в жёлобе
+  filmAdd(g.x, 0.45, hexRgb(hex), 42);   // v9: лопнул — плёнка на дисках
 }
 function liqUpdate(gdt, rdt){
   if (!LIQ.on) return;
@@ -5319,11 +5287,10 @@ function tearFX(e){
   {                                            // v5: цепочка перемола, фонтан жидким соком, валики под куском мокнут его соком
     FX.chain += 1; if (!own) liqTear(e, k, w); const jc = juiceHex(e.kind);
     for (let i = 0; i < VIEW.rollers; i++){ const d = Math.abs((i + 0.5) * step - e.x); if (d < w / 2 + step * 1.2) FX.rwet[i] = { a: Math.min(1, ((FX.rwet[i] && FX.rwet[i].col === jc ? FX.rwet[i].a : 0)) + 0.6), col: jc }; }
-    filmAdd(e.x, V9.tear[0] * (1 + k), hexRgb(jc), V9.tear[1] + V9.tear[2] * k); troughFeed(e.x, e.kind, 0.25 + 0.5 * k, k);   // v9: плёнка вдоль ряда и волна в жёлобе
+    filmAdd(e.x, V9.tear[0] * (1 + k), hexRgb(jc), V9.tear[1] + V9.tear[2] * k);   // v9: плёнка вдоль ряда
   }
   Sound.playRL('tear', 0.05, Math.round(e.area) + (Math.min(8, Math.round(FX.chain)) * 10000));
   rumble(0.25 + 0.75 * k, VIEW.grindRumble[0] + (VIEW.grindRumble[1] - VIEW.grindRumble[0]) * k);   // вибрация перемола: непрерывное мурчание, сильнее и дольше на крупном куске
-  mix28(e.kind, e.area);                       // v28.2: цвет победного ляпа — по перемолотой массе
   log('event', 'grind', e.kind + ' area=' + e.area + ' dur=' + e.dur);
 }
 // Кусок исчез в жерновах: последний хлюп.
@@ -5510,8 +5477,7 @@ function goto(screen){
 function celebrate(){
   const s = G.s, n = s ? s.n : G.save.level;
   const WW = s ? WIN_WORDS7 : WIN_WORDS, phrase = winWord28(WW, n);   // v28.3: соседние уровни — разные фразы
-  if (s) trough9().spill = G.rt;      // v10: жёлоб полон — сок переливается через кромку с искрами
-  if (!win28Start(phrase)) addWord(phrase, 200, 300, { size: 58, dur: UI.winHold, rise: 12, quiet: true });   // v28.2: ляп сока с надписью; v20: конфетти с боков сняты (Андрей: «звёздочки не вписываются»)
+  addWord(phrase, 200, 300, { size: 58, dur: UI.winHold, rise: 12, quiet: true });   // v31: прежняя надпись (ляп v28.2/v28.3 снят по слову Андрея); v20: конфетти с боков сняты (Андрей: «звёздочки не вписываются»)
   Sound.play('win'); Sound.play('confetti'); buzz([20, 40, 20, 40, 60]); Music.duck(0.25, 1.8);
   G.nextAt = s ? G.rt + UI.winHold : 0; G.aim = null; hideHint();
 }
@@ -5545,7 +5511,7 @@ function applyTheme(){
   r.setProperty('--world', th.world); r.setProperty('--world2', th.world2);
   const m = document.querySelector('meta[name="theme-color"]'); if (m) m.setAttribute('content', th.world2);
 }
-const VIEW7 = { top: 64, bottom: CFG.grindY + 61, anchor: CFG.grindY + 104, pad: 0 };   // v22: pad 0 — низ корыта не ниже верха поднятой (выбранной) кнопки;   // v18: anchor — мир у верха кнопок лотка (низ передней доски корыта; кнопка стоит на траве, как на рефе), масштаб — по bottom, как прежде         // v7: стойки нет — низ экрана отдан куче, зоне полёта и жерновам; v10: + жёлоб целиком над лотком; v12 круг 5: жёлоб ниже (низ grindY + 58, тень + 61) — поле во всю ширину
+const VIEW7 = { top: 64, bottom: CFG.grindY + 61, anchor: CFG.grindY + 62, pad: 0 };   // v31: корыта нет — anchor = низ зубьев пил (grindY + 54,5) + 7,5 ед. травы: кнопки на траве под пилами, освободившаяся высота — полю;   // v22: pad 0 — низ корыта не ниже верха поднятой (выбранной) кнопки;   // v18: anchor — мир у верха кнопок лотка (низ передней доски корыта; кнопка стоит на траве, как на рефе), масштаб — по bottom, как прежде         // v7: стойки нет — низ экрана отдан куче, зоне полёта и жерновам; v10: + жёлоб целиком над лотком; v12 круг 5: жёлоб ниже (низ grindY + 58, тень + 61) — поле во всю ширину
 let LAY = null;                                              // v12 круг 6: текущий кадр; у VIEW7 верх (VIEW.top — обод) считает fit()
 function setLayout(){ const L = VIEW7; if (LAY !== L){ LAY = L; VIEW.top = L.top; VIEW.bottom = L.bottom; fit(); } }
 // v12 круг 6: верх кучи на старте уровня (fit оставляет над ним VIEW.swing ед. для замаха ниже кнопок верха)
@@ -5655,7 +5621,7 @@ $('btn-menu').onclick = () => { Sound.init(); Sound.play('click'); log('input', 
 $('btn-mute').onclick = () => { Sound.init(); G.save.muted = !G.save.muted; save(); Sound.setMuted(G.save.muted); hud(); log('input', 'button', 'mute=' + G.save.muted); if (!G.save.muted) Sound.play('click'); };
 
 // --- размер: resize + orientationchange + периодический пересчёт (§2). Кадр VIEW.top…VIEW.bottom вписывается под HUD. ---
-// v12 круг 6: «развали» (VIEW7) — поле во всю ширину на любом портретном экране, низ кадра (жернова, жёлоб) прижат к лотку.
+// v12 круг 6: «развали» (VIEW7) — поле во всю ширину на любом портретном экране, низ кадра (пилы; v31 — трава под ними) прижат к лотку.
 // Нехватку высоты отдаёт пустой верх короба: он уходит под строку «Level n» и за верх экрана, обод тогда не рисуется (VIEW.top
 // выше экрана, стенки до края). Масштаб меньше ширины — только если над кучей уровня не остаётся VIEW.swing ед. ниже кнопок верха,
 // ровно настолько, насколько нужно, и не меньше круга 5 (короб 64…низ целиком под HUD).
@@ -5669,20 +5635,20 @@ function fit(){
   if (LAY === VIEW7){
     // v22.1 (правило круга 6, просьба Андрея 23.11 «почему поле уменьшено»): поле всегда во всю ширину; нехватку высоты отдаём по очереди —
     // пустому верху сцены (уходит под HUD и за экран), запасу замаха над кучей (VIEW.swing → не меньше V22.fit.swing ед.; касания под строкой
-    // «Level n» тоже доходят до поля), наезду кнопки на переднюю стенку корыта (до V22.fit.over px); мельче ширины — только если и так не
-    // влезает, и не мельче пола круга 5 (kc5). Низ корыта (VIEW7.anchor) — у верха кнопок, когда место есть.
+    // «Level n» тоже доходят до поля), наезду кнопки на полосу травы под пилами (до V22.fit.over px — не на зубья); мельче ширины — только если и так не
+    // влезает, и не мельче пола круга 5 (kc5). Мир VIEW7.anchor (v31: трава под пилами) — у верха кнопок, когда место есть.
     const k0 = r.width / CFG.W, kc5 = Math.min(k0, avail / (VIEW.bottom - VIEW7.top)), F = V22.fit;
     const heap = G.heapTop > -1e9 && G.heapTop < 1e9 ? G.heapTop : null;
-    const bt = trayH ? $('tray').getBoundingClientRect().top - r.top + VIEW7.pad : bot + (VIEW7.anchor - VIEW.bottom) * k0;   // низ корыта не ниже
+    const bt = trayH ? $('tray').getBoundingClientRect().top - r.top + VIEW7.pad : bot + (VIEW7.anchor - VIEW.bottom) * k0;   // v31: трава под пилами не ниже
     const span = (sw) => VIEW7.anchor - (heap - sw), room = (ov) => bt + ov - top;                                         // нужно ед. / есть px
     let k = k0, sw = VIEW.swing, ov = 0;
     if (heap !== null && span(sw) * k > room(0)){
       sw = Math.max(F.swing, room(0) / k - (VIEW7.anchor - heap));                                  // 1) меньше запаса над кучей
-      if (span(sw) * k > room(0)){ ov = Math.min(F.over, span(sw) * k - room(0));                  // 2) кнопка на передней стенке корыта
+      if (span(sw) * k > room(0)){ ov = Math.min(F.over, span(sw) * k - room(0));                  // 2) кнопка на полосе травы (v31)
         if (span(sw) * k > room(ov)) k = Math.max(VIEW.swingFloor ? kc5 : 0.2, room(ov) / span(sw)); } }   // 3) мельче — крайний случай
     if (k >= k0 * VIEW.swingSnap) k = k0;
     nv = { k, ox: (r.width - CFG.W * k) / 2, oy: bt - VIEW7.anchor * k, w: r.width, h: r.height, k0, kc5, sw: +sw.toFixed(1), ov: +ov.toFixed(1) };
-    if (heap !== null) nv.oy = Math.min(bt + ov - VIEW7.anchor * k, Math.max(nv.oy, top + (sw - heap) * k));   // куча с запасом sw под HUD, корыто не ниже bt + ov
+    if (heap !== null) nv.oy = Math.min(bt + ov - VIEW7.anchor * k, Math.max(nv.oy, top + (sw - heap) * k));   // куча с запасом sw под HUD, трава под пилами не ниже bt + ov
     const yH = (top - nv.oy) / k;                             // мир у низа HUD
     VIEW.top = yH <= VIEW7.top + 6 ? VIEW7.top : -nv.oy / k - 30;   // короб целиком под HUD — обод на месте; иначе — за верхом экрана
   } else {
@@ -7235,14 +7201,13 @@ const V15 = {
 // сила), без светлой рамки. Кант — внутри контура, слабый (ширина ед., у света, в тени); наружная обводка — радиус, в тени, у света.
 // задник — wood17-back.jpg (3 доски GPT на ширину, крупные неровные волокна; бесшовно).
 // v22: низ кадра — трава (пучки по бокам), свет, интерфейс. Пучки: [центр x, ширина, высота видимой кочки, низ (ед. ниже grindY), кочка картинки
-// x0…x1 px (картинка 1024×325), зеркало]; top — верх слоя травы (ед. ниже grindY)
+// x0…x1 px (картинка 1024×325), зеркало]; top — верх слоя травы (ед. ниже grindY). v31: трава — под пилами (корыта нет), всё на 63 ед. выше
 const V22 = {
   bg: { dim: [0.13, 0.75], green: ['#173F2E', 0.13], dimK: [1, 1.55, 1.25, 0.6], greenK: [1, 1.25, 1.1, 0.8] },   // по состояниям (день, туман, вечер, ночь): туман и вечер — темнее (фон сереет и гасит дерево)
-  spill: false,
   hint: { hand: 0.88, pad: 16, idle: 1.3, title: 0.8 },   // рука ×0,88 (−23 %), запас пунктира 16 ед. (4 % W), рука после 1,3 с простоя, название уровня 0,8 с
-  fit: { swing: 35, over: 22 },   // v22.1: раскладка без уменьшения поля — запас замаха над кучей не меньше swing ед., кнопка на корыте не больше over px   // фон: за постройкой темнее (alpha в центре, радиус — доля прежнего), нижняя треть — зелёный слой
-  grass: { top: 58, clumps: [[6, 52, 40, 128, 60, 230, 0], [30, 30, 24, 125, 330, 470, 1], [50, 22, 10, 121, 330, 470, 0], [118, 26, 7, 118, 540, 640, 1],
-    [396, 46, 33, 128, 760, 930, 1], [373, 30, 21, 125, 330, 470, 0], [352, 24, 11, 121, 80, 200, 0]] },
+  fit: { swing: 35, over: 7 },   // v22.1: раскладка без уменьшения поля — запас замаха над кучей не меньше swing ед.; v31: кнопка на полосе травы под пилами не больше over px (было 22 px на передней доске корыта)   // фон: за постройкой темнее (alpha в центре, радиус — доля прежнего), нижняя треть — зелёный слой
+  grass: { top: 22, clumps: [[6, 52, 40, 65, 60, 230, 0], [30, 30, 24, 62, 330, 470, 1], [50, 22, 10, 58, 330, 470, 0], [118, 26, 7, 55, 540, 640, 1],
+    [396, 46, 33, 65, 760, 930, 1], [373, 30, 21, 62, 330, 470, 0], [352, 24, 11, 58, 80, 200, 0]] },
 };
 const V16 = {
   wood: { atlas: 'wood17-plank.jpg', rows: 6, rowH: 104, atlasH: 624, len: 330, band: 34, gain: 1.0, con: 0.62, mean: [0.588, 0.369, 0.235], glue: 0.2, tone: [0.06, 80],
@@ -7257,7 +7222,7 @@ const V16 = {
   // фрукты: мягче и сочнее — мельче фактура (смещение мип-уровня текстуры, сила рельефа), насыщенность, глубже тень (степень, доля),
   // крупный мягкий блик (сила, ширина) и мягкое пятно блика (сила, ширина) — по гладкой нормали, без «окон»
   fruit: { lod: 1.4, lodK: { melon: 2.6, orange: 2.2, lemon: 2.0, lime: 1.8, coco: 1.8 }, bump: 0.3, sat: 1.12, shade: [1.9, 0.46], wrap: [-0.2, 0.95], hi: [0.2, 4, 0.13, 18] },   // wrap — переход света уже (тень глубже, объём крупнее)
-  grass: { img: 'grass16.webp', h: 58, y: 5 },              // трава переднего плана — рисованные пучки GPT: высота полосы (ед.), сдвиг верха от кромки корыта (ед.); v22 — ниже (ножки видны, перекрыты на 1–2 % W)
+  grass: { img: 'grass16.webp', h: 58, y: 0 },              // трава переднего плана — рисованные пучки GPT: высота полосы (ед.), сдвиг верха от V31.ground (ед.; v31 — трава под пилами, корыта нет)
 };
 // v19 (отзыв Андрея 24.11): «зелёные слишком яркие, почти неоновые, у фиолетовых очень тёмные нижние половины; на рефе зелёный уходит
 // в жёлтый и оливковый, переходы света и тени спокойнее» + «срез — плоский яркий диск, пятна сока — однотонные графические фигуры».
@@ -7302,17 +7267,6 @@ const V13 = {
   saw: { n: 7, pitch: CFG.sawRow.pitch, phase: [0, 27, 49, 71, 103, 121, 152], R: 32, r0: 27.8, teeth: 18, hook: true, depth: 4.2, cy: 22.5, spin: [2.6, 12], steel: '#79746d', hub: '#5f5a55', boss: '#6e6862', bolt: '#7c756d',
     edge: [0.714, 0.667, 0.569], spec: 0.1, slot: '#2b1d15', ink: '#1b140f', inkW: 1.25, dim: 0.88, shadow: [2.5, 4, 0.36],
     tilt: 0.42, bev: 1.05, ring: 0.76, slotR: 0.55, slotA: 0.82, slotW: 1.55, flange: 0.37, bossR: 0.27, boltR: 0.155, warm: [1.02, 0.85, 0.74, 0.5], hi: [0.2, 4, 0.32] },
-  // корыто (ед. ниже grindY): задняя кромка, дно у задней стенки (пусто) и сок у неё же (полно), передняя кромка (верх), её толщина,
-  // низ передней доски, низ ножек; торцы, ножки — ширина
-  // v18 (реф: «глубокий деревянный лоток, вид чуть сверху»): дальняя стенка — верх back, её верхняя грань farLip; сок пустой/полный — floor/full
-  // (линия сока на дальней стенке); передняя доска — верх rim, верхняя грань lip, низ face; ножки враспор до leg (ширина legW, отступ legX, вынос
-  // legOut); торцевые стенки у краёв экрана — внутренний угол x end[0] у дальней стенки, end[1] у передней; задняя планка за пилами plank [верх, низ]
-  // v22 (GPT №1, п. 6): корыто — предмет, а не полоса: ширина x0…W−x0 = 90,5 % W, чаша back…face = 54 ед. (13,5 % W), передняя стенка rim…face
-  // 26 ед. (6,5 % W), ножки face…leg 14 ед. (3,5 % W); боковые стенки толщиной side, внутренний угол end[0] у дальней стенки, end[1] у передней;
-  // полость тёмная (cav — цвет #493023); полный сок на 5,6 ед. (1,4 % W) ниже дальней кромки; задней планки за пилами нет — ось видна до краёв;
-  // contact — тень под чашей на траве [высота, alpha, вынос за ножки]
-  trough: { back: 50, farLip: 3.4, floor: 81, full: 59, rim: 78, lip: 4, face: 104, leg: 118, legW: 13, legX: 33, legOut: 4, x0: 19, side: 6, end: [31, 25], axle: 5.5,
-    cav: '#493023', shadow: [10, 0.42, 6], gold: [246, 172, 46, 0.86] },   // gold — сок в корыте и струйки тянутся к золотому, как на рефе (смесь слив, лаймов и арбуза иначе серая)   // gold — сок в корыте и струйки тянутся к золотому, как на рефе (смесь слив, лаймов и арбуза иначе серая)
   // куски на пилах: потолок кусков в кадре, новых сеток за кадр (раскол), треугольников
   frag: { max: 32, perFrame: 6, trisCap: 120000 },
   // круг 3: пила ест кусок. eat — время съедания от мелочи до половины арбуза (с) по √площади [от, до]; drag — тянет по вращению к щели
@@ -7356,7 +7310,7 @@ const V13 = {
 const V28 = {
   plan: { len: [3, 2], cycle: ['L', 'L', 'L', 'fog', 'L', 'rain', 'L', 'night', 'L', 'L'], light: ['gold', 'noon', 'morn', 'glade'] },
   // дождь: штрихов за деревом и перед ним, длина (ед.), наклон (рад), скорость (ед./с), alpha за / перед, толщина за / перед (ед.);
-  // всплески на кромке корыта и траве: сколько сразу, период (с), радиус (ед.), alpha
+  // всплески на траве (v31: корыта нет): сколько сразу, период (с), радиус (ед.), alpha
   pre: { after: 0.25, gap: 0.06 },   // v28.1: подготовка леса следующего уровня после победы — через столько с, шаги не чаще (с)
   rain: { back: 80, front: 12, len: [18, 34], ang: 0.22, speed: 760, a: [0.42, 0.36], w: [1.25, 1.6], col: '232,240,248', splash: 10, per: 0.5, r: 6, sa: 0.85 },
 };
@@ -7401,7 +7355,7 @@ function prewarm28(){
   P28.step++; P28.at = G.rt + V28.pre.gap;
 }
 const F13 = { st: -1, from: -1, at: -9, force: -1, img: {}, cv: null, cvKey: '', prev: null, tint0: [1, 1, 1], tint1: [1, 1, 1], live: false, vst: [], vcol: [],
-  baked: false, front: null, frontY: 0, sawG: null, saws: [], gates: [], frags: [], split: new Set(), sparks: [], nid: 0, shd: null, shM: null, wm: null, da: null, dw: null, om: null, dl: null, tickAt: 0, ray: null, glow: null, fog: null, css: false, stats: {} };
+  baked: false, sawG: null, saws: [], gates: [], frags: [], split: new Set(), sparks: [], nid: 0, shd: null, shM: null, wm: null, da: null, dw: null, om: null, dl: null, tickAt: 0, ray: null, glow: null, fog: null, css: false, stats: {} };
 const forest13 = () => V13.on && r3Game();
 const state13 = (n) => F13.force >= 0 ? F13.force : plan28(n);   // v28: блоками по 3 и 2 уровня (V28.plan)
 function img13(k){
@@ -7453,7 +7407,7 @@ function forest13Draw(c, sh){
   const key = key13(k);
   if (F13.cvKey !== key){ if (P28.cv && P28.k === k && P28.key === key){ F13.cv = P28.cv; F13.stats.pre28 = (F13.stats.pre28 || 0) + 1; } else F13.cv = canvas13(k);   // v28.1: готовый лес следующего уровня
     P28.cv = null; P28.key = ''; F13.cvKey = key; }
-  prewarm28(); win28Prep();
+  prewarm28();
   c.setTransform(1, 0, 0, 1, 0, 0); c.drawImage(F13.cv, 0, 0, cv.width, cv.height);
   const f = clamp((G.rt - F13.at) / V13.fade, 0, 1), fs = f * f * (3 - 2 * f);
   if (F13.prev && f < 1){ c.globalAlpha = 1 - fs; c.drawImage(F13.prev, 0, 0, cv.width, cv.height); c.globalAlpha = 1; } else if (f >= 1) F13.prev = null;
@@ -7508,7 +7462,7 @@ function amb13(c, k, al){
   c.globalAlpha = 1;
 }
 // v28: дождь — косые штрихи от времени и номера (без случайности и без состояния). front = 0 — за деревом (гуще, тоньше), 1 — перед
-// сценой (редко, у краёв кадра, середина поля почти чистая); одна обводка на слой — дёшево. Всплески — на кромке корыта и траве.
+// сценой (редко, у краёв кадра, середина поля почти чистая); одна обводка на слой — дёшево. Всплески — на траве (v31: корыта нет).
 function rain28(c, al, x0, y0, W, H, front){
   const R = V28.rain, t = REDUCED ? 0 : G.rt, n = front ? R.front : R.back, sa = Math.sin(R.ang), ca = Math.cos(R.ang), cx = CFG.W / 2;
   c.save(); c.globalCompositeOperation = 'source-over'; c.lineCap = 'round'; c.strokeStyle = 'rgba(' + R.col + ',1)'; c.lineWidth = R.w[front]; c.globalAlpha = al * R.a[front];
@@ -7521,9 +7475,9 @@ function rain28(c, al, x0, y0, W, H, front){
     c.moveTo(x, y); c.lineTo(x - len * sa, y - len * ca); }
   c.stroke();
   if (front){                                               // всплески: дуга-«корона» и пара капель, живёт четверть периода
-    const T = V13.trough, gy = CFG.grindY, yR = gy + T.rim - 1, yG = gy + T.face + 14; c.lineWidth = 1.1; c.strokeStyle = 'rgba(' + R.col + ',1)'; c.fillStyle = 'rgba(' + R.col + ',1)';
+    const gy = CFG.grindY, yR = gy + V31.ground + 14, yG = gy + V31.ground + 34; c.lineWidth = 1.1; c.strokeStyle = 'rgba(' + R.col + ',1)'; c.fillStyle = 'rgba(' + R.col + ',1)';
     for (let i = 0; i < R.splash; i++){ const ph = t / R.per + r3Hash(i * 2.9 + 0.7), cyc = Math.floor(ph), u = ph - cyc; if (u > 0.3) continue;
-      const h = r3Hash(i * 7.7 + cyc * 1.37), onRim = i % 3 !== 2, x = onRim ? T.x0 + 8 + h * (CFG.W - 2 * T.x0 - 16) : x0 + W * (h < 0.5 ? 0.04 + 0.2 * h : 0.76 + 0.2 * (h - 0.5) * 2), y = onRim ? yR : yG + 20 * r3Hash(i * 1.3 + cyc);
+      const h = r3Hash(i * 7.7 + cyc * 1.37), onRim = i % 3 !== 2, x = onRim ? 27 + h * (CFG.W - 54) : x0 + W * (h < 0.5 ? 0.04 + 0.2 * h : 0.76 + 0.2 * (h - 0.5) * 2), y = onRim ? yR : yG + 20 * r3Hash(i * 1.3 + cyc);
       const k = u / 0.3, r = R.r * (0.4 + 0.8 * k); c.globalAlpha = al * R.sa * (1 - k);
       c.beginPath(); c.ellipse(x, y, r, r * 0.32, 0, Math.PI, 2 * Math.PI); c.stroke();
       c.beginPath(); c.arc(x - r * 0.7, y - 4 * Math.sin(k * 3.14) - 1, 0.8, 0, 6.29); c.arc(x + r * 0.8, y - 5 * Math.sin(k * 3.14) - 1, 0.7, 0, 6.29); c.fill(); }
@@ -7664,7 +7618,6 @@ function wood15Mat(dir, P, o){
   const S = [0, 0, 0, 0]; let C1 = far, C2 = far;
   if ((kind === 'board' || kind === 'floor') && L > PL.seam){ S[0] = u0 + (dir[1] >= 0 ? PL.seamAt : 1 - PL.seamAt) * L; S[1] = 1; S[2] = r3Hash(sd * 5.3) > 0.5 ? 0.22 : -0.22; }
   if (kind === 'cheek' || kind === 'leg'){ S[3] = 1; C1 = [u1 - 0.3, th * 0.66, u1 - 0.48 * L, th * 0.6]; if (L > 20) C2 = [u1 - 0.3, th * 0.3, u1 - 0.24 * L, th * 0.34]; }
-  if (kind === 'trough'){ C1 = [u0 + 0.22 * L, th * 0.02, u0 + 0.22 * L + 9, th * 0.3]; C2 = [u0 + 0.71 * L, th * 0.02, u0 + 0.71 * L - 7, th * 0.26]; }   // две короткие зарубки от верхней кромки
   const m = new THREE.ShaderMaterial({ vertexShader: W13_VS, fragmentShader: W15_FS, side: THREE.BackSide, uniforms: { uTint: u13().uTint, uTg: { value: 0 },
     uP: { value: new THREE.Vector4(dir[0], dir[1], v0, th) }, uU: { value: new THREE.Vector4(u0, u1, kind === 'beam' && inF(u0) ? 1 : 0, kind === 'beam' && inF(u1) ? 1 : 0) },
     uQ: { value: new THREE.Vector4(r3Hash(sd * 13.1), r3Hash(sd * 7.7), o.shade || 1, 0) }, uS: { value: new THREE.Vector4(...S) },
@@ -7748,7 +7701,6 @@ function wood16Mat(dir, P, o){
   const S = [0, 0, 0, 0]; let C1 = far, C2 = far;
   if ((kind === 'board' || kind === 'floor') && L > PL.seam){ S[0] = u0 + (dir[1] >= 0 ? PL.seamAt : 1 - PL.seamAt) * L; S[1] = 1; S[2] = r3Hash(sd * 5.3) > 0.5 ? 0.22 : -0.22; }
   if (kind === 'cheek' || kind === 'leg'){ S[3] = 1; C1 = [u1 - 0.3, th * 0.66, u1 - 0.4 * L, th * 0.6]; if (L > 20) C2 = [u1 - 0.3, th * 0.3, u1 - 0.2 * L, th * 0.34]; }
-  if (kind === 'trough'){ C1 = [u0 + 0.22 * L, th * 0.02, u0 + 0.22 * L + 9, th * 0.3]; C2 = [u0 + 0.71 * L, th * 0.02, u0 + 0.71 * L - 7, th * 0.26]; }
   // рёбра: к середине кадра (как в перспективе рефа) — широкая боковая грань, от середины — узкая фаска; цвет — светлая фаска атласа,
   // если ребро смотрит вверх или от середины (и не вниз), иначе — тёмный бок
   const ar = polyArea(P) < 0 ? -1 : 1, sm = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); }, CX = CFG.W / 2, CY = VIEW.top + Q.cy * (CFG.grindY - VIEW.top); let E = [];
@@ -7881,7 +7833,6 @@ function wood17Mat(dir, P, o){
   const pv = P.map(q => q[0] * dir[0] + q[1] * dir[1]), U0 = Math.min(...pv), U1 = Math.max(...pv), LL = U1 - U0;
   let C1 = far, C2 = far;
   if (kind === 'cheek' || kind === 'leg'){ C1 = [U1 - 0.3, th * 0.66, U1 - 0.4 * LL, th * 0.6]; if (LL > 20) C2 = [U1 - 0.3, th * 0.3, U1 - 0.2 * LL, th * 0.34]; }
-  if (kind === 'trough'){ C1 = [U0 + 0.22 * LL, th * 0.02, U0 + 0.22 * LL + 9, th * 0.3]; C2 = [U0 + 0.71 * LL, th * 0.02, U0 + 0.71 * LL - 7, th * 0.26]; }
   const ES = edges17(P), spec = o.e17 ? o.e17.E : ES.map(E => role17(E, dir, th, o));
   const UE = [], UF = [], UG = [];
   for (let k = 0; k < 10; k++){ const E = ES[k], R = spec[k];
@@ -8049,27 +8000,20 @@ function roundRect16(c, P, r){ const n = P.length;            // контур с
 const inkA16 = (a) => { const Q = V16.wood, ln = Math.hypot(Q.lit[0], Q.lit[1]), k = clamp(0.5 - 0.5 * (Math.cos(a) * Q.lit[0] + Math.sin(a) * Q.lit[1]) / ln, 0, 1); return Q.outer[2] + (Q.outer[1] - Q.outer[2]) * k; };   // v16: сила наружной обводки по направлению (от света — сильнее)
 const scrY13 = () => [-view.oy / view.k - 40, (cv.height / DPR - view.oy) / view.k + 40];   // верх и низ экрана, ед. мира
 // Запечь дерево уровня в фон c: мягкая тень на лес (по свету состояния), брусья (three.js) с обводкой силуэта, кромки щелей, тени пил;
-// корыто: изнанка — здесь, перед — в F13.front (кладётся поверх сока и пил).
+// ось пил и стойки у краёв (v31: корыта нет — ни изнанки, ни переда).
 function wood13Bake(c){
   if (!R3.ready || !R3.ren || wood16Wait()) return false;     // v16: ждём текстуры дерева (не загрузились — прежнее дерево кодом)
-  const t0 = performance.now(), s = G.s, Q = V13.wood, gy = CFG.grindY, W = CFG.W, top = VIEW.top, T = V13.trough, S = V13.saw, L = V13.look[V13.states[Math.max(0, F13.st)]];
+  const t0 = performance.now(), s = G.s, Q = V13.wood, gy = CFG.grindY, W = CFG.W, top = VIEW.top, S = V13.saw, L = V13.look[V13.states[Math.max(0, F13.st)]];
   const [sy0, sy1] = scrY13(), ov = Q.over;
   F13.stats.woodTris = 0;
   const parts = s.statics.filter(st => st.role !== 'wall'), vis0 = parts.map(st => st.role === 'peg' || st.role === 'rod' ? st.poly : wood13Ext(st.poly));   // v30: нагели решётки — как нагели
   const v17 = wood16Tex() && !wood16Wait() ? vis17(s, parts, vis0) : null, vis = v17 ? vis0.map((P, i) => v17[i] ? v17[i].P : P) : vis0;   // v17: контур вида построек из досок
   F13.vis26 = parts.map((st, i) => [st.role, vis[i]]);        // v26: контуры дерева — для пятен и потёков сока
-  const posts = [[[-ov, sy0], [0, sy0], [0, gy + T.leg], [-ov, gy + T.leg]], [[W, sy0], [W + ov, sy0], [W + ov, gy + T.leg], [W, gy + T.leg]]];   // стойки — за верх и низ экрана
+  const posts = [[[-ov, sy0], [0, sy0], [0, gy + V31.post], [-ov, gy + V31.post]], [[W, sy0], [W + ov, sy0], [W + ov, gy + V31.post], [W, gy + V31.post]]];   // стойки — за верх и низ экрана
   const backs = partBacks(s.level.parts || []).map(P => backExt15(P));   // v15: задние стенки полостей
   const rim = [[-ov, top - 6], [W + ov, top - 6], [W + ov, top + 11], [-ov, top + 11]];   // v22: задней планки за пилами нет — ось видна до краёв экрана
-  const [e0, e1] = T.end, yb = gy + T.back, yl = yb + T.farLip, yr = gy + T.rim, sw = T.side;
-  const tin = [[e0, yl], [W - e0, yl], [W - e0, yr + 3], [e0, yr + 3]];                          // v18: дальняя стенка изнутри (и дно под соком); v22 — полость тёмная
-  const farRim = [[e0 - sw, yb], [W - e0 + sw, yb], [W - e0, yl], [e0, yl]];                     // верхняя грань дальней стенки
-  const farOut = [[e0 - sw, yb - 0.5], [W - e0 + sw, yb - 0.5], [W - e0 + sw, yb + 1.2], [e0 - sw, yb + 1.2]];   // v22: её наружная кромка (видна над полостью)
-  const ends = [-1, 1].map(sd => { const X = (x) => sd < 0 ? x : W - x;                          // v22: боковые стенки — внутренняя грань, верх (скос к зрителю) и наружный торец
-    return { face: [[X(e0), yl], [X(e1), yr], [X(e1), yr + 6], [X(e0), yr + 6]], top: [[X(e0 - sw), yb], [X(e0), yl], [X(e1), yr], [X(e1 - sw), yr]],
-      out: [[X(e0 - sw), yb], [X(e1 - sw), yr], [X(e1 - sw - 1.5), yr + 4], [X(e0 - sw - 1.2), yb + 3]] }; });
   const w16 = !!wood16Tex(), U16 = V16.wood;                   // v16: рисованное дерево (атлас GPT), иначе — круг 3 кодом
-  // v16: порядок — сначала сцены WebGL (брусья, перед корыта) и их копии в 2D, потом 2D-работа на фоне (тень, задник, кант): копия кадра
+  // v16: порядок — сначала сцены WebGL (брусья) и их копии в 2D, потом 2D-работа на фоне (тень, задник, кант): копия кадра
   // WebGL ждёт очередь GPU, и если в ней уже лежат размытия задника, ждёт и их (≈ 20 мс на кадре старта уровня)
   const sc = new THREE.Scene(), add = (P, o) => sc.add(wood13Mesh(P, o)), PL = V15.plank, pw = (o) => Object.assign(w16 ? { w16: true, D: PL.D, bevel: PL.bevel, r: PL.r } : { w15: true, D: PL.D, bevel: PL.bevel, r: PL.r }, o);   // круг 3: рисованное дерево; v16 — текстурой GPT
   parts.forEach((st, i) => { if (st.role === 'peg' || st.role === 'rod'){ let cx = 0, cy = 0; for (const v of st.poly){ cx += v[0] / st.poly.length; cy += v[1] / st.poly.length; }
@@ -8078,11 +8022,7 @@ function wood13Bake(c){
     else add(vis[i], w16 ? pw({ kind: 'block', r: Q.r }) : undefined); });   // v16: клинья, полки, бруски уровней 11–110 — тем же деревом
   posts.forEach((P, i) => add(P, pw({ kind: 'post', dir: [0, 1], seed: 0.3 + 0.4 * i, z: 1.5 })));   // стойки чуть ближе — брусья уходят за них
   add(rim, pw({ kind: 'beam', dir: [1, 0], seed: 0.5, z: 1 }));
-  add(tin, pw({ kind: 'inner', dir: [1, 0], seed: 0.2, z: -10, D: 2, shade: T.tinShade || 0.56, r: 1 }));   // корыто изнутри (дальняя стенка и дно) — тёмная полость
-  ends.forEach((E, i) => { add(E.out, pw({ kind: 'inner', dir: [0, 1], seed: 0.9 + i, z: -9.2, D: 1.5, shade: 0.72, r: 0.5 })); add(E.face, pw({ kind: 'inner', dir: [0, 1], seed: 0.4 + i, z: -9.5, D: 1.5, shade: 0.5, r: 0.5 })); add(E.top, pw({ kind: 'inner', dir: [0, 1], seed: 0.7 + i, z: -9, D: 1.5, shade: 1.18, r: 0.5 })); });
-  add(farRim, pw({ kind: 'inner', dir: [1, 0], seed: 0.35, z: -9, D: 1.5, shade: 1.18, r: 0.6 }));   // верхняя грань дальней стенки — светлее лица на 15–20 %
-  add(farOut, pw({ kind: 'inner', dir: [1, 0], seed: 0.65, z: -9.1, D: 1.5, shade: 0.9, r: 0.4 }));
-  { const ax = new THREE.Mesh(col13(new THREE.CylinderGeometry(T.axle, T.axle, W + 2 * ov, 20).rotateZ(Math.PI / 2), '#8a837d'), saw13Mat());   // ось пил — труба через диски, за края экрана
+  { const ax = new THREE.Mesh(col13(new THREE.CylinderGeometry(V31.axle, V31.axle, W + 2 * ov, 20).rotateZ(Math.PI / 2), '#8a837d'), saw13Mat());   // ось пил — труба через диски, за края экрана
     ax.position.set(W / 2, gy + S.cy, -7); sc.add(ax); }
   r3SetCam(); if (R3.cv.width !== cv.width || R3.cv.height !== cv.height){ R3.cv.width = cv.width; R3.cv.height = cv.height; R3.ren.setSize(cv.width, cv.height, false); }
   const tM = performance.now(); R3.ren.render(sc, R3.cam);
@@ -8090,27 +8030,6 @@ function wood13Bake(c){
   const ink = F13.inkCv || (F13.inkCv = document.createElement('canvas')); ink.width = cv.width; ink.height = cv.height;   // кант — обводка силуэта (как он виден в 3D)
   { const ig = ink.getContext('2d'); ig.drawImage(wc, 0, 0); ig.globalCompositeOperation = 'source-in'; ig.fillStyle = backs.length || w16 ? (w16 ? U16.outerCol : PL.inkCol) : Q.ink; ig.fillRect(0, 0, ink.width, ink.height); ig.globalCompositeOperation = 'source-over'; }
   dispose13(sc); const tR = performance.now();
-  // перед корыта: передняя доска (верхняя грань — кромка), торцы, ножки — отдельный слой поверх сока и пил (от уровня не зависит — кэш)
-  const fkey = [cv.width, cv.height, view.ox.toFixed(1), view.oy.toFixed(1), view.k.toFixed(4), L.wk || 1, w16].join();   // v28.1: перед корыта зависит от wk состояния, не от номера (тёплые леса — без пересборки)
-  if (!F13.front || F13.frontKey !== fkey){ F13.frontKey = fkey;
-    const fs = new THREE.Scene(), fa = (P, o) => fs.add(wood13Mesh(P, o)), yr = gy + T.rim, yf = gy + T.face, yt = yr + T.lip;
-    const pt = (o) => Object.assign({ [w16 ? 'w16' : 'w15']: true, D: 4.5, bevel: 0.9, r: 2 }, o);   // круг 3: корыто — то же рисованное дерево; v16 — текстурой
-    const xa = T.x0, xb = W - T.x0;   // v22: передняя доска — от торца до торца (90,5 % W), концы видны
-    for (const sd of [-1, 1]){ const X = (x) => sd < 0 ? x : W - x, x0 = T.legX, w = T.legW, o2 = T.legOut;   // v18: ножки-бруски враспор (низ — наружу)
-      fa([[X(x0), yf - 4], [X(x0 + w), yf - 4], [X(x0 + w - o2), gy + T.leg], [X(x0 - o2), gy + T.leg]], pt({ kind: 'leg', dir: [0, 1], seed: 0.3 + sd * 0.17, D: 4, r: 1.2, shade: 0.72, z: -2 })); }
-    fa([[xa, yt], [xb, yt], [xb, yf], [xa, yf]], pt({ kind: 'trough', dir: [1, 0], seed: 0.15 }));   // v18: толстая передняя доска (волокна, зарубки — W17 'trough')
-    fa([[xa, yr], [xb, yr], [xb, yt + 0.6], [xa, yt + 0.6]], pt({ kind: 'inner', dir: [1, 0], seed: 0.55, D: 4.5, r: 0.6, shade: 1.18, z: 0.4 }));   // её верхняя грань — светлее лица на 15–20 %
-    for (const sd of [-1, 1]){ const X = (x) => sd < 0 ? x : W - x;   // v22: торцы передней доски — волокно поперёк, темнее лица
-      fa([[X(xa), yr + 0.5], [X(xa + 2.6), yr + 0.5], [X(xa + 2.6), yf - 0.3], [X(xa), yf - 0.3]], pt({ kind: 'inner', dir: [0, 1], seed: 0.25 + sd * 0.1, D: 2, r: 0.4, shade: 0.7, z: 0.6 })); }
-    R3.ren.render(fs, R3.cam); dispose13(fs);
-    const fy0 = Math.max(0, Math.floor((gy + T.back - 12) * K + view.oy * DPR)), fy1 = Math.min(cv.height, Math.ceil((gy + T.leg + 10) * K + view.oy * DPR)), fh = Math.max(1, fy1 - fy0);
-    if (!F13.front) F13.front = document.createElement('canvas');
-    F13.front.width = cv.width; F13.front.height = fh; F13.frontY = fy0;
-    const fw = F13.frontCv || (F13.frontCv = document.createElement('canvas')); fw.width = cv.width; fw.height = fh; fw.getContext('2d').drawImage(R3.cv, 0, fy0, cv.width, fh, 0, 0, cv.width, fh);
-    const g2 = F13.front.getContext('2d'), r = (w16 ? U16.outer[0] : PL.ink) * K, ink2 = F13.inkCv2 || (F13.inkCv2 = document.createElement('canvas')); ink2.width = cv.width; ink2.height = fh;
-    const ig = ink2.getContext('2d'); ig.drawImage(fw, 0, 0); ig.globalCompositeOperation = 'source-in'; ig.fillStyle = w16 ? U16.outerCol : PL.inkCol; ig.fillRect(0, 0, ink2.width, fh); ig.globalCompositeOperation = 'source-over';
-    for (let k = 0; k < 8; k++){ const a = k * Math.PI / 4; if (w16) g2.globalAlpha = inkA16(a); g2.drawImage(ink2, Math.round(Math.cos(a) * r), Math.round(Math.sin(a) * r)); }
-    g2.globalAlpha = 1; g2.drawImage(fw, 0, 0); }
   const tF = performance.now();
   if (w16){ c.save(); vbase(c); c.shadowColor = 'rgba(13,22,10,' + L.sh[2] + ')'; c.shadowBlur = U16.shadowBlur * K; c.shadowOffsetX = (6000 + L.sh[0]) * K; c.shadowOffsetY = L.sh[1] * K;   // v16: наружная тень — мягкое размытие (без ступенек), слабая, почти без сдвига
     c.translate(-6000, 0); c.fillStyle = '#000'; c.beginPath(); for (const P of vis.concat(posts, [rim], backs)) roundRect16(c, P, Q.r); c.fill(); c.restore(); }
@@ -8141,7 +8060,7 @@ function wood13Bake(c){
     for (let i = 0; i < S.n; i++){ const x = sawCx13(i) + dx, y = gy + S.cy + dy, g = c.createRadialGradient(x, y, S.R * 0.8, x, y, S.R * 1.14);
       g.addColorStop(0, 'rgba(14,16,12,' + al + ')'); g.addColorStop(1, 'rgba(14,16,12,0)'); c.fillStyle = g; c.beginPath(); c.arc(x, y, S.R * 1.14, 0, 6.29); c.fill(); } }
   if (F13.dbgFlush) c.getImageData(0, 0, 1, 1);
-  F13.stats.bakeMs = +(performance.now() - t0).toFixed(1); F13.stats.bakeParts = [tR - t0, tF - tR, tI - tF, performance.now() - tI].map(v => +v.toFixed(1));   // v16: брусья (WebGL и копия), перед корыта, тень-задник-кант, кромки и тени пил
+  F13.stats.bakeMs = +(performance.now() - t0).toFixed(1); F13.stats.bakeParts = [tR - t0, tF - tR, tI - tF, performance.now() - tI].map(v => +v.toFixed(1));   // v16: брусья (WebGL и копия), — (v31: перед корыта снят), тень-задник-кант, кромки и тени пил
   return true;
 }
 const WOOD2D = { top: '#d39a5e', mid: '#ad7140', bot: '#8a5530', ink: '#5a2e12', lit: '#ffe2b0', dk: '#6e3c1c', shadow: 'rgba(18,28,12,0.3)' };   // пока three.js грузится — дерево 2D
@@ -8333,8 +8252,8 @@ function splash15Draw(c){
 }
 // =====================================================================================================
 // v21 «Больше сока» (только вид, ядро не знает): веер сока вдоль реза и крупные дуги с хвостом, клякса-корона на дереве, струя
-// бензопилы назад по ходу, фонтан пил по сочности вида (выбросы подряд на крупном теле и «послевкусие» после него), волны в корыте,
-// отдача на крупном (пауза отрисовки 33 мс и тряска сцены), капли «на стекле» поверх всей сцены, победа — всплеск сока в корыте.
+// бензопилы назад по ходу, фонтан пил по сочности вида (выбросы подряд на крупном теле и «послевкусие» после него),
+// отдача на крупном (пауза отрисовки 33 мс и тряска сцены), (v31: капли «на стекле» и победный всплеск в корыте сняты).
 // У каждого потока — потолок (V21.cap). Ед. — мира (400 в ширину: 1 % W = 4 ед.); экранные капли — в CSS px.
 // =====================================================================================================
 const V21 = {
@@ -8352,19 +8271,12 @@ const V21 = {
   chain: { drops: 70, pulp: 10, liq: 18, arcs: 9, cone: 0.32, splash: 0.2 },   // v23: arcs — струи jet23 в с; капель и жидкости меньше (было 120 / 60)
   // пилы внизу. hit — первое касание: капель, жидких, волна (ед.); churn — тело в пилах: капель в с, крупных капель в с, жидких в с, дуг в с,
   // высота (ед., не выше зоны под кучей); pulse — выбросы на крупном теле (от площади bigA): число [крупное, огромное от hugeA], шаг (с),
-  // капель, жидких, дуг; after — фонтан после поглощения: длительность (с), капель в с в начале; wave — волна в корыте на порцию (ед.)
+  // капель, жидких, дуг; after — фонтан после поглощения: длительность (с), капель в с в начале; gap — струйка с дисков не чаще (с)
   saw: { hit: [4, 3, 1.6], churn: [30, 3, 26, 2.4], h: [40, 160], size: [0.9, 2.0], bigA: 1200, hugeA: 2500, pulse: [2, 3, 0.075, 12, 9, 2],
-    after: [1.1, 28], wave: [1.2, 3.6], gap: 0.12 },
-  // капли на стекле (CSS px): радиус, жизнь (с), скорость стекания (px/с), не чаще (с), одновременно не больше, полоса у края (доля ширины),
-  // вертикальная полоса (доля высоты), прозрачность тела, увеличение линзы
-  lens: { r: [15, 24], T: [0.9, 1.4], slide: [40, 95], every: 1.2, max: 5, edge: [0.05, 0.17], band: [0.2, 0.62], a: 0.26, zoom: 0.6 },
-  // победа: волна (ед.), капель вверх, высота (ед.), пузырьков, световой проход (цвет, сила, с), капель на стекло
-  win: { wave: 5, drops: [5, 7], h: [38, 64], bub: 5, light: ['#ffe69a', 0.22, 0.45], lens: 2 },   // h — выше рекомендации GPT (4–7 % W): ниже 30 ед. капли прячутся за дисками
-  // серия резов: столько резов за окно (с) — капля на стекло
-  combo: [3, 0.7],
-  cap: { arcs: 10, gey: 6, pulses: 12, wdrops: 8 },   // потолки: дуг, фонтанов «после», запланированных выбросов, капель победы (частицы — VIEW.partLive)
+    after: [1.1, 28], gap: 0.12 },
+  cap: { arcs: 10, gey: 6, pulses: 12 },   // потолки: дуг, фонтанов «после», запланированных выбросов (частицы — VIEW.partLive)
 };
-const J21 = { arcs: [], gey: [], pulse: [], lens: [], wdrops: [], win: null, winFor: -1, lensAt: -9, kickAt: -9, cuts: [], s: null, chain: { d: 0, p: 0, l: 0, a: 0, at: -9 }, peak: { pt: 0, liq: 0, arcs: 0, lens: 0 } };
+const J21 = { arcs: [], gey: [], pulse: [], kickAt: -9, s: null, chain: { d: 0, p: 0, l: 0, a: 0, at: -9 }, peak: { pt: 0, liq: 0, arcs: 0 } };
 const jk21 = (kind) => V21.juicy[kind] || 1;
 const big21 = (kind, area) => area >= V21.big.area || (V21.big.kinds.includes(kind) && area >= V21.big.kindArea);
 const lerp21 = (a, k) => a[0] + (a[1] - a[0]) * k;
@@ -8412,15 +8324,13 @@ function cut21(kind, area, p, q, ux, uy, w){
     liqSpawn(L_FREE, p[0] + dx * t, p[1] + dy * t, (nx * side * 0.9 + ux * 0.5) * sp, (ny * side * 0.9 + uy * 0.5) * sp - 70, 0.5 + 0.3 * R(), 2.6 + 2.2 * R(), lhex); }
   if (kind === 'melon' && big){ const cs = pcol((ART[kind] && ART[kind].col.seed) || '#2b1a12');
     for (let k = 0; k < lerp21(C.seeds, R()); k++){ const t = 0.3 + 0.4 * R(); spawnP(P_SEED, p[0] + dx * t, p[1] + dy * t, (R() - 0.5) * 200, -80 - R() * 160, 0.55, 2.4, cs); } }
-  if (big){ kick21(ux, uy, 1); if (J >= 0.8) lens21(p[0] + dx * 0.5, p[1] + dy * 0.5, J >= 1.3 ? 2 : 1, lhex); }
-  J21.cuts.push(G.rt); while (J21.cuts.length && G.rt - J21.cuts[0] > V21.combo[1]) J21.cuts.shift();
-  if (J21.cuts.length >= V21.combo[0]){ J21.cuts.length = 0; J21.combo = { at: G.rt + 0.06, x: p[0] + dx * 0.5, y: p[1] + dy * 0.5, hex: lhex }; }   // серия — чуть позже: крупный рез того же взмаха важнее
+  if (big) kick21(ux, uy, 1);
 }
-// Пилы: первое касание куска — капли, волна в корыте, струйка под пилой; крупное — выбросы подряд, отдача, стекло.
-function sawHit21(f){                                          // v23: касание — сильный импульс жидкости (hit23), волна, струйка; крупное — отдача и одна капля на стекло
-  const S = V21.saw, m = clamp((Math.sqrt(f.area) - 12) / 48, 0, 1); hit23(f); J23.lastX = f.x; saw26(f);   // v26: много массы / крупное тело — залп на экран
-  const T = trough9(), xs = chew13Gap(clamp(f.x, 1, CFG.W - 1), f.kind, 0.4 + 0.6 * m); T.waves.push({ x: xs, t0: G.rt, a: lerp21(S.wave, m) }); if (T.waves.length > 8) T.waves.shift();
-  if (f.area >= S.bigA && !f.c27){ kick21(0, 1, 1); if (jk21(f.kind) >= 0.8) lens23(f.x, CFG.grindY - 40, f.kind); }   // v27: посадка куска с пил — без отдачи
+// Пилы: первое касание куска — капли, струйка под пилой; крупное — выбросы подряд, отдача (v31: без волны в корыте и капли на стекло).
+function sawHit21(f){                                          // v23: касание — сильный импульс жидкости (hit23), струйка; крупное — отдача
+  const S = V21.saw, m = clamp((Math.sqrt(f.area) - 12) / 48, 0, 1); hit23(f);
+  chew13Gap(clamp(f.x, 1, CFG.W - 1), f.kind, 0.4 + 0.6 * m);
+  if (f.area >= S.bigA && !f.c27) kick21(0, 1, 1);   // v27: посадка куска с пил — без отдачи
 }
 function pulse21(P){                                           // выброс: веер капель вверх, жидкий сок, дуги, туман, мокрый диск
   const S = V21.saw, f = P.f, J = jk21(f.kind), hex = (KINDS[f.kind] || KINDS.melon).juice, cj = pcol(hex), lhex = juiceHex(f.kind), x = f.x, y = (f.clip || CFG.grindY) - 3, w = Math.max(8, f.rad * 1.2), room = Math.max(S.h[0], y - (F13.zt || -1e9));
@@ -8432,7 +8342,7 @@ function pulse21(P){                                           // выброс: 
     arc21(x + (R() - 0.5) * w, y, Math.cos(a) * sp, Math.sin(a) * sp, 2 + 1.2 * R(), 0.3 + 0.12 * R(), hex, 22 + 14 * R()); }
   mist13(x, y, lhex, 1.3); mist13(x + (R() - 0.5) * w, y, lhex, 1.1);
   const di = discAt13(x); wet13Stamp(di, x, sawTop13(x), 1.6, f.kind, 0.6);
-  const T = trough9(), xs = chew13Gap(clamp(x, 1, CFG.W - 1), f.kind, 1); T.waves.push({ x: xs, t0: G.rt, a: S.wave[1] * P.k }); if (T.waves.length > 8) T.waves.shift();
+  chew13Gap(clamp(x, 1, CFG.W - 1), f.kind, 1);
 }
 function churn21(f, L, Rx, y, k, dt){                           // тело в пилах: непрерывный фонтан по сочности вида
   const S = V21.saw, U = S.churn, J = jk21(f.kind), hex = (KINDS[f.kind] || KINDS.melon).juice, cj = pcol(hex), m = clamp((Math.sqrt(f.A0 || f.area) - 24) / 36, 0, 1), W = Math.max(2, Rx - L), room = Math.max(S.h[0], y - (F13.zt || -1e9));
@@ -8445,7 +8355,7 @@ function churn21(f, L, Rx, y, k, dt){                           // тело в �
   while (f.l21 >= 1){ f.l21--; if (!LIQ.on) continue; const [x, a] = at(), h = lerp21([S.h[0], Math.min(S.h[1] * 0.8, room)], R()), sp = Math.sqrt(2 * VIEW.pg * h) / Math.max(0.4, -Math.sin(a));
     liqSpawn(L_FOUNT, x, y - 4, Math.cos(a) * sp, Math.sin(a) * sp, 0.9, 2.2 + 2.2 * R(), juiceHex(f.kind)); }
   while (f.r21 >= 1){ f.r21--; const [x, a] = at(), sp = Math.sqrt(2 * VIEW.pg * 0.8 * Math.min(room, 140)) / Math.max(0.5, -Math.sin(a)); arc21(x, y - 3, Math.cos(a) * sp, Math.sin(a) * sp, 1.6 + 1.0 * R(), 0.28 + 0.1 * R(), hex, 18 + 12 * R()); }
-  if (G.rt - (f.g21 || 0) > S.gap){ f.g21 = G.rt; chew13Gap(clamp((L + Rx) / 2, 1, CFG.W - 1), f.kind, 0.5 + 0.5 * m); }   // струйки с дисков в корыто — гуще, пока мелется
+  if (G.rt - (f.g21 || 0) > S.gap){ f.g21 = G.rt; chew13Gap(clamp((L + Rx) / 2, 1, CFG.W - 1), f.kind, 0.5 + 0.5 * m); }   // струйки с дисков в траву — гуще, пока мелется
 }
 function churnEnd21(f, x, y){                                   // тело ушло в зубья: фонтан ещё дотекает (крупное — «праздник» дольше)
   if (J21.gey.length >= V21.cap.gey) J21.gey.shift(); const m = clamp((Math.sqrt(f.A0 || f.area) - 24) / 36, 0, 1);
@@ -8472,350 +8382,33 @@ function chain21(s, dt){
     while (Q.l >= 1){ Q.l--; if (!LIQ.on) continue; const a = dir(), sp = 280 + 180 * R(); liqSpawn(L_FREE, F6.x, F6.y, Math.cos(a) * sp, Math.sin(a) * sp - 50, 0.35 + 0.2 * R(), 2.4 + 1.8 * R(), juiceHex(b.kind)); }
     while (Q.a >= 1){ Q.a--; const a = dir(); jet23(F6.x, F6.y, a, 22 + 18 * R(), 2.8 + 1.4 * R(), 0.7, 0.09 + 0.04 * R(), pal23(b.kind)); }   // v23: струя от пропила, а не дуга-«червячок»
     if (G.rt - Q.at > C.splash){ Q.at = G.rt; splash15(F6.x - ux * 8, F6.y - uy * 8, b.kind, Math.min(18, b.rad * 0.55), -ux, -uy, 'saw'); }
-    chain26(F6, b);   // v26: пятна по пути, через несколько плодов — залп на экран
+    chain26(F6, b);   // v26: пятна по пути (v31: без залпа на экран)
     break; }   // одно тело в пропиле на кадр: поток не гуще при пропиле через кучу
 }
-// Капли на стекле: крупные полупрозрачные поверх всей сцены у края кадра, блик и линза (сцена под каплей — перевёрнута и затемнена к краю),
-// стекают вниз и гаснут; не на куче, не на кнопках и плашках (только полоса у края по вертикали band).
-function lens21(wx, wy, n, hex){
-  const L = V21.lens; if (G.rt - J21.lensAt < L.every || REDUCED) return 0; const s = G.s; if (!s) return 0;
-  const W = cv.clientWidth, H = cv.clientHeight, sx = view.ox + wx * view.k, c = hexRgb(hex || '#ff9f1c'); let made = 0;
-  const heap = []; for (const b of s.bodies){ if (b.y > CFG.grindY - 20) continue; heap.push([view.ox + b.x * view.k, view.oy + b.y * view.k, (b.rad + 6) * view.k]); }
-  for (let i = 0; i < n && J21.lens.length < L.max; i++){
-    for (let tr = 0; tr < 8; tr++){ const left = (sx < W / 2) !== (i % 2 === 1), r = lerp21(L.r, R()) * (i ? 0.75 : 1), x = left ? W * lerp21(L.edge, R()) : W * (1 - lerp21(L.edge, R())), y = H * lerp21(L.band, R());
-      if (heap.some(h => Math.hypot(h[0] - x, h[1] - y) < h[2] + r + 4)) continue;
-      if (J21.lens.some(q => Math.hypot(q.x - x, q.y - y) < q.r + r + 8)) continue;
-      J21.lens.push({ x, y, y0: y, r, t0: G.rt, t: 0, T: lerp21(L.T, R()), v: lerp21(L.slide, R()), c, ph: R() * 6.28 }); made++; break; } }
-  if (made){ J21.lensAt = G.rt; log('fx.start', 'lens21', made); }
-  return made;
-}
-let lensCv = null, lensDirty = [];   // рамки, нарисованные в прошлый кадр (чистим только их)
-// =====================================================================================================
-// v28.2 «Победный ляп» → v28.3 «Ляп — размазанный сок, который течёт» (Андрей 25.11: «думал будет ляп как размазанный сок, а на нём
-// уже надпись, но он прям так смачно чпок на экране после победы, начинает течь (на нём поздравительная надпись) — разные цвета ляпа»).
-// Только вид. На победе от пил на стекло летит капля сока и «чпокает»: в первый кадр удара пятно уже крупное и сплющенное, перехлёст
-// масштаба и быстрый возврат, вспышка-ореол, тряска, разлёт капель от центра (часть долетает до краёв экрана и остаётся точками на стекле).
-// Пятно — размазанный сок: плотная середина под надписью, рваные полупрозрачные края, языки-мазки наружу от точки удара, тонкие
-// штрихи-брызги, россыпь мелких капель; толщина неравномерная (толще — темнее и плотнее, по краям сквозь сок видна сцена); мраморные
-// прожилки второго и третьего по массе сока; мелкие мокрые блики на наплывах (свет по «высоте» слоя). После удара сок течёт: потёки с
-// нижней кромки и из наплывов, рывками, с тяжёлыми каплями на концах (часть отрывается и падает), пятно оплывает вниз. Надпись
-// впечатывается по буквам, буквы мокрые (блики, сок у низа, тень-вдавленность), с пары букв стекают капли. До UI.winHold, потом сползает и тает.
-// Пятно — маски (толща, прожилки 2/3, свет/тень), считаются заранее во время уровня кусками по bake мс за кадр (поле из «капель»-ядер);
-// цвет накладывается композитингом масок (tint28) — на победе перекрашивается, только если сменилась палитра (доли масс).
-// w — ширина плотной середины (доля ширины экрана), y — центр (доля высоты), hMax — высота середины на пике не больше доли высоты;
-// fly — подлёт (с); pop — масштаб удара [первый кадр, пик, недолёт, покой, длительность с]; sq — сплющивание [в первый кадр, гаснет за с];
-// flash — ореол (с); spray — капель разлёта [от, до], edge — доля долетающих до краёв; drips — потёков [от, до], dripLen — длина к концу
-// показа (доля высоты экрана) [от, до]; sag — оплывание нижнего края (доля высоты экрана); out — сползает и тает (с), slide — на долю
-// высоты; font — кегль (доля ширины середины), letter — задержка буквы (с), arc — дуга строки, breathe — «дыхание» [Гц, доля];
-// mix/pair — основной сок берётся, если его доля перемолотой площади ≥ mix или двух первых вместе ≥ pair, иначе смесь — золотой;
-// minor — доля сока, чтобы стать прожилкой; col — цвета групп сока; bake — мс за кадр на маски; bs — px маски на px CSS (до DPR).
-const V28W = {
-  on: true, w: [0.7, 0.77], y: 0.33, hMax: 0.34, fly: 0.13, pop: [0.86, 1.22, 0.97, 1, 0.2], sq: [0.3, 0.09], flash: 0.16,
-  spray: [20, 30], edge: 0.36, drips: [6, 10], dripLen: [0.15, 0.35], sag: 0.03, out: 0.35, slide: 0.07,
-  font: 0.2, letter: 0.026, arc: 0.5, breathe: [1.1, 0.016], mix: 0.34, pair: 0.5, minor: 0.08, shake: 3.2, bake: 2.5, bs: 1.25,
-  col: { red: [236, 42, 82], orange: [255, 136, 26], yellow: [246, 182, 28], purple: [150, 52, 212], green: [150, 204, 40], gold: [238, 164, 40] },
-  grp: { melon: 'red', berry: 'red', cherry: 'red', pomelo: 'red', dragon: 'red', pepper: 'red', orange: 'orange', mango: 'orange', passion: 'orange',
-    lemon: 'yellow', banana: 'yellow', apple: 'yellow', citron: 'yellow', plum: 'purple', grape: 'purple', lime: 'green', cuke: 'green', kiwi: 'green',
-    cabbage: 'green', coco: 'gold' },
-};
-const W28 = { n: -1, mass: {}, last: null, job: null, geo: null, out: null, tmp: null, tintKey: '', tintAt: -9, on: false, t0: 0, T: 0, hit: false, txt: null,
-  phrase: '', pal: null, grp: 'gold', v: 0, tilt: 0, W: 0, cx: 0, cy: 0, d: 1, drips: [], spray: [], st: {} };
-function mix28(kind, area){                                     // перемолотая масса по группам сока (событие grind ядра)
-  const s = G.s; if (!s) return; if (W28.n !== s.n){ W28.n = s.n; W28.mass = {}; }
-  const g = V28W.grp[kind] || 'gold'; W28.mass[g] = (W28.mass[g] || 0) + (area || 0);
-}
-function choose28(useBodies){                                   // палитра: основной сок + два для прожилок; совпал с прошлой победой — второй по массе
-  const s = G.s, F = V28W, m = W28.n === (s && s.n) ? Object.assign({}, W28.mass) : {};
-  if (useBodies && s) for (const b of s.bodies) if (b.kind && !b.flags.static){ const g = F.grp[b.kind] || 'gold'; m[g] = (m[g] || 0) + (b.area || 0); }
-  const L = Object.keys(m).filter(k => m[k] > 0).sort((a, b) => m[b] - m[a] || (a < b ? -1 : 1)); let tot = 0; for (const k of L) tot += m[k];
-  const sh = (k) => k && tot > 0 ? m[k] / tot : 0;
-  let main = L.length && (sh(L[0]) >= F.mix || sh(L[0]) + sh(L[1]) >= F.pair) ? L[0] : 'gold';
-  if (main === W28.last){ const alt = L.find(k => k !== main); main = alt || (main !== 'gold' ? 'gold' : main); }
-  const minor = L.filter(k => k !== main && sh(k) >= F.minor).slice(0, 2), c1 = F.col[main];
-  const c2 = minor[0] ? F.col[minor[0]] : mixRgb(c1, [255, 228, 120], 0.4), c3 = minor[1] ? F.col[minor[1]] : mixRgb(c1, [90, 14, 40], 0.34);
-  return { main, minor, c: [c1, c2, c3].map(c => c.map(Math.round)), key: main + '|' + minor.join() };
-}
-function group28(useBodies){ return choose28(useBodies).main; }
-const rgb28 = (c, a) => a === undefined ? 'rgb(' + c.join(',') + ')' : 'rgba(' + c.join(',') + ',' + a + ')';
-function shape28(v){                                            // раскладка «капель»-ядер поля (единицы: полуширина середины = 1, y вниз)
-  if (W28.shp && W28.shp[v]) return W28.shp[v];
-  const r = mulberry32(v * 7919 + 13), K = 1 / 0.575, B = [], M2 = [], M3 = [];   // ядро [x, y, носитель вдоль, поперёк, угол, сила]; K: видимый радиус → носитель
-  const ax = 0.88 + 0.08 * r(), ay = 0.52 + 0.05 * r(), rim = (a) => 1 / Math.hypot(Math.cos(a) / ax, Math.sin(a) / ay);
-  let ex = ax, ey = ay; B.push([0, 0, ax * K * 0.9, ay * K * 0.9, 0, 1]);
-  const nl = 9 + (r() * 4 | 0); for (let i = 0; i < nl; i++){ const a = (i + r() * 0.6) / nl * 6.283, rr = 0.18 + 0.16 * r(), x = Math.cos(a) * (ax - rr * 0.75), y = Math.sin(a) * (ay - rr * 0.75);
-    B.push([x, y, rr * K, rr * K * 0.85, 0, 1]); ex = Math.max(ex, Math.abs(x) + rr); ey = Math.max(ey, Math.abs(y) + rr * 0.85); }   // наплывы по кромке
-  for (let i = 0; i < 7; i++) B.push([(r() - 0.5) * 1.3 * ax, (r() - 0.5) * 1.1 * ay, 0.28 + 0.22 * r(), 0.2 + 0.14 * r(), r() * 3.14, 0.5 + 0.6 * r()]);   // толща: бугры внутри
-  const nt = 13 + (r() * 6 | 0), tongue = [];                    // языки-мазки наружу от точки удара (вверх длиннее: сок летел снизу), разной длины и ширины
-  for (let i = 0; i < nt; i++){ const a = (i + r() * 0.9) / nt * 6.283, dn = Math.sin(a) > 0.15, big = r() < 0.35, L = (big ? 0.3 + 0.35 * r() : 0.08 + 0.22 * r() * r()) * (dn ? 0.5 : 1), w0 = big ? 0.06 + 0.04 * r() : 0.035 + 0.045 * r(), d0 = rim(a) * 0.9, da = (r() - 0.5) * 0.35;
-    const n = 5 + (L * 9 | 0), T = []; for (let j = 0; j <= n; j++){ const u = j / n, aa = a + da * u, dd = d0 + L * u, w = w0 * (1 - 0.78 * Math.sqrt(u)) + 0.008;
-      const b = [Math.cos(aa) * dd, Math.sin(aa) * dd, Math.max(w * K * 2.4, L / n * 1.3), w * K, aa, 0.98 - 0.45 * u]; B.push(b); T.push(b); }
-    if (r() < 0.8){ const dd = d0 + L * (1.08 + 0.12 * r()) + 0.03, rr = 0.03 + 0.035 * r(); B.push([Math.cos(a + da) * dd, Math.sin(a + da) * dd, rr * K, rr * K, 0, 1]); }   // капля на конце языка
-    tongue.push(T); }
-  const ns = 12 + (r() * 9 | 0); for (let i = 0; i < ns; i++){ const a = r() * 6.283, dn = Math.sin(a) > 0.2, d0 = rim(a) * (0.95 + 0.3 * r()), L = (0.14 + 0.42 * r()) * (dn ? 0.55 : 1), w0 = 0.011 + 0.014 * r();   // штрихи-брызги
-    for (let j = 0; j <= 5; j++){ const u = j / 5, dd = d0 + L * u, w = w0 * (0.45 + 0.55 * Math.sin(Math.PI * (0.2 + 0.7 * u))); B.push([Math.cos(a) * dd, Math.sin(a) * dd, Math.max(w * K * 2.5, L / 5 * 1.3), w * K, a, 0.9]); }
-    B.push([Math.cos(a) * (d0 + L + 0.03), Math.sin(a) * (d0 + L + 0.03), (w0 * 1.6) * K, (w0 * 1.6) * K, 0, 1]); }
-  for (let i = 0; i < 38; i++){ const a = r() * 6.283, dd = rim(a) * (1.1 + 0.65 * r()), rr = 0.01 + 0.03 * r() * r() + 0.008; B.push([Math.cos(a) * dd, Math.sin(a) * dd, rr * K, rr * K, 0, 1]); }   // россыпь капель
-  const vein = (M, n, w0) => { for (let i = 0; i < n; i++){ let x = (r() - 0.5) * 1.4 * ax, y = (r() - 0.5) * 1.1 * ay, a = r() * 6.283; const m = 7 + (r() * 7 | 0), w = w0 * (0.7 + 0.6 * r());   // прожилки: разводы-завитки
-    for (let j = 0; j < m; j++){ M.push([x, y, w * 1.6, w, a, 0.9 + 0.3 * Math.sin(j / m * 3.14)]); a += (r() - 0.5) * 0.9; x += Math.cos(a) * w * 0.9; y += Math.sin(a) * w * 0.6; } } };
-  vein(M2, 3, 0.108); vein(M3, 2, 0.085);
-  for (const [T, M] of [[tongue.find(T => T.length > 6) || tongue[1], M2], [tongue[(nt / 2) | 0], M3]]) for (const b of T) M.push([b[0], b[1], b[2], b[3] * 1.6, b[4], 1.6]);   // языки другого сока
-  return (W28.shp || (W28.shp = {}))[v] = { B, M2, M3, ex, ey, ax, ay };
-}
-function splat28(A, Wp, Hp, ox, oy, p, b){                     // ядро поля (1 − q)³, q = эллиптическое расстояние² в носителе
-  const X = ox + b[0] * p, Y = oy + b[1] * p, sa = b[2] * p, sc = b[3] * p, R = Math.max(sa, sc), cs = Math.cos(b[4]), sn = Math.sin(b[4]), ia = 1 / (sa * sa), ic = 1 / (sc * sc), amp = b[5];
-  const x0 = Math.max(0, (X - R) | 0), x1 = Math.min(Wp - 1, (X + R + 1) | 0), y0 = Math.max(0, (Y - R) | 0), y1 = Math.min(Hp - 1, (Y + R + 1) | 0);
-  for (let j = y0; j <= y1; j++){ const dy = j + 0.5 - Y, o = j * Wp; for (let i = x0; i <= x1; i++){ const dx = i + 0.5 - X, u = dx * cs + dy * sn, w = dy * cs - dx * sn, q = u * u * ia + w * w * ic;
-    if (q < 1){ const k = 1 - q; A[o + i] += amp * k * k * k; } } }
-}
-const sm28 = (x) => x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x);
-function job28(v, W, budget){                                   // маски пятна кусками: поле → свет/тень → холсты; true — готово
-  const bs = Math.min(DPR, V28W.bs), key = [v, Math.round(W), bs].join(); let J = W28.job;
-  if (W28.geo && W28.geo.key === key) return true;
-  if (!J || J.key !== key){ const S = shape28(v), p = W * bs, Wp = Math.ceil(3.5 * p), Hp = Math.ceil(2.55 * p);
-    J = W28.job = { key, v, S, p, Wp, Hp, ox: Wp / 2, oy: 1.45 * p, F: new Float32Array(Wp * Hp), M2: new Float32Array(Wp * Hp), M3: new Float32Array(Wp * Hp), list: [], i: 0, row: 0, step: 0, ms: 0, img: null };
-    for (const b of S.B) J.list.push([J.F, b]); for (const b of S.M2) J.list.push([J.M2, b]); for (const b of S.M3) J.list.push([J.M3, b]); }
-  const t0 = performance.now(), end = t0 + budget, { Wp, Hp, p } = J;
-  while (performance.now() < end){
-    if (J.step === 0){ const [A, b] = J.list[J.i++]; splat28(A, Wp, Hp, J.ox, J.oy, p, b); if (J.i >= J.list.length) J.step = 1; }
-    else if (J.step === 1){                                       // свет/тень по «высоте» слоя; толща → непрозрачность; прожилки
-      if (!J.img){ const mk = () => new ImageData(Wp, Hp); J.img = [mk(), mk(), mk(), mk()]; J.bot = new Float32Array(Wp).fill(-1); }
-      const F = J.F, [ib, i2, i3, is] = J.img.map(m => m.data), t0f = 0.3, hs = 1.3 * p, Lx = -0.42, Ly = -0.58, Lz = 0.7, Hn = Math.hypot(Lx, Ly, Lz + 1), Hx = Lx / Hn, Hy = Ly / Hn, Hz = (Lz + 1) / Hn;
-      const fy = (j) => sm28(Math.min(j, Hp - 1 - j) / (0.05 * Hp)), fx = (i) => sm28(Math.min(i, Wp - 1 - i) / (0.04 * Wp));   // у краёв маски поле гаснет — без среза
-      for (let n = 0; n < 24 && J.row < Hp; n++, J.row++){ const j = J.row, ey = fy(j);
-        for (let i = 0; i < Wp; i++){ const o = j * Wp + i, f = F[o] * ey * fx(i); if (f < t0f - 0.04) continue; const q = o * 4;
-          const ins = sm28((f - t0f + 0.035) / 0.07), th = sm28((f - t0f) / 0.75), a = ins * (0.46 + 0.51 * th);
-          ib[q] = ib[q + 1] = ib[q + 2] = 255; ib[q + 3] = a * 255;
-          i2[q] = i2[q + 1] = i2[q + 2] = 255; i2[q + 3] = sm28((J.M2[o] - 0.12) / 0.5) * 220; i3[q] = i3[q + 1] = i3[q + 2] = 255; i3[q + 3] = sm28((J.M3[o] - 0.12) / 0.5) * 220;
-          const h = (k) => F[k] / (F[k] + 0.8), gx = (i > 0 && i < Wp - 1 ? h(o + 1) - h(o - 1) : 0) * 0.5 * hs, gy = (j > 0 && j < Hp - 1 ? h(o + Wp) - h(o - Wp) : 0) * 0.5 * hs;
-          const nl = 1 / Math.hypot(gx, gy, 1), nh = (-gx * Hx - gy * Hy + Hz) * nl, nd = (-gx * Lx - gy * Ly + Lz) * nl;
-          const lt = ins * (nh > 0.8 ? Math.pow(nh, 36) * 0.95 : 0) + ins * 0.12 * Math.max(0, nh) ** 6;   // мокрые блики на наплывах
-          const dk = Math.min(0.62, 0.24 * sm28((f - 1.05) / 1.3) + 0.36 * (1 - sm28((f - t0f) / 0.16)) * ins + 0.22 * Math.max(0, 0.55 - nd) * ins);   // толща, кромка, теневая сторона
-          const A = lt + dk * (1 - lt); is[q] = is[q + 1] = is[q + 2] = A > 0 ? 255 * lt / A : 0; is[q + 3] = A * 255; } }
-      if (J.row >= Hp) J.step = 2;
-    } else if (J.step === 2){                                     // нижняя кромка плотной середины (откуда течёт) и доля прожилок
-      const F = J.F, j0 = Math.round(J.oy); let cov = 0, mar = 0;
-      for (let i = 0; i < Wp; i++){ let j = j0; if (F[j0 * Wp + i] < 0.42) continue; while (j < Hp - 1 && F[(j + 1) * Wp + i] >= 0.42) j++; J.bot[i] = (j - J.oy) / p; }
-      const [ib, i2, i3] = J.img.map(m => m.data); for (let q = 3; q < ib.length; q += 16) if (ib[q] > 128){ cov++; if (i2[q] > 110 || i3[q] > 110) mar++; }
-      J.mf = cov ? mar / cov : 0; J.step = 3;
-    } else if (J.step === 3){                                     // в холсты
-      const cs = J.img.map(m => { const c = document.createElement('canvas'); c.width = Wp; c.height = Hp; c.getContext('2d').putImageData(m, 0, 0); return c; });
-      W28.geo = { key, v, base: cs[0], m2: cs[1], m3: cs[2], shade: cs[3], Wp, Hp, ox: J.ox, oy: J.oy, p, bot: J.bot, mf: J.mf, S: J.S };
-      J.ms += performance.now() - t0; W28.st.geoMs = +J.ms.toFixed(1); W28.st.mf = +J.mf.toFixed(2); W28.job = null; F13.stats.bake28 = W28.st.geoMs; W28.tintKey = ''; return true; }
-  }
-  J.ms += performance.now() - t0; return false;
-}
-function tint28(pal){                                           // цвет пятна: толща — основной сок, прожилки — второй/третий, сверху свет/тень
-  const G2 = W28.geo; if (!G2) return; const t0 = performance.now(), w = G2.Wp, h = G2.Hp;
-  for (const k of ['out', 'tmp']) if (!W28[k] || W28[k].width !== w || W28[k].height !== h){ const c = document.createElement('canvas'); c.width = w; c.height = h; W28[k] = c; }
-  const g = W28.out.getContext('2d'), u = W28.tmp.getContext('2d');
-  g.globalCompositeOperation = 'copy'; g.drawImage(G2.base, 0, 0); g.globalCompositeOperation = 'source-in'; g.fillStyle = rgb28(pal.c[0]); g.fillRect(0, 0, w, h);
-  for (const [m, c] of [[G2.m2, pal.c[1]], [G2.m3, pal.c[2]]]){ u.globalCompositeOperation = 'copy'; u.drawImage(m, 0, 0); u.globalCompositeOperation = 'source-in'; u.fillStyle = rgb28(c); u.fillRect(0, 0, w, h);
-    g.globalCompositeOperation = 'source-atop'; g.drawImage(W28.tmp, 0, 0); }
-  g.globalCompositeOperation = 'source-atop'; g.drawImage(G2.shade, 0, 0); g.globalCompositeOperation = 'source-over';
-  W28.tintKey = G2.key + '#' + pal.key + pal.c.join(); W28.st.tintMs = +(performance.now() - t0).toFixed(2);
-}
-function geom28(n){                                             // размер и место середины пятна (px CSS) — под плашкой уровня, выше пил
-  const vw = cv.clientWidth || 393, vh = cv.clientHeight || 780, v = ((n | 0) % 4 + 4) % 4, wf = V28W.w[0] + (V28W.w[1] - V28W.w[0]) * ((v * 0.37) % 1);
-  const S = shape28(v), pk = V28W.pop[1]; let W = vw * wf / 2; W = Math.min(W, vw * 0.5 / (S.ex * pk), vh * V28W.hMax / 2 / (S.ey * pk));   // середина на пике удара — в экране (языки и брызги могут уйти за край)
-  return { v, W, cx: vw / 2, cy: vh * V28W.y, d: DPR };
-}
-function win28Prep(){                                           // во время уровня: маски пятна кусками, цвет — по набирающейся массе (раз в 0,5 с)
-  const s = G.s; if (!V28W.on || !s || s.won || W28.on || s.t < 0.3 || !cv.clientWidth) return;
-  const q = geom28(s.n); if (!job28(q.v, q.W, V28W.bake)) return;
-  if (G.rt - W28.tintAt < 0.5) return; W28.tintAt = G.rt; const pal = choose28(true); if (W28.tintKey !== W28.geo.key + '#' + pal.key + pal.c.join()) tint28(pal);
-}
+// v28.3 (v31 — без ляпа): фраза победы — соседние уровни разные (детерминированно по номеру; тест в test.mjs)
 function winWord28(WW, n){                                      // фраза победы: соседние уровни — разные фразы (детерминированно по номеру)
   let i = Math.floor(mulberry32(38)() * WW.length); for (let k = 2; k <= n; k++) i = (i + 1 + Math.floor(mulberry32(k * 31 + 7)() * (WW.length - 1))) % WW.length; return WW[i];
 }
-function win28Start(phrase){                                    // celebrate(): true — победа показана ляпом (слово addWord не нужно)
-  const s = G.s; if (!V28W.on || !s) return false; const F = V28W, t0 = performance.now();
-  const q = geom28(s.n), r = mulberry32(s.n * 131 + 7), pal = choose28(false), sync = !(W28.geo && W28.geo.key === [q.v, Math.round(q.W), Math.min(DPR, F.bs)].join());
-  job28(q.v, q.W, Infinity); if (W28.tintKey !== W28.geo.key + '#' + pal.key + pal.c.join()) { tint28(pal); W28.st.tintWin = true; } else W28.st.tintWin = false;
-  W28.st.geoWin = sync; W28.last = pal.main;
-  Object.assign(W28, { on: true, t0: G.rt, T: UI.winHold, hit: false, txt: null, phrase, pal, grp: pal.main, v: q.v, W: q.W, cx: q.cx, cy: q.cy, d: q.d, tilt: (r() - 0.5) * 0.1, n2: s.n });
-  const G2 = W28.geo, vh = cv.clientHeight || 780, vw = cv.clientWidth || 393, bot = (x) => { const i = Math.round(G2.ox + x * G2.p); let m = -1; for (let k = -2; k <= 2; k++) m = Math.max(m, G2.bot[Math.min(G2.Wp - 1, Math.max(0, i + k))] || -1); return m > 0 ? m : 0.3; };
-  W28.botC = bot(0); const nd = F.drips[0] + Math.floor(r() * (F.drips[1] - F.drips[0] + 1)), E = UI.winHold - F.fly - F.out; W28.drips = [];
-  for (let i = 0; i < nd; i++){ const inner = i % 3 === 1, x = (-0.74 + 1.48 * (i + 0.2 + 0.6 * r()) / nd) * (inner ? 0.85 : 1), yb = bot(x);   // с нижней кромки и из наплывов (ниже надписи)
-    const S = [[0.02 + 0.1 * r(), 0.1 + 0.08 * r(), 1]]; for (let k = 0, ns = 3 + (r() * 3 | 0); k < ns; k++) S.push([0.2 + (E - 0.3) * r(), 0.1 + 0.18 * r(), 0.4 + r()]);
-    W28.drips.push({ x, y: inner ? Math.max(0.5, yb - 0.05 - 0.07 * r()) : yb - 0.035, inner, w: (inner ? 0.022 : 0.03) + 0.032 * r(), L: (F.dripLen[0] + (F.dripLen[1] - F.dripLen[0]) * r()) * vh,
-      S, Sa: S.reduce((a, b) => a + b[2], 0), E, det: r() < 0.6 ? 0.45 + (E - 0.6) * r() : 99, sw: (r() - 0.5) * 2, ci: r() < 0.62 ? 0 : r() < 0.6 ? 1 : 2 }); }
-  const sawTop = Math.min(vh * 0.9, view.oy + view.k * (CFG.grindY - 40)), ns = F.spray[0] + Math.floor(r() * (F.spray[1] - F.spray[0] + 1)), m = 10; W28.spray = [];
-  for (let i = 0; i < ns; i++){ const a = (i + r()) / ns * 6.283, ca = Math.cos(a), sa = Math.sin(a), edge = r() < F.edge, rim = 1 / Math.hypot(ca / G2.S.ax, sa / G2.S.ay);   // от центра; часть — до краёв экрана (не на пилы)
-    let tx = ca > 0 ? (vw - m - q.cx) / ca : ca < 0 ? (m - q.cx) / ca : 1e9, ty = sa > 0 ? (sawTop - m - q.cy) / sa : sa < 0 ? (m - q.cy) / sa : 1e9, D = Math.min(tx, ty);
-    const d = edge ? D * (0.82 + 0.16 * r()) : Math.min(D * 0.95, q.W * rim * (1.15 + 0.85 * r()));
-    W28.spray.push({ x: ca * d, y: sa * d, x0: ca * q.W * rim * 0.4, y0: sa * q.W * rim * 0.4, dl: 0.01 * r(), du: 0.1 + 0.14 * r() * (edge ? 1.4 : 1), r: (edge ? 0.009 : 0.013) + (edge ? 0.012 : 0.022) * r(), ci: r() < 0.55 ? 0 : r() < 0.55 ? 1 : 2, sl: r() < 0.35 ? 6 + 14 * r() : 0 }); }
-  W28.st.startMs = +(performance.now() - t0).toFixed(2);
-  log('fx.start', 'win28', phrase + ' ' + pal.main + ' ' + pal.minor.join('+')); return true;
-}
-function text28(g, d){                                          // раскладка надписи (буквы-спрайты — glyph28: в кадрах подлёта и по мере появления)
-  const S = Math.round(W28.W * 2 * V28W.font) * d, words = W28.phrase.split(' '), maxW = W28.W * 2 * 0.84 * d; g.font = '700 ' + S + 'px ' + FONT;
-  let lines = [W28.phrase]; if (g.measureText(W28.phrase).width > maxW && words.length > 1){ let best = null;
-    for (let i = 1; i < words.length; i++){ const a = words.slice(0, i).join(' '), b = words.slice(i).join(' '), m = Math.max(g.measureText(a).width, g.measureText(b).width); if (!best || m < best[0]) best = [m, [a, b]]; } lines = best[1]; }
-  let fs = S; for (const l of lines) fs = Math.min(fs, S * maxW / Math.max(1, g.measureText(l).width)); fs = Math.floor(fs); g.font = '700 ' + fs + 'px ' + FONT;
-  const L = [], lh = fs * 0.98; let k = 0;
-  lines.forEach((l, li) => { const ws = [...l].map(ch => g.measureText(ch).width), tw = ws.reduce((a, b) => a + b, 0); let x = -tw / 2;
-    const y = (li - (lines.length - 1) / 2) * lh; ws.forEach((w, i) => { L.push({ ch: l[i], w, x: x + w / 2, y, xn: (x + w / 2) / (tw / 2 || 1), k: k++ }); x += w; }); });
-  const r = mulberry32(W28.n2 * 17 + 3), cand = L.filter(q => q.ch !== ' ' && !/[!.,'il1]/.test(q.ch)), LD = [];   // капли с пары букв
-  for (let i = 0; i < 2 && cand.length; i++){ const q = cand.splice(Math.floor(r() * cand.length), 1)[0]; LD.push({ q, dx: (r() - 0.5) * q.w * 0.4, L: fs * (0.8 + 0.6 * r()), at: 0.25 + 0.35 * r(), w: fs * (0.06 + 0.02 * r()) }); }
-  return { L, fs, n: k, LD, font: g.font };
-}
-function glyph28(q, T){                                        // буква-спрайт (мокрая: блики, сок у низа, контур, вдавленность) — лениво, по одной
-  const fs = T.fs, c1 = W28.pal.c[0], ink = c1.map(x => Math.round(x * 0.28));
-  const w = Math.ceil(q.w + fs * 0.5), h = Math.ceil(fs * 1.7), c = document.createElement('canvas'); c.width = w; c.height = h;
-  const u = c.getContext('2d'), X = w / 2, Y = h * 0.44; u.font = T.font; u.textAlign = 'center'; u.textBaseline = 'middle'; u.lineJoin = 'round';
-  const fill = u.createLinearGradient(0, Y - fs * 0.5, 0, Y + fs * 0.5); fill.addColorStop(0, '#ffffff'); fill.addColorStop(0.4, '#fffdf6'); fill.addColorStop(0.6, '#fff1d8'); fill.addColorStop(1, '#ffe2bc');
-  u.fillStyle = fill; u.fillText(q.ch, X, Y); u.globalCompositeOperation = 'source-atop';
-  const jg = u.createLinearGradient(0, Y + fs * 0.06, 0, Y + fs * 0.42); jg.addColorStop(0, rgb28(c1, 0)); jg.addColorStop(1, rgb28(c1, 0.42)); u.fillStyle = jg; u.fillRect(0, 0, w, h);   // сок у низа буквы
-  u.save(); u.translate(X - q.w * 0.14, Y - fs * 0.2); u.rotate(-0.35); u.scale(1, 0.32); const hl = u.createRadialGradient(0, 0, 0, 0, 0, q.w * 0.34); hl.addColorStop(0, 'rgba(255,255,255,0.95)'); hl.addColorStop(1, 'rgba(255,255,255,0)');
-  u.fillStyle = hl; u.beginPath(); u.arc(0, 0, q.w * 0.34, 0, 6.283); u.fill(); u.restore();                // мокрый блик
-  u.fillStyle = 'rgba(255,255,255,0.95)'; u.beginPath(); u.arc(X + q.w * 0.16, Y + fs * 0.12, fs * 0.03, 0, 6.283); u.fill();
-  u.globalCompositeOperation = 'destination-over'; u.lineWidth = fs * 0.2; u.strokeStyle = rgb28(ink); u.strokeText(q.ch, X, Y);
-  u.fillStyle = rgb28(ink, 0.45); u.lineWidth = fs * 0.22; u.strokeStyle = rgb28(ink, 0.45); u.strokeText(q.ch, X + fs * 0.02, Y + fs * 0.1); u.fillText(q.ch, X + fs * 0.02, Y + fs * 0.1);   // вдавленность
-  q.c = c; q.ox = X; q.oy = Y;
-}
-const ease28 = (t, a, b) => a + (b - a) * (t < 0 ? 0 : t > 1 ? 1 : t * t * (3 - 2 * t));
-function drip28(g, x, y0, y1, w, rb, sw, c, dk, al){            // потёк: шейка у пятна, тоньше книзу, тяжёлая капля на конце
-  const xm = x + sw * w * 0.7, xe = x + sw * w * 0.45; g.globalAlpha = al;
-  for (const [cc, k, oy] of [[dk, 1, 0], [c, 0.66, -w * 0.08]]){ g.fillStyle = cc; g.beginPath(); g.moveTo(x - w * 1.8 * k, y0 - w * 0.5);
-    g.bezierCurveTo(x - w * 0.55 * k, y0 + w * 0.9, xm - w * 0.45 * k, (y0 + y1) / 2, xe - rb * 0.5 * k, y1 - rb * 0.7 + oy); g.arc(xe, y1 + oy, rb * k, Math.PI + 0.5, -0.5, true);
-    g.bezierCurveTo(xm + w * 0.45 * k, (y0 + y1) / 2, x + w * 0.55 * k, y0 + w * 0.9, x + w * 1.8 * k, y0 - w * 0.5); g.closePath(); g.fill(); }
-  g.globalAlpha = al * 0.6; g.strokeStyle = '#fffaf0'; g.lineWidth = Math.max(1, w * 0.2); g.lineCap = 'round'; g.beginPath(); g.moveTo(x - w * 0.3, y0 + w * 1.2);
-  if (y1 - rb - (y0 + w * 1.2) > 2) g.quadraticCurveTo(xm - w * 0.3, (y0 + y1) / 2, xe - w * 0.28, y1 - rb * 0.9); g.stroke();
-  g.globalAlpha = al * 0.85; g.fillStyle = '#fffaf0'; g.beginPath(); g.arc(xe - rb * 0.36, y1 - rb * 0.3, rb * 0.22, 0, 6.283); g.fill(); g.globalAlpha = al;
-}
-function dlen28(q, t){                                          // длина потёка (доля) — рывками: медленная ползучесть + толчки
-  if (t <= 0) return 0; let s = 0; for (const [a, du, w] of q.S) s += w * sm28((t - a) / du); return 0.25 * Math.min(1, t / q.E) + 0.75 * s / q.Sa;
-}
-function win28Draw(g, d){                                       // на холсте стекла (из lens21Draw); true — нарисовано
-  if (!W28.on) return false; const s = G.s, t = G.rt - W28.t0, F = V28W;
-  if (!s || s.n !== W28.n2 || t > W28.T || G.screen !== 'win' && G.screen !== 'game'){ W28.on = false; log('fx.end', 'win28'); return false; }
-  const G2 = W28.geo, R = W28.W * d, cx = W28.cx * d, cy0 = W28.cy * d, PC = W28.pal.c, cols = PC.map(c => rgb28(c)), dks = PC.map(c => rgb28(c.map(x => Math.round(x * 0.55))));
-  if (t < F.fly){                                               // подлёт: капля от пил к стеклу, растёт
-    const u = t / F.fly, e = u * u, sy = (view.oy + view.k * CFG.grindY) * d, x = cx + (cx * 0.04) * (1 - e), y = sy + (cy0 - sy) * e, r = R * (0.06 + 0.24 * e);
-    g.globalAlpha = 0.6 + 0.4 * u; g.fillStyle = dks[0]; g.beginPath(); g.arc(x, y, r, 0, 6.283); g.fill();
-    g.fillStyle = cols[0]; g.beginPath(); g.arc(x - r * 0.08, y - r * 0.1, r * 0.86, 0, 6.283); g.fill(); g.globalAlpha = 1;
-    if (!W28.txt) W28.txt = text28(g, d); else { let k = 0; for (const q of W28.txt.L) if (q.ch !== ' ' && !q.c && k++ < 3) glyph28(q, W28.txt); }   // буквы — заранее, в кадрах подлёта
-    return true; }
-  const th = t - F.fly; if (!W28.hit){ W28.hit = true; shake(0, 1, F.shake); Sound.play('win.splat'); }
-  const P = F.pop, ts = th / P[4], sc = REDUCED ? 1 : ts < 0.3 ? ease28(ts / 0.3, P[0], P[1]) : ts < 0.65 ? ease28((ts - 0.3) / 0.35, P[1], P[2]) : ease28((ts - 0.65) / 0.35, P[2], P[3]);
-  const sq = REDUCED ? 0 : F.sq[0] * Math.pow(Math.max(0, 1 - th / F.sq[1]), 2), sx = sc * (1 + sq), sy = sc * (1 - sq * 0.85);   // «чпок»: сплющено в первый кадр
-  const to = W28.T - F.out, fo = t > to ? (t - to) / F.out : 0, al = 1 - fo * fo, vh = cv.clientHeight * d, slide = (REDUCED ? 0 : fo * fo) * F.slide * vh, cy = cy0 + slide;
-  const sagPx = REDUCED ? 0 : F.sag * vh * ease28(th / 1.5, 0, 1), kS = sagPx / Math.max(1, W28.botC * R * sy);   // оплывает: низ тянется вниз
-  const Y = (yu) => cy + yu * R * sy * (yu > 0 ? 1 + kS : 1), X = (xu) => cx + xu * R * sx;
-  g.save(); g.globalAlpha = al;
-  for (const q of W28.spray){ const u = (th - q.dl) / q.du; if (u < 1) continue; const sl = q.sl ? Math.max(0, th - q.dl - q.du - 0.3) * q.sl * d : 0, x = cx + q.x * d, y = cy + q.y * d + sl, rr = q.r * R;   // капли, долетевшие до стекла
-    g.fillStyle = dks[q.ci]; g.beginPath(); g.arc(x, y, rr, 0, 6.283); g.fill(); g.fillStyle = cols[q.ci]; g.beginPath(); g.arc(x - rr * 0.1, y - rr * 0.12, rr * 0.76, 0, 6.283); g.fill();
-    if (sl > 1){ g.fillRect(x - rr * 0.35, y - sl, rr * 0.7, sl); } g.fillStyle = '#fffaf0'; g.beginPath(); g.arc(x - rr * 0.32, y - rr * 0.34, rr * 0.24, 0, 6.283); g.fill(); }
-  { const k = R * sx / G2.p * 1, ky = R * sy / G2.p, oyp = G2.oy, hb = G2.Hp - oyp;   // пятно: верх как есть, низ растянут на оплывание
-    g.save(); g.translate(cx, cy); g.rotate(W28.tilt); g.drawImage(W28.out, 0, 0, G2.Wp, oyp + 1, -G2.ox * k, -oyp * ky, G2.Wp * k, (oyp + 1) * ky);
-    g.drawImage(W28.out, 0, oyp, G2.Wp, hb, -G2.ox * k, 0, G2.Wp * k, hb * ky * (1 + kS)); g.restore(); }
-  if (th < F.flash && !REDUCED){ const u = th / F.flash, rr = R * (0.7 + 1.1 * u), fg = g.createRadialGradient(cx, cy, rr * 0.2, cx, cy, rr);   // вспышка-ореол удара
-    fg.addColorStop(0, 'rgba(255,250,235,' + (0.5 * (1 - u) * (1 - u)).toFixed(3) + ')'); fg.addColorStop(0.7, 'rgba(255,240,210,' + (0.28 * (1 - u)).toFixed(3) + ')'); fg.addColorStop(1, 'rgba(255,240,210,0)');
-    g.fillStyle = fg; g.fillRect(cx - rr, cy - rr, rr * 2, rr * 2); }
-  for (const q of W28.drips){ const tt = th - 0.03, Lf = q.L * d; let L = dlen28(q, tt) * Lf + fo * R * 0.25; if (L < 1) continue;   // потёки
-    const w = q.w * R, x = X(q.x), y0 = Y(q.y), dt = tt - q.det, gr = Math.min(1, L / Lf);
-    const rb = w * (dt > 0 ? 0.75 + 0.75 * Math.min(1, dt / 0.6) * (0.6 + 0.6 * gr) : 1.15 + 0.6 * gr);
-    drip28(g, x, y0, y0 + L, w, rb, q.sw, cols[q.ci], dks[q.ci], al * (q.inner ? 0.94 : 0.97));
-    if (dt > 0 && dt < 0.9){ const Ld = dlen28(q, q.det) * Lf, yd = y0 + Ld + w * 0.6 + 0.5 * 1500 * d * dt * dt + 60 * d * dt, rd = w * (1.25 + 0.55 * Math.min(1, Ld / Lf));   // оторвалась и падает
-      if (yd < vh + rd){ g.globalAlpha = al * (1 - dt / 0.9); g.fillStyle = dks[q.ci]; g.beginPath(); g.ellipse(x + q.sw * w * 0.45, yd, rd * 0.86, rd * 1.18, 0, 0, 6.283); g.fill();
-        g.fillStyle = cols[q.ci]; g.beginPath(); g.ellipse(x + q.sw * w * 0.45 - rd * 0.1, yd - rd * 0.12, rd * 0.62, rd * 0.9, 0, 0, 6.283); g.fill(); g.globalAlpha = al; } } }
-  if (!REDUCED) for (const q of W28.spray){ const u = (th - q.dl) / q.du; if (u <= 0 || u >= 1) continue; const e = 1 - Math.pow(1 - u, 3), e0 = 1 - Math.pow(1 - Math.max(0, u - 0.1), 3);   // разлёт капель от центра
-    const x = cx + (q.x0 + (q.x - q.x0) * e) * d, y = cy + (q.y0 + (q.y - q.y0) * e) * d, xp = cx + (q.x0 + (q.x - q.x0) * e0) * d, yp = cy + (q.y0 + (q.y - q.y0) * e0) * d;
-    g.strokeStyle = cols[q.ci]; g.lineCap = 'round'; g.lineWidth = q.r * R * 2 * (1 - 0.3 * u); g.beginPath(); g.moveTo(xp, yp); g.lineTo(x, y); g.stroke(); }
-  g.globalAlpha = al;
-  if (!W28.txt) W28.txt = text28(g, d);                        // надпись: буквы впечатываются по очереди, дуга и наклон строки, дышит
-  const T = W28.txt, fs = T.fs, br = 1 + F.breathe[1] * Math.sin(t * F.breathe[0] * 6.283), lt = (q) => th - q.k * F.letter;
-  const ya = (q) => -F.arc * fs * 0.25 * (1 - q.xn * q.xn), ang = (q) => Math.atan(F.arc * 0.5 * q.xn * fs * 0.25 / (fs * 2));
-  g.save(); g.translate(cx, cy - fs * 0.05 + sagPx * 0.3); g.rotate(W28.tilt * 0.8); g.scale(br * sc, br * sc);
-  for (const D of T.LD){ const q = D.q, u = lt(q) - D.at; if (u <= 0) continue; const L = D.L * (0.3 * Math.min(1, u / 1.3) + 0.7 * sm28(u / 0.5) * 0.5 + 0.35 * sm28((u - 0.7) / 0.3));   // капли с букв
-    g.save(); g.translate(q.x + D.dx, q.y + ya(q)); g.rotate(ang(q)); drip28(g, 0, fs * 0.3, fs * 0.3 + L, D.w, D.w * 1.4, 0.3, '#ffeed6', rgb28(PC[0].map(x => Math.round(x * 0.28))), al); g.restore(); }   // кремовые, как буквы
-  for (const q of T.L){ if (q.ch === ' ') continue; const u0 = lt(q); if (u0 <= 0) continue; if (!q.c) glyph28(q, T); const u = Math.min(1, u0 / 0.16), ls = REDUCED ? 1 : u < 0.6 ? ease28(u / 0.6, 1.7, 0.88) : ease28((u - 0.6) / 0.4, 0.88, 1);
-    g.save(); g.translate(q.x, q.y + ya(q)); g.rotate(ang(q)); g.scale(ls, ls); g.globalAlpha = al * Math.min(1, u * 2.5); g.drawImage(q.c, -q.ox, -q.oy); g.restore(); }
-  g.restore(); g.restore(); g.globalAlpha = 1; return true;
-}
-function lens21Draw(){
-  const L = J21.lens, full26 = J26.scr.length > 0 || J26.was || W28.on; if (!L.length && !lensDirty.length && !full26) return;   // v28.2: ляп победы — тоже полная очистка   // v26: залпы — полная очистка
-  if (!lensCv){ lensCv = document.createElement('canvas'); lensCv.id = 'lens'; lensCv.style.pointerEvents = 'none'; $('game').appendChild(lensCv); }
-  if (lensCv.width !== cv.width || lensCv.height !== cv.height){ lensCv.width = cv.width; lensCv.height = cv.height; }
-  const g = lensCv.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); if (full26) g.clearRect(0, 0, lensCv.width, lensCv.height); else for (const b of lensDirty) g.clearRect(b[0], b[1], b[2], b[3]); lensDirty = [];
-  const d = DPR, A = V21.lens.a, Z = V21.lens.zoom; J26.was = scr26Draw(g, d); if (win28Draw(g, d)) J26.was = true; if (!L.length) return;
-  for (let i = L.length - 1; i >= 0; i--){ const q = L[i]; q.t = G.rt - q.t0; if (q.t >= q.T){ L.splice(i, 1); continue; }
-    if (q.v23){ lensDirty.push(lens23Draw(g, q, d)); continue; }   // v23: мелкая чистая капля без линзы
-    const u = q.t / q.T, sl = Math.max(0, q.t - 0.18); q.y = q.y0 + q.v * sl * sl * 1.6 + q.v * sl * 0.4;   // держится миг, потом стекает с ускорением
-    const pop = q.t < 0.09 ? 0.6 + 0.4 * (q.t / 0.09) : 1, al = (u > 0.62 ? 1 - (u - 0.62) / 0.38 : 1), r = q.r * pop * (1 - 0.25 * u), e = 1 + Math.min(0.45, (q.y - q.y0) / 60);   // вытягивается на ходу
-    const x = q.x * d, y = q.y * d, rx = r * d / Math.sqrt(e), ry = r * d * e, col = q.c.map(Math.round).join(','), pad = 4 * d;
-    lensDirty.push([x - rx - pad, q.y0 * d - q.r * d - pad, 2 * rx + 2 * pad, y + ry - q.y0 * d + q.r * d + 2 * pad]);   // капля и след до точки старта
-    if (q.y - q.y0 > 2){ const tw = rx * 0.32; g.globalAlpha = al * 0.32; g.fillStyle = 'rgba(' + col + ',1)';   // след: тонкая полоска выше капли
-      g.beginPath(); g.moveTo(x - tw, y - ry * 0.4); g.quadraticCurveTo(x - tw * 0.4, (q.y0 * d + y) / 2, x, q.y0 * d - r * d * 0.2); g.quadraticCurveTo(x + tw * 0.4, (q.y0 * d + y) / 2, x + tw, y - ry * 0.4); g.closePath(); g.fill(); }
-    g.save(); g.beginPath(); g.ellipse(x, y, rx, ry, 0, 0, 6.2832); g.clip();
-    g.globalAlpha = al * 0.9; g.translate(x, y); g.scale(1, -1); const sw = rx * 2 / Z, sh = ry * 2 / Z;   // линза: сцена под каплей — перевёрнута и крупнее
-    try { g.drawImage(cv, x - sw / 2, y - sh / 2, sw, sh, -rx, -ry, rx * 2, ry * 2); } catch (err) {}
-    g.setTransform(1, 0, 0, 1, 0, 0);
-    g.globalAlpha = al * A; g.fillStyle = 'rgba(' + col + ',1)'; g.fillRect(x - rx, y - ry, rx * 2, ry * 2);   // тело — цвет сока
-    const rg = g.createRadialGradient(x - rx * 0.15, y - ry * 0.2, Math.min(rx, ry) * 0.3, x, y, Math.max(rx, ry) * 1.02);   // преломление: к краю темнее
-    rg.addColorStop(0, 'rgba(0,0,0,0)'); rg.addColorStop(0.75, 'rgba(' + q.c.map(v => Math.round(v * 0.45)).join(',') + ',0.12)'); rg.addColorStop(1, 'rgba(' + q.c.map(v => Math.round(v * 0.3)).join(',') + ',0.5)');
-    g.globalAlpha = al; g.fillStyle = rg; g.fillRect(x - rx, y - ry, rx * 2, ry * 2);
-    const lg = g.createRadialGradient(x + rx * 0.12, y + ry * 0.32, 0, x + rx * 0.12, y + ry * 0.32, Math.max(rx, ry) * 0.85), lc = mixRgb(q.c, [255, 252, 235], 0.45).map(Math.round).join(',');   // свет сквозь каплю — светлое пятно снизу
-    lg.addColorStop(0, 'rgba(' + lc + ',0.42)'); lg.addColorStop(1, 'rgba(' + lc + ',0)'); g.globalAlpha = al; g.fillStyle = lg; g.fillRect(x - rx, y - ry, rx * 2, ry * 2);
-    g.restore();
-    g.globalAlpha = al * 0.55; g.strokeStyle = 'rgba(255,248,225,1)'; g.lineWidth = Math.max(1, rx * 0.12);   // каустика: светлый серп внизу справа
-    g.beginPath(); g.ellipse(x, y, rx * 0.78, ry * 0.78, 0, 0.25, 1.9); g.stroke();
-    g.globalAlpha = al * 0.9; g.fillStyle = '#ffffff'; g.beginPath(); g.ellipse(x - rx * 0.36, y - ry * 0.42, rx * 0.26, ry * 0.15, -0.6, 0, 6.2832); g.fill();   // блик
-    g.beginPath(); g.arc(x + rx * 0.3, y + ry * 0.38, Math.max(1, rx * 0.07), 0, 6.2832); g.fill(); }
-  g.globalAlpha = 1;
-}
-// Победа соком: широкая волна, крупные золотые капли вверх и обратно, пузырьки, световой проход по поверхности, капли на стекло.
-function win21Start(){
-  const W = V21.win, T = trough9(), yL = juiceY13(); J21.win = { t0: G.rt, y: yL };
-  for (const x of [CFG.W * 0.2, CFG.W * 0.5, CFG.W * 0.8]){ T.waves.push({ x, t0: G.rt, a: W.wave * (x === CFG.W * 0.5 ? 1 : 0.7) }); if (T.waves.length > 8) T.waves.shift(); }
-  const n = Math.round(lerp21(W.drops, R())), col = mixRgb(T.col, V13.trough.gold, V13.trough.gold[3]); J21.wdrops.length = 0;
-  for (let i = 0; i < n && J21.wdrops.length < V21.cap.wdrops; i++){ const x = CFG.W * (0.12 + 0.76 * (i + 0.5 * R()) / n), h = lerp21(W.h, R());
-    J21.wdrops.push({ x, x0: x, y: yL, vx: (R() - 0.5) * 30, vy: -Math.sqrt(2 * VIEW.pg * 0.6 * h), at: G.rt + 0.12 + 0.25 * R(), r: 4.4 + 2.2 * R(), c: mixRgb(col, [255, 236, 150], 0.25), gone: false }); }
-  for (let i = 0; i < W.bub; i++) if (T.bub.length < V9.trough.bubbles + 6) T.bub.push({ x: CFG.W * (0.1 + 0.8 * R()), d: 0, r: 1 + R() * 1.6, v: 8 + R() * 10, ph: R() * 6.28 });
-  J21.lensAt = -9; lens21(CFG.W * 0.5, CFG.grindY - 120, W.lens, rgbToHex21(col));
-}
 const rgbToHex21 = (c) => '#' + c.map(v => Math.round(clamp(v, 0, 255)).toString(16).padStart(2, '0')).join('');
-function win21Update(dt){
-  const g = VIEW.pg * 0.6;
-  for (const q of J21.wdrops){ if (q.gone || G.rt < q.at) continue; q.vy += g * dt; q.x += q.vx * dt; q.y += q.vy * dt;
-    const yL = juiceY13(); if (q.vy > 0 && q.y >= yL){ q.gone = true; const T = trough9(); T.waves.push({ x: q.x, t0: G.rt, a: q.v23 ? 0.8 : 1.6, k: q.v23 ? V23.win.waveK : undefined }); if (T.waves.length > 8) T.waves.shift(); } }
-}
-function win21Draw(c){                                          // перед передней доской корыта (её низ закрывает)
-  const Wn = J21.win; if (!Wn) return; const t = G.rt - Wn.t0, Wc = V21.win; if (t > 2.4){ J21.win = null; return; }
-  for (const q of J21.wdrops){ const ct = G.rt - q.at; if (ct > 0 && ct < 0.28){ const u = ct / 0.28, yS = juiceY13() + 1;   // корона на поверхности в миг выброса
-      c.globalAlpha = 0.85 * (1 - u); c.strokeStyle = rgbCss(mixRgb(q.c, [255, 250, 225], 0.5)); c.lineWidth = 1.6 * (1 - u) + 0.5; c.beginPath(); c.ellipse(q.x0, yS, 4 + 14 * u, 1.4 + 2.4 * u, 0, 0, 6.29); c.stroke();
-      c.fillStyle = rgbCss(q.c); for (let j = -2; j <= 2; j++){ const xj = q.x0 + j * (3 + 9 * u), yj = yS - (5 - Math.abs(j)) * 2.2 * Math.sin(Math.PI * u); c.beginPath(); c.arc(xj, yj, 1.4 * (1 - u * 0.5), 0, 6.29); c.fill(); } }
-    if (q.gone || G.rt < q.at) continue; const v = Math.hypot(q.vx, q.vy) || 1, e = 1 + Math.min(0.8, v / 300), col = q.c;
-    c.globalAlpha = 1; c.fillStyle = rgbCss(shadeRgb(col, 0.55)); c.beginPath(); dropPath19(c, q.x + 0.6, q.y + 0.8, q.r * e, q.r / Math.sqrt(e), q.vx / v, q.vy / v, 1); c.fill();
-    c.fillStyle = rgbCss(col); c.beginPath(); dropPath19(c, q.x, q.y, q.r * e, q.r / Math.sqrt(e), q.vx / v, q.vy / v, 1); c.fill();
-    c.fillStyle = '#fffdf4'; c.globalAlpha = 0.9; c.beginPath(); c.arc(q.x - q.r * 0.35, q.y - q.r * 0.35, q.r * 0.28, 0, 6.29); c.fill(); }
-  const u = (t - 0.25) / Wc.light[2];                           // световой проход по поверхности сока слева направо
-  if (u > 0 && u < 1){ const T = V13.trough, x0 = T.end[1], x1 = CFG.W - T.end[1], x = x0 + (x1 - x0) * u, y = juiceY13() + 4, w = 70;
-    const gr = c.createRadialGradient(x, y, 0, x, y, w); gr.addColorStop(0, Wc.light[0]); gr.addColorStop(1, 'rgba(255,230,154,0)');
-    c.save(); c.globalAlpha = Wc.light[1] * Math.sin(Math.PI * u); c.globalCompositeOperation = 'lighter'; c.fillStyle = gr; c.translate(x, y); c.scale(1, 0.16); c.translate(-x, -y); c.fillRect(x - w, y - w, 2 * w, 2 * w); c.restore(); }
-  c.globalAlpha = 1;
-}
 function juice21(e, w){                                        // топор и булава: тот же веер по линии раскола (вдоль удара)
   if (!F13.live) return; const r = Math.max(8, Math.sqrt(e.area / Math.PI) * 0.8), ux = e.ux || 0, uy = e.uy || 1;
   cut23(e.kind, e.area, [e.x - ux * r, e.y - uy * r], [e.x + ux * r, e.y + uy * r], ux, uy, w);
 }
 // кадр: выбросы по расписанию, фонтаны «после», дуги, бензопила, победа; новый уровень — всё долой
 function j21Update(gdt, rdt){
-  const s = G.s; if (J21.s !== s){ J21.s = s; J21.arcs.length = 0; J21.gey.length = 0; J21.pulse.length = 0; J21.wdrops.length = 0; J21.win = null; J21.cuts.length = 0; }
+  const s = G.s; if (J21.s !== s){ J21.s = s; J21.arcs.length = 0; J21.gey.length = 0; J21.pulse.length = 0; }
   if (!s || !F13.live) return;
   for (let i = J21.pulse.length - 1; i >= 0; i--){ const P = J21.pulse[i]; if (G.rt >= P.at){ J21.pulse.splice(i, 1); if (F13.frags.includes(P.f) || P.k > 0.9) pulse21(P); } }
-  if (gdt > 0){ gey21Update(gdt); arcs21Update(gdt); chain21(s, gdt); win21Update(gdt); }
-  if (J21.combo && G.rt >= J21.combo.at){ const q = J21.combo; J21.combo = null; lens21(q.x, q.y, 1, q.hex); }
-  if (G.screen === 'win' && J21.winFor !== G.winAt){ J21.winFor = G.winAt; win23Start(); }   // v23: один локальный всплеск
-  const P = J21.peak; P.pt = Math.max(P.pt, PT.n); P.liq = Math.max(P.liq, LIQ.n); P.arcs = Math.max(P.arcs, J21.arcs.length); P.lens = Math.max(P.lens, J21.lens.length);
+  if (gdt > 0){ gey21Update(gdt); arcs21Update(gdt); chain21(s, gdt); }
+  const P = J21.peak; P.pt = Math.max(P.pt, PT.n); P.liq = Math.max(P.liq, LIQ.n); P.arcs = Math.max(P.arcs, J21.arcs.length);
 }
 // =====================================================================================================
-// v23 «Жидкость и объём» (ревью GPT №2а: P0.1 фонтан, P0.2 рез, P0.3 победа, P1.3 стекло, P1.5 кляксы, P2.2 отдача; только вид, ядро не знает).
+// v23 «Жидкость и объём» (ревью GPT №2а: P0.1 фонтан, P0.2 рез, P0.3 победа, P1.5 кляксы, P2.2 отдача; v31: без стекла и победного всплеска в корыте; только вид, ядро не знает).
 // Сок — связная жидкость, а не россыпь фигур. Пилы: импульс = контактная клякса у разрушаемого куска → 2–3 сужающиеся струи (корень у
 // контакта, кончик тоньше и быстрее — струя тянется) → струи рвутся на простые капли, вытянутые по полёту; под контактом — струйка по
 // диску вниз. Пока тело мелется — импульс каждые 75–120 мс (на рывке сразу), у крупного первые 2–3 подряд; цвет — по телу, которое
 // мелется сейчас (рядом мелется крупнее — мелкое почти молчит). Рез: один веер на стороне выхода лезвия, 2 тонкие дуги, 10–14 капель;
-// свайп через несколько плодов — 1 крупный веер + 2 акцента. Ед. — мира (400 = W; 1 % W = 4 ед.); стекло — доли ширины экрана.
+// свайп через несколько плодов — 1 крупный веер + 2 акцента. Ед. — мира (400 = W; 1 % W = 4 ед.).
 // =====================================================================================================
 const V23 = {
   // палитра сока (тело, толща, блик) — GPT №2а P0.1; остальные виды — из KINDS[вид].juice (толща темнее, блик светлее)
@@ -8839,24 +8432,17 @@ const V23 = {
       drops: [16, 22], dropR: [1.7, 3.1], acc: [7, 9], accR: [4.0, 6.0], every: [0.055, 0.08], blob: 1.3, decay: 0.45, low: [10, 14] },   // low — низкие капли у контакта (полоса 10–30 ед. над зубьями, вне счёта верхнего выброса)
     norm: { jetH: [32, 48], jetT: [0.08, 0.12], spread: 0.3, accR: [2.0, 2.8] },   // обычный кусок: подъём 8–12 % W (v23.2, было 14–18)
     edge: [36, 8, 4],                  // брызги с нижней кромки мотаемого тела в сторону вращения диска: в с у крупного, у обычного, доля акцентов (1 из N)
-    gapW: 1.35, wave: 2.6, tsplash: [1, 2],   // струйки в корыто толще (множитель), волна на импульс крупного (ед.), всплеск в корыте (капель)   // первое касание крупного: импульсов подряд (крупное / огромное), шаг (с)
     old: { bits: 0, juice: 0.1, juiceH: 0.45, chips: 0.08, mist: 0.45, eat: 0.55, eatNear: 0.25, eatBits: 0.3 },   // прежние потоки churn13/bite13 (доля)
   },
   cut: { fan: [36, 54], fanT: [0.07, 0.09], acc: [24, 36], accT: [0.06, 0.08], arcs: 2, arcL: [30, 48], arcW: [1.0, 2.0], arcT: [0.12, 0.18],   // v23.2: веер 6–9 % W (крупное ×1,5), 60–90 мс, без кромки с узлами   // v23.1: крупное — веер и дуги в 1,7 раза длиннее
     drops: [12, 18], dropR: [0.8, 1.8], accDrops: [8, 12], group: 0.09, line: [2, 3], lineBig: [10, 14] },   // lineBig — капли с линии реза крупного: быстро наружу, срез не закрывают
-  // стекло (P1.3): диаметр (доля ширины экрана), вторая — реже и меньше, жизнь (с), сдвиг вниз (доля ширины), центр от края (доля), полоса по
-  // высоте, не чаще (с), на уровень не больше, прозрачность тела, блик
-  lens: { d: [0.03, 0.04], d2: [0.011, 0.015], second: 0.25, T: [0.5, 0.9], slide: [0.01, 0.02], edge: [0.05, 0.12], band: [0.22, 0.6], every: 1.5, perLevel: 3,
-    a: [0.22, 0.32], hi: [0.35, 0.5], col: { melon: '#F06472', plum: '#B76CA7', grape: '#B76CA7', gold: '#F1BC50' } },
-  // победа (P0.3): один локальный всплеск — капель, радиус, подъём (ед.), пузырьков и их радиус, волна (ед.) и её затухание (1/с), цвета
-  win: { drops: [5, 7], r: [1.6, 3.0], h: [16, 28], bub: [3, 5], bubR: [0.8, 1.6], wave: 5, waveK: 5.2, base: '#ECAF35', lt: '#FFE293' },
   // мокрый след на дереве (P1.5): ядро (радиус, ед.; 3–5 % W в поперечнике), лепестков и их длина, потёков и длина, прозрачность, корона на
   // контакте (с), держится, живёт (с), одновременно
   stain: { core: [7, 12], pet: [3, 5], petL: [2, 8], drip: [1, 2], dripL: [8, 16], a: [0.6, 0.75], flash: 0.09, hold: 1.2, life: 2.8, max: 6,
     col: { melon: '#C74A53', plum: '#874575', grape: '#874575', lime: '#9EAF40', cuke: '#9EAF40' } },
   cap: { jets: 6, blobs: 8, runs: 10, fans: 6 }, top: 180,   // v23.2: выразительных струй в кадре — 6 на весь ряд; капель верхнего выброса — до 90 на весь кадр
 };
-const J23 = { en: 0, jets: [], blobs: [], runs: [], fans: [], after: [], grp: { t0: -9, fan: false, acc: 0 }, s: null, lensN: 0, dom: null, peak: { jets: 0, blobs: 0 } };
+const J23 = { en: 0, jets: [], blobs: [], runs: [], fans: [], after: [], grp: { t0: -9, fan: false, acc: 0 }, s: null, dom: null, peak: { jets: 0, blobs: 0 } };
 const PAL23 = {};
 function pal23(kind){
   let p = PAL23[kind]; if (p) return p;
@@ -8990,18 +8576,11 @@ function pulse23(f, x, y, k, d, out){
     spawnP(P_FOUNT, x0, y - 2, vx, vy, fly23(y - 2, vy, yE), 1.0 + 1.3 * Math.pow(R(), 1.3), pal.ci, true); } }   // v23.2: сочная полоса у контакта — низко и вширь
   if (k >= 0.5 && F13.saws){ const C = V13.bite, U = C.churn, c = kcol13(f.kind), nb = k >= 1.1 ? lerp21(S.bits, R()) : R() < S.bitP ? 1 : 0; for (let i = 0; i < Math.round(nb); i++){ F13.shB = Math.max(F13.shB || 0, 1); churn13Bit(x + (R() - 0.5) * bw * 0.5, y, d || 1, c, U, C.shard, m * 0.6); } }
   run23(x, y + 1, lerp21([S.run[0], S.run[1]], m) * (0.7 + 0.3 * Math.min(1, kk)) * (big ? 1.4 : 1), lerp21([S.run[2], S.run[3]], R()), pal, f);
-  if (k >= 0.5){ const xs = chew13Gap(clamp(x, 1, CFG.W - 1), f.kind, 0.5 + 0.5 * m); if (big) trough23(xs, kk); }
+  if (k >= 0.5) chew13Gap(clamp(x, 1, CFG.W - 1), f.kind, 0.5 + 0.5 * m);
   J23.peak.jets = Math.max(J23.peak.jets, J23.jets.length); J23.peak.blobs = Math.max(J23.peak.blobs, J23.blobs.length);
 }
 // v23.1: выше зоны под кучей — не в одну линию (иначе капли собираются «потолком» под постройкой)
 const cap23 = (room, h) => h <= room ? h : room * (0.55 + 0.45 * R());
-// v23.1: вниз — струйка в корыто толще, волна выше, на месте струйки всплеск сока корыта
-function trough23(xs, k){
-  const S = V23.saw, T = trough9(), v = clamp(Math.floor(xs / (CFG.W / V13.saw.n)), 0, V13.saw.n - 1); (F13.vamp || (F13.vamp = []))[v] = G.rt + 0.45;
-  T.waves.push({ x: xs, t0: G.rt, a: S.wave * Math.min(1, k) }); if (T.waves.length > 10) T.waves.shift();
-  const yL = juiceY13(), ci = pcol(rgbToHex21(mixRgb(T.col, V13.trough.gold, V13.trough.gold[3])));
-  for (let i = 0; i < Math.round(lerp21(S.tsplash, R())); i++){ const vy = -(70 + 70 * R()); spawnP(P_DROP, xs + (R() - 0.5) * 5, yL - 1, (R() - 0.5) * 50, vy, fly23(yL - 1, vy, yL), 0.8 + 0.8 * R(), ci, true); }
-}
 // v23.1: брызги с нижней кромки мотаемого тела — сок бьёт из самого куска в сторону вращения диска под кромкой
 function edge23(f, L, Rx, y, dt){
   const S = V23.saw, big = (f.A0 || f.area) >= V21.saw.bigA || f.kind === 'melon', pal = pal23(f.kind), kd = clamp((f.area || 1) / (f.A0 || f.area || 1), 0.4, 1), yE = CFG.grindY - 2;
@@ -9021,7 +8600,7 @@ function churn23(f, L, Rx, y, k, dt, sk){                          // пока �
     if (T[di] === undefined) T[di] = G.rt + lerp21(S.every, R()) * (0.3 + 0.7 * R());
     if (jerk) T[di] = Math.min(T[di], G.rt);
     if (G.rt < T[di]) continue; T[di] = G.rt + (big ? lerp21(S.big.every, R()) * (d1 > d0 ? 1.4 : 1) : lerp21(S.every, R()) * (d1 > d0 ? 1.8 : 1)) / Math.min(1.6, Math.max(1, k * 0.7)) * (sk ? 1.6 : 1);
-    if (big) chew13Gap(clamp(st * (di + 0.5), 1, CFG.W - 1), f.kind, 1);   // v23.1: струйки в корыто — по всем дискам под крупным телом
+    if (big) chew13Gap(clamp(st * (di + 0.5), 1, CFG.W - 1), f.kind, 1);   // v23.1: струйки в траву — по всем дискам под крупным телом
     if (!main){ if (J23.tok < 1.5){ T[di] = G.rt + 0.03; continue; } J23.tok -= 1; if (dk < 1 && R() < 0.25) continue; }   // главное тело — вне бюджета; мелочь — из общего бюджета, рядом с крупным реже
     const outer = di === d0 || di === d1; if (big && !outer) continue;   // v23.2: крупное — выброс по краям куска (середина открыта), под серединой — только сток
     const o = d1 > d0 ? (di === d0 ? -1 : 1) : ((f.so23 = -(f.so23 || 1))), x = big || d1 === d0 ? (o < 0 ? L + 3 + 6 * R() : Rx - 3 - 6 * R()) : a + (b - a) * (0.25 + 0.5 * R()), d = di % 2 ? 1 : -1;
@@ -9036,12 +8615,10 @@ function hit23(f){                                              // первое 
 function churnEnd23(f, x, y){ const S = V23.saw, big = (f.A0 || f.area) >= V21.saw.bigA; J23.after.push({ at: G.rt + 0.02, f, k: big ? 1 : 0.6, x, y });   // тело ушло в зубья: всплеск; крупное — ещё два затухающих
   if (big){ J23.after.push({ at: G.rt + S.after[2], f, k: S.after[0], x, y }); J23.after.push({ at: G.rt + 2 * S.after[2], f, k: S.after[1], x, y }); } }
 function j23Update(gdt){
-  const s = G.s; if (J23.s !== s){ J23.s = s; J23.jets.length = 0; J23.blobs.length = 0; J23.runs.length = 0; J23.fans.length = 0; J23.after.length = 0; J23.lensN = 0; }
+  const s = G.s; if (J23.s !== s){ J23.s = s; J23.jets.length = 0; J23.blobs.length = 0; J23.runs.length = 0; J23.fans.length = 0; J23.after.length = 0; }
   if (!s || !F13.live) return;
   J23.tok = Math.min(V23.saw.tok[1], (J23.tok || 0) + gdt * V23.saw.tok[0]);
   { let n = 0; const yT = CFG.grindY - 50; for (let i = 0; i < PT.n; i++) if (PT.type[i] === P_FOUNT && PT.y[i] < yT) n++; J23.fl = n * 1.6; }   // v23.2: живые капли верхнего выброса — выше полосы контакта (50 ед. над зубьями); ×1,6 — запас на капли, которые ещё поднимаются
-  if (gdt > 0 && F13.vst){ const st = CFG.W / V13.saw.n, T = trough9(), sw = J23.sw || (J23.sw = []);   // v23.2: каждое попадание стока в корыто — своя маленькая волна
-    for (let v = 0; v < V13.saw.n; v++){ if (!(F13.vst[v] > G.rt) || G.rt < (sw[v] || 0)) continue; sw[v] = G.rt + 0.14 + 0.12 * R(); T.waves.push({ x: st * (v + 0.5) + (v % 2 ? 2.5 : -2.5), t0: G.rt, a: 0.4 + 0.7 * R(), k: 3 + 2 * R(), kx: 0.07 + 0.05 * R() }); if (T.waves.length > 12) T.waves.shift(); } }
   let D = null; for (const f of F13.frags) if (f.ph === 'churn' && (!D || f.area > D.area)) D = f; J23.dom = D;
   for (let i = J23.after.length - 1; i >= 0; i--){ const A = J23.after[i]; if (G.rt < A.at) continue; J23.after.splice(i, 1);
     const main = A.f === J23.dom || (A.f.A0 || A.f.area) >= V21.saw.bigA; if (!main && J23.tok < 1.5) continue; J23.tok = Math.max(0, J23.tok - 1);   // мелочь — из общего бюджета
@@ -9065,7 +8642,7 @@ function cut23(kind, area, p, q, ux, uy, w){
       for (let k = 0; k < C.arcs; k++){ const side = k ? 1 : -1, t = 0.45 + 0.3 * R(), ax = nx * side + ux * 0.6, ay = ny * side + uy * 0.6 - 0.5, m = Math.hypot(ax, ay) || 1, L = lerp21(C.arcL, R()), T = lerp21(C.arcT, R()), sp = L / T * 1.1;
         arc21(p[0] + dx * t, p[1] + dy * t, ax / m * sp, ay / m * sp, lerp21(C.arcW, R()) * 0.5, T, pal.b, L); } }
     if (kind === 'melon'){ const cs = pcol((ART[kind] && ART[kind].col.seed) || '#2b1a12'); for (let k = 0; k < 2; k++) spawnP(P_SEED, ex, ey, ux * 120 + (R() - 0.5) * 160, uy * 120 - 80 - R() * 100, 0.5, 2.2, cs); }
-    kick21(ux, uy, 1); if (J >= 0.8) lens23(ex, ey, kind); }
+    kick21(ux, uy, 1); }
   else if (g.acc < 2){ g.acc++; const fd = fanDir23(ux, uy); { const dx = q[0] - p[0], dy = q[1] - p[1], ln = Math.hypot(dx, dy) || 1, nx = -dy / ln, ny = dx / ln;
       for (let k = 0; k < C.arcs; k++){ const side = k ? 1 : -1, ax = nx * side + ux * 0.6, ay = ny * side + uy * 0.6 - 0.5, m = Math.hypot(ax, ay) || 1, L = lerp21(C.arcL, R()) / 1.5, T = lerp21(C.arcT, R()) * 0.8, sp = L / T * 1.1;
         arc21(p[0] + dx * 0.5, p[1] + dy * 0.5, ax / m * sp, ay / m * sp, lerp21(C.arcW, R()) * 0.5, T, pal.b, L); } } fan23(ex, ey, fd[0], fd[1], lerp21(C.acc, R()) * sz, lerp21(C.accT, R()), pal, Math.round(lerp21(C.accDrops, R()) * Math.min(1.1, J)), C.dropR); }
@@ -9073,53 +8650,6 @@ function cut23(kind, area, p, q, ux, uy, w){
   const nl = Math.round(lerp21(big ? [4, 6] : C.line, R()) * Math.min(1.15, J));   // v23.2: капли с линии — немного (масса — в веере и дугах)
   for (let k = 0; k < nl; k++){ const t = 0.15 + 0.7 * R(), side = k % 2 ? 1 : -1, sp = big ? 220 + 160 * R() : 90 + 110 * R();
     spawnP(P_DROP, p[0] + dx * t, p[1] + dy * t, (nx * side + ux * 0.4) * sp, (ny * side + uy * 0.4) * sp - 40, big ? 0.2 + 0.14 * R() : 0.16 + 0.1 * R(), big ? 0.8 + 0.9 * Math.pow(R(), 1.5) : 0.6 + 0.6 * R(), pal.ci, true); }
-}
-// --- капли на стекле: мелкие, чистый цвет сока, один мягкий блик; у боковых краёв; одна на крупное событие, не больше 3 за уровень ---
-function lens23(wx, wy, kind){
-  const L = V23.lens; if (G.rt - J21.lensAt < L.every || REDUCED || J23.lensN >= L.perLevel) return 0; const s = G.s; if (!s) return 0;
-  const W = cv.clientWidth, H = cv.clientHeight, sx = view.ox + wx * view.k, hex = L.col[kind] || (kind === 'gold' ? L.col.gold : pal23(kind).b), c = hexRgb(hex);
-  const heap = []; for (const b of s.bodies){ if (b.y > CFG.grindY - 20) continue; heap.push([view.ox + b.x * view.k, view.oy + b.y * view.k, b.rad * view.k + W * 0.05]); }
-  const n = R() < L.second ? 2 : 1; let made = 0;
-  for (let i = 0; i < n && J21.lens.length < 2; i++){   // v23.2: не больше 2 одновременно
-    for (let tr = 0; tr < 10; tr++){ const left = (sx < W / 2) !== (i === 1), r = W * (i ? lerp21(L.d2, R()) : lerp21(L.d, R())) / 2, x = left ? W * lerp21(L.edge, R()) : W * (1 - lerp21(L.edge, R())), y = H * lerp21(L.band, R());
-      if (heap.some(h => Math.hypot(h[0] - x, h[1] - y) < h[2] + r)) continue;
-      if (J21.lens.some(q => Math.hypot(q.x - x, q.y - y) < q.r + r + 8)) continue;
-      J21.lens.push({ x, y, y0: y, r, t0: G.rt, t: 0, T: lerp21(L.T, R()), v: W * lerp21(L.slide, R()), c, a: lerp21(L.a, R()), hi: lerp21(L.hi, R()), ph: R() * 6.28, v23: 1 }); made++; break; } }
-  if (made){ J21.lensAt = G.rt; J23.lensN++; log('fx.start', 'lens23', made); }
-  return made;
-}
-function lens23Draw(g, q, d){                                   // рисует одну каплю (вызов из lens21Draw); возвращает рамку для очистки
-  const u = q.t / q.T, fi = Math.min(1, q.t / 0.04), al = fi * (u > 0.6 ? 1 - (u - 0.6) / 0.4 : 1), sl = Math.min(1, Math.max(0, (q.t - 0.08) / (q.T - 0.08)));
-  q.y = q.y0 + q.v * sl * sl;                                    // держится миг, потом сползает на 1–2 % ширины
-  const e = 1 + 0.18 * sl, x = q.x * d, y = q.y * d, rx = q.r * d / Math.sqrt(e), ry = q.r * d * e, col = q.c.map(Math.round).join(','), dk = q.c.map(v => Math.round(v * 0.7)).join(',');
-  g.globalAlpha = al * 0.16; g.fillStyle = '#fffaf2'; g.beginPath(); g.ellipse(x, y, rx, ry, 0, 0, 6.2832); g.fill();   // стекло под каплей чуть светлее — цвет сока не мешается с зеленью в бурый
-  const gr = g.createRadialGradient(x - rx * 0.2, y - ry * 0.25, 0, x, y + ry * 0.1, Math.max(rx, ry));   // тело: чистый цвет сока, толща к низу-краю
-  gr.addColorStop(0, 'rgba(' + col + ',' + (q.a * 1.1).toFixed(3) + ')'); gr.addColorStop(0.75, 'rgba(' + col + ',' + Math.min(0.7, q.a * 1.9).toFixed(3) + ')'); gr.addColorStop(1, 'rgba(' + dk + ',' + Math.min(0.8, q.a * 2.4).toFixed(3) + ')');
-  g.globalAlpha = al; g.fillStyle = gr; g.beginPath(); g.ellipse(x, y, rx, ry, 0, 0, 6.2832); g.fill();
-  g.globalAlpha = al * q.hi; g.fillStyle = '#FFE4CD'; g.beginPath(); g.ellipse(x - rx * 0.32, y - ry * 0.36, rx * 0.3, ry * 0.2, -0.6, 0, 6.2832); g.fill();   // один мягкий блик ≈ 6 % площади
-  g.globalAlpha = 1; const pad = 3 * d;
-  return [x - rx - pad, q.y0 * d - q.r * d - pad, 2 * rx + 2 * pad, y + ry - q.y0 * d + q.r * d + 2 * pad];
-}
-// --- победа: один локальный всплеск в корыте — 5–7 золотистых капель, пузырьки, волна гаснет за 450–650 мс ---
-function win23Start(){
-  const W = V23.win, T = trough9(), yL = juiceY13(), st = CFG.W / V13.saw.n, xc = J23.lastX !== undefined ? J23.lastX : CFG.W / 2;
-  const x0 = clamp(st * Math.round(xc / st), st, CFG.W - st);  // в щели между дисками — капли видны
-  J21.win = { t0: G.rt, y: yL, x: x0 };
-  T.waves.push({ x: x0, t0: G.rt, a: W.wave, k: W.waveK }); if (T.waves.length > 8) T.waves.shift();
-  const n = Math.round(lerp21(W.drops, R())), base = hexRgb(W.base); J21.wdrops.length = 0;
-  for (let i = 0; i < n && J21.wdrops.length < V21.cap.wdrops; i++){ const a = -Math.PI / 2 + (i / (n - 1) - 0.5) * 1.1 + (R() - 0.5) * 0.2, h = lerp21(W.h, R()), v = Math.sqrt(2 * VIEW.pg * 0.6 * h);
-    J21.wdrops.push({ x: x0, x0, y: yL, vx: Math.cos(a) * v * 0.8, vy: -Math.sqrt(2 * VIEW.pg * 0.6 * h), at: G.rt + 0.03 * R(), r: lerp21(W.r, R()), c: mixRgb(base, hexRgb(W.lt), 0.15 * R()), gone: false, v23: 1 }); }
-  const nb = Math.round(lerp21(W.bub, R())); for (let i = 0; i < nb; i++) if (T.bub.length < V9.trough.bubbles + 6) T.bub.push({ x: x0 + (R() - 0.5) * 30, d: 0, r: lerp21(W.bubR, R()), v: 8 + R() * 10, ph: R() * 6.28 });
-  if (!salvo26(x0, CFG.grindY - 60, 0.7, 'gold', true, 'win')){ J21.lensAt = -9; lens23(x0, CFG.grindY - 120, 'gold'); }   // v26: победа — залп на экран
-}
-function win23Draw(c){
-  const Wn = J21.win; if (!Wn) return; const t = G.rt - Wn.t0; if (t > 1.6){ J21.win = null; return; } const W = V23.win, lt = hexRgb(W.lt);
-  if (t < 0.12){ const u = t / 0.12, yS = juiceY13() + 1; c.globalAlpha = 0.8 * (1 - u); c.fillStyle = rgbCss(hexRgb(W.base)); c.beginPath(); c.ellipse(Wn.x, yS, 5 + 10 * u, 1.2 + 1.6 * u, 0, 0, 6.29); c.fill(); }   // корона на поверхности — миг
-  for (const q of J21.wdrops){ if (q.gone || G.rt < q.at) continue; const v = Math.hypot(q.vx, q.vy) || 1, e = 1 + Math.min(0.6, v / 320), col = q.c;
-    c.globalAlpha = 1; c.fillStyle = rgbCss(shadeRgb(col, 0.72)); c.beginPath(); dropPath19(c, q.x + 0.4, q.y + 0.5, q.r * e, q.r / Math.sqrt(e), q.vx / v, q.vy / v, 1); c.fill();
-    c.fillStyle = rgbCss(col); c.beginPath(); dropPath19(c, q.x, q.y, q.r * e, q.r / Math.sqrt(e), q.vx / v, q.vy / v, 1); c.fill();
-    c.fillStyle = rgbCss(lt); c.globalAlpha = 0.85; c.beginPath(); c.arc(q.x - q.r * 0.3, q.y - q.r * 0.32, q.r * 0.34, 0, 6.29); c.fill(); }
-  c.globalAlpha = 1;
 }
 // --- мокрый след на дереве: неровное ядро, 3–5 неравных лепестков, 1–2 потёка; дерево просвечивает (умножение); корона — только миг касания ---
 function stain23(seed, ang){
@@ -9156,9 +8686,8 @@ function stainDraw23(c, q, t){
 // цвет). Из пятна — 1–4 потёка: ползут вниз по лицу детали с неровной скоростью, у нижней кромки идут по ней под уклон и срываются каплей;
 // капля падает на нижнюю деталь (там новое пятно) или в пилы. Высыхание: сначала тает блик, потом цвет; след потёка сохнет сверху.
 // К 6 с после реза дерево чистое. Свежие куски (R3.st), катясь по дереву, оставляют мазки у точки касания.
-// Экран. Залп по сочному моменту — бензопила через несколько плодов, много массы на пилах за 0,6 с или крупное тело в пилах, серия из 3+
-// резов, победа: 3–7 капель и 1–2 кляксы летят от места события к краю экрана, шлёпаются, стекают с неровной скоростью и гаснут.
-// Ед. — мира (400 = W); экран — CSS px и доли ширины/высоты экрана.
+// Экран (залпы капель и клякс на стекло) снят в v31 по слову Андрея «сделаем чтобы сок не летел в экран».
+// Ед. — мира (400 = W).
 // =====================================================================================================
 const V26 = {
   on: true,
@@ -9174,19 +8703,9 @@ const V26 = {
     smudge: { step: [7, 11], core: [2.3, 4.0], stretch: 1.9, age: 3.5, runP: 0.3, backP: 0.35 },   // мокрый след куска: шаг (ед.), ядро, вытянут по ходу, сколько живёт мокрый срез (с)
     chain: 0.2, saw: { every: [0.28, 0.42], h: [30, 120], dx: 55 },   // бензопила: пятно по пути не чаще (с); пилы: сок вверх на дерево у крупного тела
   },
-  scr: {
-    gap: [0.8, 1.4],                                  // пауза между залпами (с): сильный / слабый
-    maxDrops: 10, maxBig: 2,
-    mass: { win: 0.6, n: 5, nA: 2500, area: 6000, big: 4000, full: 9000 },   // пилы: окно (с), плодов за окно (и их масса от nA), масса (площадь, ед.²); одно тело от big; сила 1 — full
-    combo: [3, 0.8, 2],                               // серия: резов за окно (с) не меньше чем из стольких взмахов
-    kMin: 0.5, heat: [0.15, 0.12],                     // залп — от силы kMin; после залпа следующий сильнее «жара» на heat[0], жар гаснет heat[1] в с (сочный момент — редкий)
-    drops: [3, 7], big: [0.042, 0.05], small: [0.011, 0.02],   // капель на залп; радиус (доля ширины экрана): клякса (Ø 8–10 % W), капля (Ø 2–4 % W)
-    fly: [0.05, 0.14], pop: 0.06, hold: [0.12, 0.3], slide: [0.8, 1.6], v: [0.05, 0.1],   // полёт (с), шлепок (с), держится, стекает (с), скорость (доля высоты в с)
-    edge: [0.03, 0.2], corner: 0.25, a: [0.5, 0.62],   // центр капли от края (доля ширины), доля в верхних углах, прозрачность тела
-  },
 };
-const J26 = { s: null, spots: [], runs: [], falls: [], scr: [], surf: null, surfKey: null, surfB: null, woodClip: null, pos: new Map(), posAt: 0, nSm: 0,
-  saw: [], cuts: [], ch: { F: null, ids: null, A: 0, fired: 0, at: -9 }, salvoAt: -9, heat: 0, was: false, lastT: 0, peak: { spots: 0, runs: 0, falls: 0, scr: 0 }, n: { salvo: 0, spots: 0 } };
+const J26 = { s: null, spots: [], runs: [], falls: [], surf: null, surfKey: null, surfB: null, woodClip: null, pos: new Map(), posAt: 0, nSm: 0,
+  ch: { F: null, at: -9 }, lastT: 0, peak: { spots: 0, runs: 0, falls: 0 }, n: { spots: 0 } };
 const CS26 = {};
 function cs26(kind){                                            // цвета пятна по виду (палитра мокрого следа v23)
   let c = CS26[kind]; if (c) return c; const hex = V23.stain.col[kind] || rgbToHex21(shadeRgb(cssRgb19((KINDS[kind] || KINDS.melon).juice || '#C74A53'), 0.82)), q = hexRgb(hex);
@@ -9244,9 +8763,6 @@ function cut26(x, y, kind, area, ux, uy){                       // рез, ра�
     if (!bp) continue; const ln = Math.hypot(bp[2], bp[3]) || 1;
     for (let k = 0; k < 1; k++){ const s = (R() - 0.5) * 22, px = bp[0] + bp[2] / ln * s, py = bp[1] + bp[3] / ln * s, ix = px + (px - x) / (bd || 1) * 2.2, iy = py + (py - y) / (bd || 1) * 2.2;
       if (inPoly15(q.P, ix, iy)) spot26(ix, iy, (3 + 3.5 * R()) * clamp(Math.sqrt(area / Math.PI) / 40, 0.8, 1.4), kind, Math.atan2(iy - y, ix - x), { sf: q, delay: bd / C.fly, runs: [0, 2], sat: 1 + Math.floor(R() * 2) }); } }
-  const Cb = V26.scr.combo; J26.cuts.push(G.rt); while (J26.cuts.length && G.rt - J26.cuts[0] > Cb[1]) J26.cuts.shift();   // серия резов из нескольких взмахов — залп на экран
-  let sw = 1; for (let i = 1; i < J26.cuts.length; i++) if (J26.cuts[i] - J26.cuts[i - 1] > 0.05) sw++;
-  if (J26.cuts.length >= Cb[0] && sw >= Cb[2] && jk21(kind) >= 0.6 && salvo26(x, y, 0.55, kind, false, 'combo')) J26.cuts.length = 0;
 }
 function touch26(b){                                            // кусок касается бруса: ближайшая точка контура (внутрь на 1,4 ед.)
   let best = null, bd = b.rad + 2.6;
@@ -9319,90 +8835,18 @@ function sawWood26(){                                           // пилы мо
     for (let tr = 0; tr < 3; tr++){ const h = lerp21(W.h, R()), x = f.x + (R() - 0.5) * 2 * W.dx, y = (f.clip || CFG.grindY) - h; if (!hit26(x, y)) continue;
       spot26(x, y, 2.6 + 3.2 * R(), f.kind, -Math.PI / 2 + (R() - 0.5), { delay: h / 500, life: V26.wood.lifeS, runs: [0, 2], sat: 1 + Math.floor(R() * 2) }); break; } }
 }
-function chain26(F6, b){                                        // бензопила в теле: пятна по пути; через несколько плодов — залп на экран
-  const C = J26.ch; if (C.F !== F6){ C.F = F6; C.ids = new Set(); C.A = 0; C.fired = 0; }
-  if (!C.ids.has(b.id)){ C.ids.add(b.id); C.A += b.area; }
+function chain26(F6, b){                                        // бензопила в теле: пятна по пути (v31: залп на экран снят)
+  const C = J26.ch;
   if (G.rt - C.at > V26.wood.chain){ C.at = G.rt; const ux = F6.ux || 1, uy = F6.uy || 0;
     for (let k = 0; k < 2; k++){ const d = 12 + 44 * R(), sd = (R() - 0.5) * 50, x = F6.x - ux * d - uy * sd, y = F6.y - uy * d + ux * sd; if (hit26(x, y)) spot26(x, y, 3 + 4 * R(), b.kind, Math.atan2(-uy, -ux), { delay: d / 700, runs: [0, 2], sat: 1 + Math.floor(R() * 2) }); } }
-  if (C.fired < 2 && C.ids.size >= 2 + 2 * C.fired && jk21(b.kind) >= 0.5 && salvo26(F6.x, F6.y, clamp(0.5 + C.A / 8000, 0.5, 1), b.kind, false, 'chain')) C.fired++;
-}
-function saw26(f){                                              // пилы: много массы за 0,6 с или крупное тело — залп на экран
-  if (!V26.on || f.c27) return false; const M = V26.scr.mass, L = J26.saw; L.push([G.rt, f.area, f.kind, f.x]); while (L.length && G.rt - L[0][0] > M.win) L.shift();   // v27: куски с пил — масса тела уже учтена
-  let A = 0, best = null; for (const q of L){ if (jk21(q[2]) < 0.5) continue; A += q[1]; if (!best || q[1] > best[1]) best = q; }
-  if (!best || !(L.length >= M.n && A >= M.nA || A >= M.area || best[1] >= M.big)) return false;
-  if (!salvo26(best[3], CFG.grindY - 30, clamp(A / M.full + (L.length >= 7 ? 0.15 : 0), 0.4, 1), best[2], false, best[1] >= M.big ? 'big' : 'mass' + L.length)) return false;
-  L.length = 0; return true;
-}
-// --- экран: залп капель и клякс ---
-function blob26(seed){                                          // клякса на стекле: неровное ядро с буграми и брызги вокруг (радиус ядра ≈ 1)
-  const h = (i) => r3Hash(seed + i * 3.71), P = new Path2D(), n = 26, nb = 6 + Math.floor(h(1) * 4), bumps = [];
-  for (let i = 0; i < nb; i++) bumps.push([h(10 + i) * 6.2832, 0.1 + 0.26 * h(20 + i), 0.2 + 0.22 * h(30 + i)]);
-  const pts = []; for (let i = 0; i < n; i++){ const a = i / n * 6.2832; let r = 0.82 + 0.08 * Math.sin(i * 1.3 + seed); for (const [ba, bl, bw] of bumps){ const d = Math.atan2(Math.sin(a - ba), Math.cos(a - ba)); r += bl * Math.exp(-d * d / (bw * bw)); } pts.push([Math.cos(a) * r, Math.sin(a) * r]); }
-  for (let i = 0; i <= n; i++){ const a = pts[i % n], b = pts[(i + 1) % n], mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2; if (!i) P.moveTo(mx, my); else P.quadraticCurveTo(a[0], a[1], mx, my); }
-  P.closePath(); const S = new Path2D(), ns = 5 + Math.floor(h(40) * 5), nk = 4 + Math.floor(h(41) * 3);   // S — лучи и капли вокруг (ровный цвет)
-  for (let i = 0; i < nk; i++){ const a = (i + 0.7 * h(80 + i)) / nk * 6.2832, L = 1.12 + 0.42 * h(90 + i), w = 0.16 + 0.09 * h(95 + i), tr = w * 0.7, c = Math.cos(a), sn = Math.sin(a);   // лучи-брызги: от ядра наружу, на конце капля
-    S.moveTo(c * 0.7 - sn * w, sn * 0.7 + c * w); S.quadraticCurveTo(c * (L * 0.7) - sn * w * 0.35, sn * (L * 0.7) + c * w * 0.35, c * L - sn * tr * 0.5, sn * L + c * tr * 0.5); S.arc(c * L, sn * L, tr, a + 1.5708, a - 1.5708, true); S.quadraticCurveTo(c * (L * 0.7) + sn * w * 0.35, sn * (L * 0.7) - c * w * 0.35, c * 0.7 + sn * w, sn * 0.7 - c * w); S.closePath(); }
-  for (let i = 0; i < ns; i++){ const a = h(50 + i) * 6.2832, d = 1.3 + 0.9 * h(60 + i), r = 0.05 + 0.1 * h(70 + i); S.moveTo(Math.cos(a) * d + r, Math.sin(a) * d); S.arc(Math.cos(a) * d, Math.sin(a) * d, r, 0, 6.2832); }
-  return { P, S };
-}
-function salvo26(wx, wy, k, kind, force, why){
-  if (!V26.on || REDUCED || !G.s || !cv) return false; const S = V26.scr;
-  if (G.rt - J26.salvoAt < (k >= 0.7 || force ? S.gap[0] : S.gap[1])) return false;
-  if (!force && k < Math.max(S.kMin, J26.heat - S.heat[1] * (G.rt - J26.salvoAt) + S.heat[0])) return false;   // после залпа нужен момент сочнее
-  const W = cv.clientWidth, H = cv.clientHeight, ex = view.ox + wx * view.k, ey = view.oy + wy * view.k;
-  const yTop = view.oy + (VIEW.top + 18) * view.k, yBot = Math.min(H * 0.8, view.oy + (CFG.grindY - 6) * view.k);
-  const heap = []; for (const b of G.s.bodies){ if (b.y > CFG.grindY - 20) continue; heap.push([view.ox + b.x * view.k, view.oy + b.y * view.k, b.rad * view.k]); }
-  const hex = kind === 'gold' ? V23.lens.col.gold : (V23.lens.col[kind] || pal23(kind).b), c = hexRgb(hex), Lq = J26.scr;
-  let nBig = Math.min(k >= 0.75 ? 2 : 1, S.maxBig - Lq.filter(q => q.big).length), nDrop = Math.min(Math.round(lerp21(S.drops, k)), S.maxDrops - Lq.filter(q => !q.big).length - J21.lens.length);
-  const place = (r, big) => { for (let tr = 0; tr < 18; tr++){ const left = (ex < W / 2) !== (R() < 0.22), corner = R() < S.corner, x = left ? W * lerp21(S.edge, R()) : W * (1 - lerp21(S.edge, R()));
-      const y = corner ? yTop + r + H * 0.12 * R() : big ? clamp(ey - H * (0.1 + 0.32 * R()), yTop + r + H * 0.04, yBot - r - H * 0.1) : clamp(ey + (R() - 0.5) * H * 0.45, yTop + r, yBot - r);   // крупная — выше события, в спокойной полосе (у пил тонет в брызгах)
-      if (heap.some(h => Math.hypot(h[0] - x, h[1] - y) < h[2] + r + (big ? 10 : 3))) continue;
-      if (Lq.some(q => Math.hypot(q.x - x, q.y - y) < q.r + r + 6)) continue; return [x, y]; } return null; };
-  let made = 0; const add = (big) => { const r = big ? W * lerp21(S.big, R()) * (0.85 + 0.15 * k) : W * lerp21(S.small, R()) * (0.8 + 0.3 * k), p = place(r, big); if (!p) return;
-    const fly = lerp21(S.fly, R()), t0 = G.rt + fly, drips = [];
-    if (big) for (let i = 0; i < 1 + (R() < 0.6 ? 1 : 0); i++) drips.push({ dx: (R() - 0.5) * 0.9, y: 0, w: 0.1 + 0.07 * R(), v: 0.8 + 0.6 * R(), f: 3 + 3 * R(), p: R() * 6.28 });
-    Lq.push({ big, x: p[0], y: p[1], y0: p[1], r, ex, ey, ts: G.rt, t0, hold: lerp21(S.hold, R()), T: lerp21(S.slide, R()), v: H * lerp21(S.v, R()) * (big ? 0.35 : 1), c, a: lerp21(S.a, R()),
-      P: big ? blob26(R() * 1000) : null, drips, f1: 2.5 + 2.5 * R(), f2: 5 + 4 * R(), p1: R() * 6.28, p2: R() * 6.28, last: G.rt }); made++; };
-  for (let i = 0; i < nBig; i++) add(true); for (let i = 0; i < nDrop; i++) add(false);
-  if (!made) return false; J26.salvoAt = G.rt; J26.heat = k; J21.lensAt = G.rt; J26.n.salvo++; J26.last = { why: why || '', k: +k.toFixed(2), made, t: +G.rt.toFixed(2) }; (J26.log || (J26.log = [])).push(J26.last); log('fx.start', 'salvo26', made + ' k=' + k.toFixed(2) + ' ' + (why || '')); return true;
-}
-function scr26Draw(g, d){                                       // рисует залпы на холсте стекла (вызов из lens21Draw); true — что-то нарисовано
-  const L = J26.scr; if (!L.length) return false; const now = G.rt, H = cv.clientHeight;
-  for (let i = L.length - 1; i >= 0; i--){ const q = L[i], t = now - q.t0, life = q.hold + q.T; if (t > life){ L.splice(i, 1); continue; }
-    const col = q.c.map(Math.round).join(','), dk = q.c.map(v => Math.round(v * 0.55)).join(','), lt = mixRgb(q.c, [255, 248, 230], 0.5).map(Math.round).join(',');
-    if (t < 0){ const u = 1 + t / (q.t0 - q.ts), e = u * u, x = q.ex + (q.x - q.ex) * e, y = q.ey + (q.y - q.ey) * e, r = (1.5 + q.r * 0.45 * u) * d;   // летит от события к стеклу (растёт)
-      g.globalAlpha = 0.45 + 0.45 * u; g.fillStyle = 'rgba(' + col + ',0.85)'; g.beginPath(); g.arc(x * d, y * d, r, 0, 6.2832); g.fill(); continue; }
-    const dt = Math.max(0, Math.min(0.05, now - q.last)); q.last = now; const ts = t - q.hold;
-    if (ts > 0){ const nz = 0.5 + 0.5 * Math.sin(ts * q.f1 + q.p1) * Math.sin(ts * q.f2 + q.p2), sl = Math.min(1, ts / 0.25); q.y += q.v * sl * (0.25 + 1.5 * nz) * dt;   // стекает рывками
-      for (const r of q.drips){ const nd = 0.5 + 0.5 * Math.sin(ts * r.f + r.p); r.y += H * 0.06 * r.v * sl * (0.2 + 1.6 * nd) * dt; } }
-    const sc = t < V26.scr.pop ? 0.5 + 0.6 * t / V26.scr.pop : t < V26.scr.pop + 0.07 ? 1.1 - 0.1 * (t - V26.scr.pop) / 0.07 : 1 + 0.05 * Math.min(1, t / 0.4);
-    const u = t / life, al = u > 0.6 ? 1 - (u - 0.6) / 0.4 : 1, x = q.x * d, y = q.y * d, r = q.r * d * sc * (1 - 0.18 * Math.max(0, u - 0.3)), e = 1 + (q.big ? 0.06 : 0.22) * Math.min(1, Math.max(0, ts) / 0.4);
-    if (!q.big && q.y - q.y0 > 1){ const y0 = q.y0 * d, tw = r * (q.big ? 0.5 : 0.5), lg = g.createLinearGradient(0, y0 - r * 0.3, 0, y);   // след: тоньше и прозрачнее кверху
-      lg.addColorStop(0, 'rgba(' + col + ',0)'); lg.addColorStop(1, 'rgba(' + col + ',' + Math.min(0.8, q.a * 1.4).toFixed(3) + ')'); g.globalAlpha = al; g.fillStyle = lg;
-      g.beginPath(); g.moveTo(x - tw, y); g.quadraticCurveTo(x - tw * 0.35, (y0 + y) / 2, x - tw * 0.12, y0); g.lineTo(x + tw * 0.12, y0); g.quadraticCurveTo(x + tw * 0.35, (y0 + y) / 2, x + tw, y); g.closePath(); g.fill(); }
-    for (const r0 of q.drips){ if (r0.y <= 0.5) continue; const w = r0.w * r * 0.9, xd = x + r0.dx * r, yS = y + r * 0.6, yE = yS + r0.y * d, lg = g.createLinearGradient(0, yS, 0, yE);   // потёки из кляксы
-      lg.addColorStop(0, 'rgba(' + col + ',' + (q.a * 1.2).toFixed(3) + ')'); lg.addColorStop(1, 'rgba(' + col + ',' + (q.a * 1.4).toFixed(3) + ')'); g.globalAlpha = al; g.fillStyle = lg;
-      g.beginPath(); g.moveTo(xd - w * 1.3, yS); g.quadraticCurveTo(xd - w * 0.35, (yS + yE) / 2, xd - w * 0.5, yE - w * 0.6); g.arc(xd, yE, w * 0.95, Math.PI + 0.55, -0.55, true); g.quadraticCurveTo(xd + w * 0.35, (yS + yE) / 2, xd + w * 1.3, yS); g.closePath(); g.fill(); }   // сужается к капле на конце
-    g.save(); g.translate(x, y); g.scale(r / Math.sqrt(e), r * e); const body = () => { if (q.P) g.fill(q.P.P); else { g.beginPath(); g.arc(0, 0, 1, 0, 6.2832); g.fill(); } };
-    g.globalAlpha = al * 0.22; g.fillStyle = '#fffaf2'; body();   // стекло под соком светлее — цвет не буреет на зелени
-    const gr = g.createRadialGradient(-0.18, -0.22, 0, 0, 0, 1.12);   // тело: светлее в середине, к кромке — толща (тёмный край даёт форму на любом фоне)
-    gr.addColorStop(0, 'rgba(' + col + ',' + q.a.toFixed(3) + ')'); gr.addColorStop(0.62, 'rgba(' + col + ',' + Math.min(0.9, q.a * 1.35).toFixed(3) + ')');
-    gr.addColorStop(0.86, 'rgba(' + dk + ',' + Math.min(0.94, q.a * 1.6).toFixed(3) + ')'); gr.addColorStop(1, 'rgba(' + dk + ',0.95)');
-    g.globalAlpha = al; g.fillStyle = gr; body();
-    if (q.P){ g.globalAlpha = al; g.fillStyle = 'rgba(' + col + ',' + Math.min(0.85, q.a * 1.3).toFixed(3) + ')'; g.fill(q.P.S); }   // лучи и капли вокруг — ровным цветом сока
-    const lg = g.createRadialGradient(0.22, 0.38, 0, 0.22, 0.38, 0.7); lg.addColorStop(0, 'rgba(' + lt + ',0.5)'); lg.addColorStop(1, 'rgba(' + lt + ',0)');   // свет сквозь сок — мягко снизу
-    g.globalAlpha = al; g.fillStyle = lg; g.beginPath(); g.arc(0.22, 0.38, 0.7, 0, 6.2832); g.fill();
-    g.globalAlpha = al * 0.8 * Math.max(0.35, 1 - u); g.fillStyle = '#FFF4EA'; g.beginPath(); g.ellipse(-0.36, -0.4, 0.28, 0.15, -0.6, 0, 6.2832); g.fill();   // один блик
-    g.restore(); }
-  g.globalAlpha = 1; return true;
 }
 // --- кадр: новый уровень — всё долой; след кусков, потёки, капли с кромок, сок с пил на дерево ---
 function j26Update(gdt){
-  const s = G.s; if (J26.s !== s){ J26.s = s; J26.spots.length = 0; J26.runs.length = 0; J26.falls.length = 0; J26.scr.length = 0; J26.pos.clear(); J26.nSm = 0; J26.saw.length = 0; J26.cuts.length = 0; J26.ch.F = null; J26.heat = 0; }
+  const s = G.s; if (J26.s !== s){ J26.s = s; J26.spots.length = 0; J26.runs.length = 0; J26.falls.length = 0; J26.pos.clear(); J26.nSm = 0; J26.ch.F = null; }
   if (!V26.on || !s || !F13.live) return; surf26();
   for (let i = J26.spots.length - 1; i >= 0; i--){ const q = J26.spots[i]; if (G.rt - q.t0 > q.T){ J26.spots.splice(i, 1); if (q.sm) J26.nSm--; } }
   if (gdt > 0){ trail26(s); runs26Update(gdt); falls26Update(gdt); sawWood26(); }
-  const P = J26.peak; P.spots = Math.max(P.spots, J26.spots.length); P.runs = Math.max(P.runs, J26.runs.length); P.falls = Math.max(P.falls, J26.falls.length); P.scr = Math.max(P.scr, J26.scr.length);
+  const P = J26.peak; P.spots = Math.max(P.spots, J26.spots.length); P.runs = Math.max(P.runs, J26.runs.length); P.falls = Math.max(P.falls, J26.falls.length);
 }
 function al26(q, t){                                            // [цвет, блик]: появление, держится, блик тает первым, потом цвет
   const W = V26.wood, u = t / q.T, pop = Math.min(1, t / 0.06), c = pop * (u < W.fade ? 1 : Math.pow(clamp(1 - (u - W.fade) / (1 - W.fade), 0, 1), 1.2)),
@@ -9501,36 +8945,60 @@ function saw13Update(){                                       // круг 3: у 
     const U = m.material.uniforms; U.uDim.value = mir > 0 ? 1 : Q.dim; U.uRot.value.set(m.rotation.z, mir, M ? C.wet.run * Math.min(1, M.avg[i] * 2.5) * clamp(1.4 - OM[i] / 5, 0, 1) : 0); });
   if (DL) DL.fill(0);
 }
-// Круг 2: корыто — предмет, без шкалы. Сок виден сверху между задней стенкой и передней кромкой; уровень — на глаз (доля кучи из ядра,
-// как прежде), на победе — перелив через кромку. Струйки — в щелях между дисками (с мокрых пил и от догрызенных кусков).
-const juiceY13 = () => { const T = V13.trough, lv = clamp(trough9().lvl / V9.trough.full, 0, 1); return CFG.grindY + T.floor - (T.floor - T.full) * lv; };   // v22: не выше «полно» — до кромки остаётся 1,4 % W (было до 1,25)
-function juice13(c){
-  const T = V13.trough, gy = CFG.grindY, W = CFG.W, Tr = trough9(), col = mixRgb(Tr.col, T.gold, T.gold[3]), x0 = T.end[1], x1 = W - T.end[1], yb = gy + T.back + T.farLip, yr = gy + T.rim + 2.5, yL = juiceY13();
-  c.save(); c.beginPath(); c.moveTo(T.end[0], yb); c.lineTo(W - T.end[0], yb); c.lineTo(x1, yr); c.lineTo(x0, yr); c.closePath(); c.clip();   // v18: внутри корыта — трапеция (торцы видны)
-  const sf = (x) => Math.max(yb + 2.2, troughSurf(x, yL));   // v22: волна не выше 2,2 ед. под дальней кромкой — сок не ложится лентой поверх доски
-  c.beginPath(); c.moveTo(x0, yr); for (let x = x0; x < x1 + 8; x += 8){ const xx = Math.min(x, x1); c.lineTo(xx, sf(xx)); } c.lineTo(x1, yr); c.closePath();
-  const g = c.createLinearGradient(0, yL - 3, 0, yr); g.addColorStop(0, rgba(mixRgb(col, [255, 248, 210], 0.3), 0.98)); g.addColorStop(0.4, rgba(col, 0.98)); g.addColorStop(1, rgba(shadeRgb(col, 0.86), 0.98));   // v18: сок светлее, без тёмного низа
-  c.fillStyle = g; c.fill();
-  { const h = c.createLinearGradient(0, yL - 1, 0, yL + 6); h.addColorStop(0, rgba(mixRgb(col, [255, 240, 190], 0.55), 0.85)); h.addColorStop(1, rgba(col, 0)); c.fillStyle = h; c.fill(); }   // v18: светлая полоса у поверхности — сок блестит, как на рефе
-  c.beginPath(); for (let x = x0; x < x1 + 8; x += 8){ const xx = Math.min(x, x1), y = sf(xx) + 0.7; if (x === x0) c.moveTo(xx, y); else c.lineTo(xx, y); }   // мениск у задней стенки
-  c.lineWidth = 1.2; c.strokeStyle = 'rgba(255,255,255,0.72)'; c.stroke();
-  c.fillStyle = 'rgba(255,255,255,0.32)';                    // отблески плывут по поверхности
-  for (let i = 0; i < 8; i++){ const h = r3Hash(i * 3.7 + 0.2), x = x0 + ((h * W * 3 + G.rt * (5 + 6 * h)) % (x1 - x0)), y = yL + 2 + Math.max(0, yr - yL - 4) * r3Hash(i * 5.1 + 1.3);
-    c.beginPath(); c.ellipse(x, y, 3 + 5 * h, 0.55, 0, 0, 6.29); c.fill(); }
-  c.fillStyle = 'rgba(255,255,255,0.8)';                     // пена: пузыри всплывают и лопаются у мениска
-  for (const b of Tr.bub){ const u = b.d / 40; if (u >= 1) continue; const y = troughSurf(b.x, yL) + 1.2 + 3.5 * (1 - u); c.globalAlpha = 0.85 * (1 - u * u); c.beginPath(); c.arc(b.x, y, b.r * 0.8, 0, 6.29); c.fill(); }
-  c.globalAlpha = 1; c.restore();
-  streams13(c, yL);
+// =====================================================================================================
+// v31 «Без корыта» (Андрей 25.11: «давай вернем старый вин надпись, и сделаем чтобы сок не летел в экран. Так же внизу уберем корыто
+// куда льется сок»). Только вид. Под рядом пил — трава сцены (полоса grass16 от V31.ground; нижние зубья чуть в траве), кнопки — на ней.
+// Сок с дисков: пока диск мокрый (F13.vst — под ним мелется кусок, FX.film — плёнка сока на дисках), с его низа бежит короткая струйка
+// и падают капли; в траве капля впитывается — тёмное мокрое пятно цвета сока (умножение: трава темнеет), гаснет за 0,5–1 с после
+// последней капли. Без накопления и без «уровня сока»: у диска одно пятно, растёт до rx[1] и не больше. Окраска дисков соком — прежняя.
+// Ед. — мира (400 = W).
+// =====================================================================================================
+const V31 = {
+  ground: 46,                 // верх полосы травы (ед. ниже grindY); низ зубьев — grindY + 54,5
+  post: 118, axle: 5.5,       // низ стоек у краёв экрана (за кадром) и радиус оси пил (были в V13.trough)
+  drip: { from: 0.12, rate: [1.5, 9], r: [0.75, 1.35], v0: [10, 40], g: 900, off: 2.5, max: 40 },   // капли: от влажности, в с (сухо → мокро), радиус, начальная скорость, тяжесть, сдвиг к щели, потолок
+  stream: { w: 0.3, lw: [0.7, 1.5], a: 0.8 },   // струйка с низа диска: от влажности, толщина у диска (ед.; к траве — втрое тоньше), сила
+  soak: { y: [57, 61], rx: [3.4, 8], ry: 0.36, T: [0.5, 1.0], a: 0.8, dk: 0.5, grow: 0.7, near: 6, max: 21 },   // пятно: где (ед. ниже grindY), полуось x, сплющено, гаснет (с), сила, тон, рост на каплю, «то же пятно» ближе (ед.), потолок
+};
+const S31 = { s: null, drops: [], spots: [], acc: [], st: { drops: 0, spots: 0, peak: 0 } };
+function wet31(v){                                               // влажность и цвет диска v (как струйки v18)
+  const x = sawCx13(v) + (v % 2 ? V31.drip.off : -V31.drip.off), ch = F13.vst[v] > G.rt;
+  const w = Math.max(FX.film ? filmAt(x) : 0, ch ? 0.75 + 0.25 * Math.min(1, (F13.vst[v] - G.rt) * 3) : 0);
+  return [x, w, ch ? F13.vcol[v] : filmRgb13(x)];
 }
-function streams13(c, yL){
-  const F = FX.film, Q = V13.saw, gy = CFG.grindY, yi = gy + Q.cy + Q.R - 4;   // v18: струйки с низа каждого диска в сок, от них круги
+function soak31Add(x, y, col, v){                                // капля в траве: освежает пятно диска (растёт до rx[1]) или кладёт новое
+  const S = V31.soak; let q = S31.spots.find(p => p.v === v && Math.abs(p.x - x) < S.near);
+  if (q){ q.t0 = G.rt; q.rx = Math.min(S.rx[1], q.rx + S.grow * (0.6 + 0.8 * R())); q.col = mixRgb(q.col, col, 0.3); return; }
+  if (S31.spots.length >= S.max) S31.spots.shift();
+  S31.spots.push({ x, y, v, rx: lerp21(S.rx, 0.25 * R()), col: col.slice(), t0: G.rt, T: lerp21(S.T, R()), ph: R() * 6.28 }); S31.st.spots++;
+}
+function soak31Update(dt){
+  const s = G.s; if (S31.s !== s){ S31.s = s; S31.drops.length = 0; S31.spots.length = 0; S31.acc.length = 0; }
+  for (let i = S31.spots.length - 1; i >= 0; i--){ const q = S31.spots[i]; if (G.rt - q.t0 > q.T) S31.spots.splice(i, 1); }
+  if (!s || !F13.live || dt <= 0) return; const D = V31.drip, Q = V13.saw, gy = CFG.grindY, yi = gy + Q.cy + Q.R - 2;
+  for (let v = 0; v < Q.n; v++){ const [x, w, col] = wet31(v); if (w < D.from){ S31.acc[v] = 0; continue; }
+    S31.acc[v] = (S31.acc[v] || 0) + lerp21(D.rate, Math.min(1, w)) * dt;
+    while (S31.acc[v] >= 1){ S31.acc[v]--; if (S31.drops.length >= D.max) break;
+      S31.drops.push({ x: x + (R() - 0.5) * 3, y: yi, vy: lerp21(D.v0, R()), r: lerp21(D.r, R()) * (0.8 + 0.3 * Math.min(1, w)), col, v, land: gy + lerp21(V31.soak.y, R()) }); S31.st.drops++; } }
+  for (let i = S31.drops.length - 1; i >= 0; i--){ const q = S31.drops[i]; q.vy += D.g * dt; q.y += q.vy * dt;
+    if (q.y >= q.land){ S31.drops.splice(i, 1); soak31Add(q.x, q.land, q.col, q.v); } }
+  S31.st.peak = Math.max(S31.st.peak, S31.spots.length);
+}
+function soak31Draw(c, sh){                                      // поверх травы: мокрые пятна, струйки с низа дисков, капли
+  if (!F13.live || !G.s) return; vbase(c, sh.x, sh.y); const S = V31.soak, M = V31.stream, Q = V13.saw, gy = CFG.grindY, yi = gy + Q.cy + Q.R - 2.5;
+  if (S31.spots.length){ c.save(); c.globalCompositeOperation = 'multiply';   // трава темнеет и берёт цвет сока — мокрое, а не наклейка
+    for (const q of S31.spots){ const u = (G.rt - q.t0) / q.T, al = S.a * Math.pow(1 - clamp(u, 0, 1), 1.4); if (al < 0.01) continue;
+      const cd = mixRgb(q.col, [24, 14, 8], S.dk).map(Math.round).join(','), ry = q.rx * S.ry, g = c.createRadialGradient(q.x, q.y, 0, q.x, q.y, q.rx);
+      g.addColorStop(0, 'rgba(' + cd + ',1)'); g.addColorStop(0.6, 'rgba(' + cd + ',0.75)'); g.addColorStop(1, 'rgba(' + cd + ',0)');
+      c.globalAlpha = al; c.fillStyle = g; c.save(); c.translate(q.x, q.y); c.scale(1, S.ry); c.translate(-q.x, -q.y); c.beginPath(); c.arc(q.x, q.y, q.rx, 0, 6.2832); c.fill(); c.restore(); }
+    c.restore(); }
   c.lineCap = 'round';
-  for (let v = 0; v < Q.n; v++){ const x = sawCx13(v) + (v % 2 ? 2.5 : -2.5), ch = F13.vst[v] > G.rt, w = Math.max(F ? filmAt(x) : 0, ch ? 0.75 + 0.25 * Math.min(1, (F13.vst[v] - G.rt) * 3) : 0); if (w < 0.1) continue;
-    const cs = 'rgba(' + mixRgb(ch ? F13.vcol[v] : filmRgb13(x), V13.trough.gold, 0.35).map(Math.round).join(',') + ',1)', yB = Math.max(yi + 2, troughSurf(x, yL) + 1.5), al = Math.min(1, w * 1.4);
-    if (w > 0.3){ c.globalAlpha = Math.min(0.95, (w - 0.3) * 2.2); c.strokeStyle = cs; c.lineWidth = (1.5 + w * 1.9) * (F13.vamp && F13.vamp[v] > G.rt ? V23.saw.gapW : 1);   /* v21: струйки гуще (было 1,1 + 1,2w); v23.1: на перемоле крупного ×1,35 (≈ 1 % W) */ c.beginPath(); c.moveTo(x, yi); c.quadraticCurveTo(x + Math.sin(G.rt * 9 + v) * 0.6, (yi + yB) / 2, x, yB); c.stroke();
-      c.globalAlpha *= 0.7; c.lineWidth = 0.9; c.strokeStyle = cs; c.beginPath(); c.ellipse(x, yB + 0.5, 2.5 + 2 * w + Math.sin(G.rt * 11 + v) * 0.6, 0.9, 0, 0, 6.29); c.stroke(); }   // круги на соке
-    for (let k = 0; k < 2; k++){ const ph = (G.rt * (0.9 + 0.8 * w + 0.25 * k) + v * 0.37 + k * 0.5) % 1, y = yi + ph * ph * (yB - yi);
-      c.globalAlpha = al * (1 - ph * 0.3); c.fillStyle = cs; c.beginPath(); c.ellipse(x, y, 0.9 + w, (0.9 + w) * (1 + ph * 0.8), 0, 0, 6.29); c.fill(); } }
+  for (let v = 0; v < Q.n; v++){ const [x, w, col] = wet31(v); if (w < M.w) continue;   // струйка: тонкая, с низа диска до травы
+    const lw = lerp21(M.lw, Math.min(1, w)) * (0.9 + 0.1 * Math.sin(G.rt * 23 + v)), xb = x + 0.3 * Math.sin(G.rt * 9 + v), yb = gy + S.y[0];
+    c.globalAlpha = Math.min(M.a, (w - M.w) * 2.2); c.fillStyle = rgbCss(col);   // сужается книзу: сок стекает с зуба и рвётся на капли
+    c.beginPath(); c.moveTo(x - lw / 2, yi); c.quadraticCurveTo(x - lw * 0.2, (yi + yb) / 2, xb - lw / 6, yb); c.lineTo(xb + lw / 6, yb); c.quadraticCurveTo(x + lw * 0.2, (yi + yb) / 2, x + lw / 2, yi); c.closePath(); c.fill(); }
+  for (const q of S31.drops){ const e = 1 + Math.min(0.9, q.vy / 260); c.globalAlpha = 0.95; c.fillStyle = rgbCss(q.col);
+    c.beginPath(); c.ellipse(q.x, q.y, q.r / Math.sqrt(e), q.r * e, 0, 0, 6.2832); c.fill(); }
   c.globalAlpha = 1;
 }
 // Тень-контакт фрукта на дереве: мягкий тёмный эллипс у нижней точки (под 3D). Тень на соседе снизу — в шейдере фрукта (uOcc).
@@ -9546,28 +9014,8 @@ function contact13(c, s){
     const rx = Math.max(6, (x1 - x0) / 2 + 5); c.drawImage(F13.blob, (x0 + x1) / 2 + V13.contact[2] - rx, yb + V13.contact[3] - hh, 2 * rx, 2 * hh); }
   c.globalAlpha = 1;
 }
-// Передний план: перед корыта (запечён), перелив на победе, трава и листья у нижнего края, виньетка по нижним углам.
+// Передний план: трава и листья у нижнего края, виньетка по нижним углам, дождь перед сценой (v31: перед корыта, его тень и перелив сняты).
 function front13(c, s, sh){
-  const T = V13.trough, gy = CFG.grindY, W = CFG.W, Tr = trough9(), yr = gy + T.rim, yf = gy + T.face;
-  vbase(c, sh.x, sh.y); trough22Shadow(c, T, gy, W);   // v22: земля в тени под чашей (за ножками) — до переда корыта
-  if (F13.front){ c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.drawImage(F13.front, Math.round(sh.x * K), F13.frontY + Math.round(sh.y * K)); c.restore(); }
-  vbase(c, sh.x, sh.y);
-  if (Tr.spill && V22.spill){   // перелив: сок горбом над кромкой, потёки по передней доске, искры; v22 — снят (лента сока поверх доски, GPT №1 п. 6), победа — всплеском v21
-    const age = G.rt - Tr.spill, a = clamp((age - 0.2) / 0.35, 0, 1), fade = clamp(1 - (age - 2.2) / 0.8, 0, 1), col = Tr.col, n = V9.trough.spillDrips;
-    if (a > 0 && fade > 0){
-      c.globalAlpha = fade; c.fillStyle = rgba(mixRgb(col, [255, 255, 255], 0.12), 0.97);
-      const sx0 = T.x0 + 3, sx1 = W - T.x0 - 3;   // v22: перелив — по кромке корыта, не во всю ширину
-      c.beginPath(); c.moveTo(sx0, yr + 2.5); for (let x = sx0; x <= sx1; x += 8) c.lineTo(x, yr + 1 - a * (2 + 1.2 * Math.sin(x * 0.07 + G.rt * 4))); c.lineTo(sx1, yr + 2.5); c.closePath(); c.fill();
-      c.fillStyle = rgba(shadeRgb(col, 0.92), 0.9);
-      for (let i = 0; i < n; i++){ const x = sx0 + 14 + (sx1 - sx0 - 28) * (i + 0.5) / n + 10 * Math.sin(i * 2.3), t = age - 0.3 - 0.09 * ((i * 7) % 5);
-        if (t <= 0) continue; const Lmax = (yf - yr) * (0.5 + 0.6 * (((i * 5) % 7) / 6)), Ln = Math.min(Lmax, t * (36 + 8 * ((i * 3) % 4))), w = 2 + ((i * 5) % 3) * 0.7;
-        c.beginPath(); c.moveTo(x - w * 2, yr + 1); c.quadraticCurveTo(x - w * 0.7, yr + 3, x - w * 0.55, yr + Math.max(2, Ln - w));
-        c.arc(x, yr + Math.max(2, Ln - w), w * 0.95, Math.PI, 0, true); c.quadraticCurveTo(x + w * 0.7, yr + 3, x + w * 2, yr + 1); c.closePath(); c.fill(); }
-      c.globalAlpha = 1; }
-    for (const q of Tr.sp){ const u = (G.rt - q.t0) / q.life, rr = q.r * (1 - 0.45 * u) * (0.85 + 0.25 * Math.sin(G.rt * 20 + q.ph)), al = 1 - u * u;
-      c.fillStyle = '#ffc93c'; drawSpark(c, q.x, q.y, rr * 1.35, al * 0.9); c.fillStyle = '#ffffff'; drawSpark(c, q.x, q.y, rr * 0.7, al); }
-    c.globalAlpha = 1;
-  }
   const k = F13.st; if (k < 0) return;
   const f = clamp((G.rt - F13.at) / V13.fade, 0, 1), fs = f * f * (3 - 2 * f);
   c.save(); c.setTransform(1, 0, 0, 1, 0, 0);
@@ -9577,21 +9025,15 @@ function front13(c, s, sh){
   { const ra = (look28(k).kind === 'rain' ? (F13.from >= 0 && f < 1 ? fs : 1) : 0) + (F13.from >= 0 && f < 1 && look28(F13.from).kind === 'rain' ? 1 - fs : 0);   // v28: дождь перед сценой и всплески
     if (ra > 0.01){ const x0 = -view.ox / view.k, y0 = -view.oy / view.k; rain28(c, ra, x0, y0, (cv.width / DPR) / view.k, (cv.height / DPR) / view.k, 1); } }
 }
-// v22: контактная тень корыта: тёмная земля между ножками под чашей (мягкие края) и пятно у основания ножек; рисуется под передом корыта
-function trough22Shadow(c, T, gy, W){
-  const [hh, al, ext] = T.shadow, y0 = gy + T.face - 2, y1 = gy + T.leg + hh, x0 = T.x0 - ext, x1 = W - T.x0 + ext;
-  const g = c.createLinearGradient(0, y0, 0, y1); g.addColorStop(0, 'rgba(14,26,12,' + (al * 1.6).toFixed(2) + ')'); g.addColorStop(0.55, 'rgba(18,32,14,' + al + ')'); g.addColorStop(1, 'rgba(18,32,14,0)');
-  c.save(); c.fillStyle = g; c.beginPath(); c.moveTo(x0 + 10, y0); c.lineTo(x1 - 10, y0); c.quadraticCurveTo(x1 + 4, (y0 + y1) / 2, x1 - 18, y1); c.lineTo(x0 + 18, y1); c.quadraticCurveTo(x0 - 4, (y0 + y1) / 2, x0 + 10, y0); c.fill(); c.restore();
-}
 // Трава переднего плана (печётся на состояние и кадр): стебли гуще и выше по углам, несколько листьев, низ углов темнее.
 function grass13(k){
   const key = k + '|' + cv.width + 'x' + cv.height + '|' + view.ox.toFixed(1) + ',' + view.oy.toFixed(1) + ',' + view.k.toFixed(4) + '|' + !!img16(V16.grass.img);
   F13.grass = F13.grass || {}; const old = F13.grass[k]; if (old && old.key === key) return old;
-  const T = V13.trough, gy = CFG.grindY, W = CFG.W, L = V13.look[V13.states[k]], [dk, lt, lf] = L.grass, [, yBot] = scrY13(), yT = gy + Math.min(T.face - 8, V22.grass.top);   // v18: слой травы (и виньетка углов) — ниже передней доски, корыто не темнит; v22 — выше по бокам (пучки)
+  const gy = CFG.grindY, W = CFG.W, L = V13.look[V13.states[k]], [dk, lt, lf] = L.grass, [, yBot] = scrY13(), yT = gy + V22.grass.top;   // v31: трава — под пилами (корыта нет)   // v18: слой травы (и виньетка углов) — ниже передней доски, корыто не темнит; v22 — выше по бокам (пучки)
   const y0 = Math.max(0, Math.floor(yT * K + view.oy * DPR)), c = document.createElement('canvas'); c.width = cv.width; c.height = Math.max(1, cv.height - y0);
   const g = c.getContext('2d'); g.setTransform(K, 0, 0, K, DPR * view.ox, DPR * view.oy - y0);
-  const xL = -view.ox / view.k - 4, xR = (cv.width / DPR - view.ox) / view.k + 4, span = xR - xL, yb0 = gy + T.face + 3, gim = img16(V16.grass.img);
-  if (gim){ grass16(g, gim, k, xL, xR, gy + T.face + V16.grass.y, yBot, (gg) => grass22Clumps(gg, gim, gy)); g.setTransform(1, 0, 0, 1, 0, 0);   // v16: рисованные пучки (GPT), повтор зеркалом; v22 — пучки по бокам
+  const xL = -view.ox / view.k - 4, xR = (cv.width / DPR - view.ox) / view.k + 4, span = xR - xL, yb0 = gy + V31.ground + 12, gim = img16(V16.grass.img);
+  if (gim){ grass16(g, gim, k, xL, xR, gy + V31.ground + V16.grass.y, yBot, (gg) => grass22Clumps(gg, gim, gy)); g.setTransform(1, 0, 0, 1, 0, 0);   // v16: рисованные пучки (GPT), повтор зеркалом; v22 — пучки по бокам
     g.globalCompositeOperation = 'source-atop';   // v22: виньетка — только по траве (слой выше из-за пучков, полосы по лесу нет)
     for (const cx of [0, c.width]){ const r = Math.max(c.width, c.height) * 0.75, q = g.createRadialGradient(cx, c.height, 0, cx, c.height, r);
       q.addColorStop(0, 'rgba(6,12,6,' + (L.vig + 0.12).toFixed(2) + ')'); q.addColorStop(1, 'rgba(6,12,6,0)'); g.fillStyle = q; g.fillRect(0, 0, c.width, c.height); }
@@ -9958,7 +9400,7 @@ function wet13Update(dt){
 // первые на первом ударе о зубья (в обе стороны), остальные по ходу перемола. Кусок отрезается от тела прямой со стороны, куда летит
 // (выше обреза зубьев — съеденное не возвращается), тело теряет ровно эту часть (сумма площадей сохраняется). Кусок летит по дуге
 // на 1–3 диска (не выше зоны под кучей, не за ряд), кувыркается, тянет капли сока, садится на зубья и дальше живёт как основное тело:
-// захват, рывки, доворот, поглощение, фонтан и струйки v23, окраска диска, волна в корыте (sawHit21). От крупного отлетевшего — ещё
+// захват, рывки, доворот, поглощение, фонтан и струйки v23, окраска диска (sawHit21). От крупного отлетевшего — ещё
 // 1–2 меньших (не больше двух поколений). Потолок — V27.chunk.cap кусков сразу; смена уровня ждёт, пока они перемолоты (idle13).
 // =====================================================================================================
 V27.chunk = {
@@ -10097,10 +9539,9 @@ function bite13Update(dt){
   let c27 = 0; for (const f of F13.frags) if (f.c27) c27++; C27.st.peak = Math.max(C27.st.peak, c27);   // v27: пик кусков с пил
 }
 const idle13 = (s) => !F13.frags.length && s.grinding.every(g => F13.split.has(g.id)) && !s.bodies.some(b => b.flags.swept);   // v13 круг 5: пилы пусты
-function chew13Gap(x, kind, k){                                // сок уходит в щель между дисками: струйка в корыто, круги на соке
+function chew13Gap(x, kind, k){                                // сок уходит в щель между дисками: струйка и капли в траву (v31)
   const v = sawI13(x), c = hexRgb(juiceHex(kind)), xs = sawCx13(v);   // v18: струйка — с низа диска (как на рефе)
   F13.vst[v] = Math.max(F13.vst[v] || 0, G.rt + 0.35 + 0.3 * k); F13.vcol[v] = c; filmAdd(xs, 0.08 * k, c, 10);
-  const T = trough9(); T.waves.push({ x: xs, t0: G.rt, a: 0.9 * k * (0.6 + 0.8 * R()), kx: 0.07 + 0.05 * R() }); if (T.waves.length > 12) T.waves.shift();   // v23.2: волны не одинаковые
   return xs;
 }
 // Ляда (доска на верёвке) — тот же брус, поза тела физики каждый кадр.
@@ -10141,7 +9582,7 @@ function render(){
   drawRopesV4(ctx, s);                                       // v4: верёвки и черенки — за фруктами (ляда — брус в 3D)
   if (intro){ ctx.save(); ctx.beginPath(); ctx.rect(-10, VIEW.top + 12, CFG.W + 20, VIEW.bottom); ctx.clip(); }
   drawBombAura(ctx, s);
-  ctx.save(); vbase(ctx, sh.x, sh.y); juice13(ctx); contact13(ctx, s); ctx.restore();   // v13: сок в корыте за пилами (пилы — в 3D); круг 2: тени-контакты на дереве
+  ctx.save(); vbase(ctx, sh.x, sh.y); contact13(ctx, s); ctx.restore();   // круг 2: тени-контакты на дереве (v31: сока в корыте нет)
   r3Draw(ctx, s, sh);
   if (intro) ctx.restore();
   if (s.level.feed){ vbase(ctx, sh.x, sh.y); feedBadge24(ctx, s); }   // v24: плашка порций кормушки
@@ -10150,9 +9591,9 @@ function render(){
   drawRings(ctx);
   drawFlight(ctx, s);                            // v6: летящее и воткнувшееся оружие
   vbase(ctx, sh.x, sh.y); mist13Draw(ctx);       // v13 круг 5: туман сока у пил
-  win23Draw(ctx);                                // v23: победа — один локальный всплеск в корыте (низ закрывает передняя доска)
   j23Draw(ctx);                                  // v23: контактные кляксы, струи, струйки по дискам, веер реза
-  front13(ctx, s, sh);                           // v13 круг 2: перед корыта, трава, виньетка — передний план
+  front13(ctx, s, sh);                           // v13 круг 2: трава, виньетка — передний план
+  soak31Draw(ctx, sh);                           // v31: струйки с дисков и мокрые пятна в траве
   drawParticles(ctx);
   vbase(ctx, sh.x, sh.y); arcs21Draw(ctx);       // v21: крупные дуги сока с хвостом
   vbase(ctx, sh.x, sh.y); sparks13Draw(ctx, R3.dt || 0);
@@ -10164,7 +9605,6 @@ function render(){
   drawConfetti(ctx);
   if (R3.debug) r3DebugDraw(ctx, s, sh);
   liqRender(sh);
-  lens21Draw();                                  // v21: капли на стекле — поверх всей сцены
 }
 // v14: заглушка загрузки — лес уровня (тот же, что в игре) и, если ждать дольше V13.wait.after мс, деревянная плашка «Loading».
 // Игра стоит (tick не шагает), касание поля ждёт готовности (G.pend). Не загрузилось — на плашке «Can't load 3D».
@@ -10223,12 +9663,12 @@ function fxUpdate(gdt, rdt){
   FX.load += (Math.min(1, n / 3 + FX.inflow * 25) - FX.load) * Math.min(1, rdt * 5);
   FX.spin += gdt * (VIEW.grindSpin[0] + (VIEW.grindSpin[1] - VIEW.grindSpin[0]) * FX.load) * (1 + V9.chainSpin * Math.min(6, FX.chain));   // v9: цепочка — валики быстрее
   filmUpdate(gdt);
-  troughUpdate(s, rdt);                         // v10: жёлоб — во всех наборах режима clear
+  soak31Update(gdt);                            // v31: сок с дисков капает в траву и впитывается (корыта нет)
   FX.jig = REDUCED ? 0 : FX.load * 0.7 * Math.sin(G.rt * 47);
   FX.inflow *= Math.exp(-rdt * 4);
   if (G.rt - Sound.motorAt > 0.1){ Sound.motorAt = G.rt; Sound.motorSet(FX.load, G.screen === 'game' || G.screen === 'win'); }
   // v2 (пункт E): слов JUICY / ×N / AVALANCHE нет — остаются FRENZY и фраза победы
-  updateGrindFX(gdt); liqUpdate(gdt, rdt); j21Update(gdt, rdt); j23Update(gdt); j26Update(gdt);   // v21: больше сока; v23: жидкость; v26: сок на дереве и на экране
+  updateGrindFX(gdt); liqUpdate(gdt, rdt); j21Update(gdt, rdt); j23Update(gdt); j26Update(gdt);   // v21: больше сока; v23: жидкость; v26: сок на дереве (v31: экранного нет)
   const F6 = s.flight;                                        // v6: пила под нагрузкой — мотор садится, веер сока вдоль пропила, дрожь
   if (F6 && F6.w === 'saw'){ Sound.sawSet(F6.load > 0);
     if (F6.load > 0 && gdt > 0){ const nd = Math.max(1, Math.round(VIEW.sawDrops * VIEW.dropK)), lk = 0.6;   // v9 clear: меньше, крупнее, ближе к пиле
