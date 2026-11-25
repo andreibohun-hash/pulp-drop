@@ -3952,7 +3952,7 @@ const ART = {
 };
 const IMG = {};            // имя → Image (toy-weapon-*, toy-hand-*, prop-rope, prop-hook)
 const ASSETS = { left: 0, ready: false, onReady: [] };
-const ASSET_V = 17;          // v12: версия картинок в адресе (Pages кэширует ассеты 10 мин); v16 — новый лес; v16.1 — дерево с волокнами
+const ASSET_V = 18;          // v12: версия картинок в адресе (Pages кэширует ассеты 10 мин); v16 — новый лес; v16.1 — дерево с волокнами
 function loadAssets(){
   const names = WEAPON_ORDER.map(w => 'toy-weapon-' + w).concat(['toy-hand-up', 'toy-hand-press', 'prop-rope', 'prop-hook']);   // v14: инструменты, рука обучения, верёвка и крюк
   ASSETS.left = names.length;
@@ -6812,17 +6812,55 @@ const V13 = {
   liqK: [0.35, 0.7],                                         // круг 2: фонтан жидкого сока v9 на перемоле — доля числа капель и размер                                   // круг 2: тень соседа сверху на фрукте: сдвиг от света (x, y), доля радиуса, сила
   contact: [0.28, 4.2, -2.2, 1.8],   // v22 (GPT №1, п. 7): alpha 0,2–0,3, смещение вниз-влево (x, y ед.), мягкость ≈ 1 % W                                       // круг 2: тень-контакт фрукта на дереве: сила, полувысота, ед.
 };
+// v28 «Фон» (слова Андрея 25.11: «на первых 10 уровнях мрачновато — цвет фона забрать с 11 уровня (тональность) и раз в 2–3 уровня
+// менять фон: туман, дождь, ночь и вариации размытых деревьев»). Семь состояний вместо четырёх: четыре тёплых леса (gold — прежний
+// «вечер», он же база; noon, morn, glade — новые композиции GPT), светлый тёплый туман (перекраска morn), дождь (перекраска glade, слой
+// дождя кодом), ночь (прежняя). Картинки — tools/forest28.py. Смена — блоками по 3 и 2 уровня (len) по кругу cycle: 'L' — очередной
+// тёплый лес из light (по кругу), иначе — названное состояние. Тёмные и пасмурные — по одному блоку из двух уровней между тёплыми
+// (6 уровней из 25 — 24 %), первый блок — gold, после ночи — тёплый. look: img — картинка, kind — живые слои (sun — лучи и пылинки,
+// fog — полосы тумана, rain — дождь, night — светлячки), ray — цвет лучей (0 белый, 1 янтарный), rayK — их сила, mote — цвет пылинок;
+// lift — низ леса светлее (screen: rgb, alpha сверху и снизу, с какой доли высоты); dim — лес за постройкой темнее (alpha), green — нижний слой (цвет, alpha), gtint — заливка травы, fill — цвет до загрузки картинки.
+const V28 = {
+  plan: { len: [3, 2], cycle: ['L', 'L', 'L', 'fog', 'L', 'rain', 'L', 'night', 'L', 'L'], light: ['gold', 'noon', 'morn', 'glade'] },
+  // дождь: штрихов за деревом и перед ним, длина (ед.), наклон (рад), скорость (ед./с), alpha за / перед, толщина за / перед (ед.);
+  // всплески на кромке корыта и траве: сколько сразу, период (с), радиус (ед.), alpha
+  rain: { back: 80, front: 12, len: [18, 34], ang: 0.22, speed: 760, a: [0.42, 0.36], w: [1.25, 1.6], col: '232,240,248', splash: 10, per: 0.5, r: 6, sa: 0.85 },
+};
+V13.states = ['gold', 'noon', 'morn', 'glade', 'fog', 'rain', 'night'];
+Object.assign(V13.look, {
+  gold:  { img: 'eve', kind: 'sun', ray: 1, rayK: 1.1, mote: '#ffe2a0', tint: [1.03, 0.99, 0.93], wash: [255, 238, 196, 0.1, 0.03], vig: 0.12, wk: 0.96, sh: [-2, 3.5, 0.22], rim: [1.0, 0.76, 0.42, 0.28],
+    grass: ['#3f5a1a', '#a4a83a', '#c8792a'], desat: 0.08, blur: 0.3, lift: [255, 216, 140, 0.0, 0.42, 0.18], dim: 0.04, green: ['#5a5a1c', 0.04], gtint: 'rgba(255,196,96,0.12)', fill: '#b6a457' },
+  noon:  { img: 'noon', kind: 'sun', ray: 0, rayK: 0.8, mote: '#fff4c4', tint: [1.02, 1.0, 0.94], wash: [255, 244, 214, 0.03, 0.0], vig: 0.16, wk: 0.96, sh: [-2, 3.5, 0.22], rim: [1.0, 0.88, 0.56, 0.24],
+    grass: ['#3f6a1c', '#a8c040', '#d0a038'], desat: 0.12, blur: 0.3, dim: 0.08, green: ['#4b5a1c', 0.1], gtint: 'rgba(255,214,110,0.08)', fill: '#b9c25a' },
+  morn:  { img: 'morn', kind: 'sun', ray: 1, rayK: 0.8, mote: '#ffe6c8', tint: [1.03, 0.99, 0.95], wash: [255, 238, 214, 0.03, 0.0], vig: 0.14, wk: 0.96, sh: [-2, 3.5, 0.22], rim: [1.0, 0.82, 0.62, 0.24],
+    grass: ['#3f6a1c', '#a8b848', '#d09a58'], desat: 0.12, blur: 0.3, dim: 0.08, green: ['#4b5a1c', 0.1], gtint: 'rgba(255,190,140,0.08)', fill: '#c2c07a' },
+  glade: { img: 'glade', kind: 'sun', ray: 0, rayK: 0.9, mote: '#fff0b0', tint: [1.01, 1.0, 0.94], wash: [250, 244, 210, 0.03, 0.0], vig: 0.16, wk: 0.96, sh: [-2, 3.5, 0.22], rim: [0.96, 0.92, 0.56, 0.22],
+    grass: ['#355f1a', '#98b838', '#c89a38'], desat: 0.1, blur: 0.3, dim: 0.07, green: ['#3f5a1c', 0.1], gtint: 'rgba(255,214,110,0.06)', fill: '#8fae48' },
+  fog:   { img: 'fog', kind: 'fog', mote: '#fffaf0', tint: [1.01, 1.0, 0.97], wash: [246, 236, 214, 0.04, 0.0], vig: 0.1, wk: 0.98, sh: [-1.2, 3, 0.16], rim: [1.0, 0.93, 0.8, 0.18],
+    grass: ['#5a6a3c', '#b4b67c', '#c8a468'], desat: 0.03, blur: 0.25, dim: 0.03, green: ['#7a7650', 0.06], gtint: 'rgba(246,234,206,0.16)', fill: '#e2d6b4' },
+  rain:  { img: 'rain', kind: 'rain', tint: [0.95, 0.98, 1.02], wash: [190, 210, 206, 0.03, 0.0], vig: 0.2, wk: 0.93, sh: [-1.2, 3, 0.2], rim: [0.76, 0.88, 0.96, 0.22],
+    grass: ['#24502a', '#5f8f4e', '#9a8a48'], desat: 0.04, blur: 0.3, dim: 0.07, green: ['#1f4a34', 0.1], gtint: 'rgba(110,140,160,0.16)', fill: '#5f7a66' },
+});
+Object.assign(V13.look.night, { img: 'night', kind: 'night', dim: 0.078, green: ['#173F2E', 0.104], gtint: 'rgba(8,22,48,0.55)', fill: '#1f3b48' });
+function plan28(n){                                           // номер состояния по номеру уровня (без случайности)
+  const P = V28.plan, lv = Math.max(1, n | 0), C = P.cycle, nL = C.filter(q => q === 'L').length; let b = 0, at = 1;
+  for (;;){ const len = P.len[b % P.len.length]; if (lv < at + len) break; at += len; b++; }
+  const slot = C[b % C.length]; if (slot !== 'L') return V13.states.indexOf(slot);
+  let li = Math.floor(b / C.length) * nL; for (let i = 0; i < b % C.length; i++) if (C[i] === 'L') li++;
+  return V13.states.indexOf(P.light[li % P.light.length]);
+}
+const look28 = (k) => V13.look[V13.states[k]];
 const F13 = { st: -1, from: -1, at: -9, force: -1, img: {}, cv: null, cvKey: '', prev: null, tint0: [1, 1, 1], tint1: [1, 1, 1], live: false, vst: [], vcol: [],
   baked: false, front: null, frontY: 0, sawG: null, saws: [], gates: [], frags: [], split: new Set(), sparks: [], nid: 0, shd: null, shM: null, wm: null, da: null, dw: null, om: null, dl: null, tickAt: 0, ray: null, glow: null, fog: null, css: false, stats: {} };
 const forest13 = () => V13.on && r3Game();
-const state13 = (n) => F13.force >= 0 ? F13.force : Math.floor((Math.max(1, n) - 1) / V13.block) % V13.states.length;
+const state13 = (n) => F13.force >= 0 ? F13.force : plan28(n);   // v28: блоками по 3 и 2 уровня (V28.plan)
 function img13(k){
-  const nm = 'forest-' + V13.states[k]; let im = F13.img[nm]; if (im) return im.naturalWidth ? im : null;
+  const nm = 'forest-' + (look28(k).img || V13.states[k]); let im = F13.img[nm]; if (im) return im.naturalWidth ? im : null;
   im = F13.img[nm] = new Image(); im.decoding = 'async'; im.onload = () => { F13.cvKey = ''; }; const file = nm + '.jpg';
   im.src = (window.PULP_ASSETS && window.PULP_ASSETS[file]) || 'assets/' + file + '?v=' + ASSET_V; return null;
 }
 function state13Set(n){                                       // состояние уровня; смена — плавно (лес, живые слои, свет)
-  const k = state13(n); for (let i = 0; i < V13.states.length; i++) img13(i); if (k === F13.st) return;
+  const k = state13(n); img13(k); img13(state13(n + 1)); img13(state13(n + 3)); if (k === F13.st) return;   // v28: лес уровня и ближайших смен — остальные лениво
   const T = V13.look[V13.states[k]].tint;
   if (F13.st >= 0 && F13.cv){ F13.prev = F13.cv; F13.from = F13.st; F13.at = G.rt; F13.tint0 = R3.tint ? [R3.tint.value.x, R3.tint.value.y, R3.tint.value.z] : T.slice(); }
   else { F13.prev = null; F13.from = -1; F13.at = -9; F13.tint0 = T.slice(); }
@@ -6836,8 +6874,11 @@ function canvas13(k){                                         // лес сост
     g.drawImage(im, x, y, iw, ih);
     if (L.blur > 0){ const d = 7, sm = document.createElement('canvas'); sm.width = Math.max(2, Math.round(w / d)); sm.height = Math.max(2, Math.round(h / d));   // круг 2: лес дальше — размытая копия (вниз и обратно)
       const sg = sm.getContext('2d'); sg.imageSmoothingQuality = 'high'; sg.drawImage(im, x / d, y / d, iw / d, ih / d);
-      g.globalAlpha = L.blur; g.imageSmoothingQuality = 'high'; g.drawImage(sm, 0, 0, w, h); g.globalAlpha = 1; } }
-  else { g.fillStyle = ['#86b35e', '#aebcb1', '#c99a4c', '#1f3b48'][k]; g.fillRect(0, 0, w, h); }
+      g.globalAlpha = L.blur; g.imageSmoothingQuality = 'high'; g.drawImage(sm, 0, 0, w, h); g.globalAlpha = 1; }
+    if (L.lift){ const [lr, lg2, lb, la0, la1, ly] = L.lift, q = g.createLinearGradient(0, h * ly, 0, h);   // v28: тени нижней части леса светлее и теплее (screen)
+      q.addColorStop(0, 'rgba(' + lr + ',' + lg2 + ',' + lb + ',' + la0 + ')'); q.addColorStop(1, 'rgba(' + lr + ',' + lg2 + ',' + lb + ',' + la1 + ')');
+      g.globalCompositeOperation = 'screen'; g.fillStyle = q; g.fillRect(0, h * ly, w, h * (1 - ly)); g.globalCompositeOperation = 'source-over'; } }
+  else { g.fillStyle = L.fill || '#b6a457'; g.fillRect(0, 0, w, h); }
   const q = K * V13.res, top = VIEW.top, gy = CFG.grindY, W = CFG.W, [r, gg, b, a0, a1] = L.wash;
   g.setTransform(q, 0, 0, q, DPR * view.ox * V13.res, DPR * view.oy * V13.res);
   const cx = W / 2, cy = top + (gy - top) * 0.45, R0 = Math.max(W, gy - top) * 0.72;
@@ -6847,10 +6888,10 @@ function canvas13(k){                                         // лес сост
   const rad = g.createRadialGradient(cx, cy, 30, cx, cy, R0);
   rad.addColorStop(0, 'rgba(' + r + ',' + gg + ',' + b + ',' + a0 + ')'); rad.addColorStop(1, 'rgba(' + r + ',' + gg + ',' + b + ',' + a1 + ')');
   g.fillStyle = rad; g.fillRect(-300, top - 400, W + 600, gy - top + 420);
-  { const da = V22.bg.dim[0] * V22.bg.dimK[k], dr = V22.bg.dim[1], dm = g.createRadialGradient(cx, cy, 20, cx, cy, R0 * dr);   // v22 (GPT №1, п. 7): лес прямо за постройкой темнее на 10–15 %
+  { const da = L.dim !== undefined ? L.dim : V22.bg.dim[0], dr = V22.bg.dim[1], dm = g.createRadialGradient(cx, cy, 20, cx, cy, R0 * dr);   // v22 (GPT №1, п. 7): лес прямо за постройкой темнее на 10–15 %
     dm.addColorStop(0, 'rgba(6,14,8,' + da + ')'); dm.addColorStop(0.6, 'rgba(6,14,8,' + (da * 0.75).toFixed(3) + ')'); dm.addColorStop(1, 'rgba(6,14,8,0)'); g.fillStyle = dm; g.fillRect(-300, top - 400, W + 600, gy - top + 420); }
   g.setTransform(1, 0, 0, 1, 0, 0);
-  { const col = V22.bg.green[0], ga = +(V22.bg.green[1] * V22.bg.greenK[k]).toFixed(3), lg = g.createLinearGradient(0, h * 0.6, 0, h); lg.addColorStop(0, 'rgba(' + hexRgb(col).join(',') + ',0)'); lg.addColorStop(0.35, 'rgba(' + hexRgb(col).join(',') + ',' + ga + ')');
+  { const col = (L.green || V22.bg.green)[0], ga = +(L.green || V22.bg.green)[1].toFixed(3), lg = g.createLinearGradient(0, h * 0.6, 0, h); lg.addColorStop(0, 'rgba(' + hexRgb(col).join(',') + ',0)'); lg.addColorStop(0.35, 'rgba(' + hexRgb(col).join(',') + ',' + ga + ')');
     lg.addColorStop(1, 'rgba(' + hexRgb(col).join(',') + ',' + ga + ')'); g.fillStyle = lg; g.fillRect(0, h * 0.6, w, h * 0.4); }   // v22: нижняя треть — общий зелёный слой (тёмная опора низа)
   const v = g.createRadialGradient(w / 2, h * 0.45, Math.min(w, h) * 0.4, w / 2, h * 0.45, Math.max(w, h) * 0.72); v.addColorStop(0, 'rgba(8,18,10,0)'); v.addColorStop(1, 'rgba(8,18,10,' + L.vig + ')');
   g.fillStyle = v; g.fillRect(0, 0, w, h);
@@ -6877,31 +6918,33 @@ function spr13(w, h, fn){ const c = document.createElement('canvas'); c.width = 
 function amb13(c, k, al){
   if (al <= 0.01) return;
   const t = REDUCED ? 0 : G.rt, x0 = -view.ox / view.k, x1 = (cv.width / DPR - view.ox) / view.k, y0 = -view.oy / view.k, y1 = (cv.height / DPR - view.oy) / view.k, W = x1 - x0, H = y1 - y0;
-  if (k === 0 || k === 2){
+  const L = look28(k), kd = L.kind || 'sun';                 // v28: живые слои — по роду состояния (sun, fog, rain, night)
+  if (kd === 'rain'){ rain28(c, al, x0, y0, W, H, 0); c.globalAlpha = 1; return; }
+  if (kd === 'sun'){
     if (!F13.ray) F13.ray = ['255,246,214', '255,196,110'].map(rgb => spr13(64, 256, (g, w, h) => {
       const a = g.createLinearGradient(0, 0, w, 0); a.addColorStop(0, 'rgba(' + rgb + ',0)'); a.addColorStop(0.5, 'rgba(' + rgb + ',1)'); a.addColorStop(1, 'rgba(' + rgb + ',0)'); g.fillStyle = a; g.fillRect(0, 0, w, h);
       g.globalCompositeOperation = 'destination-in'; const b = g.createLinearGradient(0, 0, 0, h); b.addColorStop(0, 'rgba(0,0,0,0.2)'); b.addColorStop(0.15, 'rgba(0,0,0,1)'); b.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = b; g.fillRect(0, 0, w, h); }));
     c.save(); c.globalCompositeOperation = 'lighter';
     for (let i = 0; i < 3; i++){ const a = 0.07 + 0.04 * Math.sin(t * 0.21 + i * 2.1) + 0.025 * Math.sin(t * 0.57 + i * 1.3), bw = 26 + 16 * i;
-      c.globalAlpha = al * Math.max(0, a) * (k === 2 ? 1.25 : 1) * 0.6;   // v16: лучи слабее — свет уже в картинке леса
+      c.globalAlpha = al * Math.max(0, a) * (L.rayK || 1) * 0.6;   // v16: лучи слабее — свет уже в картинке леса
       c.save(); c.translate(x1 - W * (0.1 + 0.19 * i) + 9 * Math.sin(t * 0.17 + i), y0 - 40); c.rotate(0.44 + 0.06 * i + 0.025 * Math.sin(t * 0.13 + i * 3));
-      c.drawImage(F13.ray[k === 2 ? 1 : 0], -bw, 0, 2 * bw, H * 1.05); c.restore(); }
+      c.drawImage(F13.ray[L.ray ? 1 : 0], -bw, 0, 2 * bw, H * 1.05); c.restore(); }
     c.restore();
   }
-  if (k !== 3){                                              // пылинки (в тумане — реже и белее)
-    const n = Math.round(V13.fx.motes * (k === 1 ? 0.5 : 1)); c.fillStyle = k === 2 ? '#ffd690' : k === 1 ? '#f6fff8' : '#fff4c4';
+  if (kd !== 'night'){                                       // пылинки (в тумане — реже и белее)
+    const n = Math.round(V13.fx.motes * (kd === 'fog' ? 0.5 : 1)); c.fillStyle = L.mote || '#fff4c4';
     for (let i = 0; i < n; i++){ const h1 = r3Hash(i * 3.17 + k * 0.5), h2 = r3Hash(i * 7.71 + 1.3), h3 = r3Hash(i * 1.93 + 4.2);
       const x = x0 + ((h1 + t * (0.004 + 0.008 * h2)) % 1) * W + 10 * Math.sin(t * (0.3 + 0.5 * h3) + i), y = y0 + H * (0.06 + 0.84 * ((h2 + 10 - t * (0.003 + 0.005 * h3)) % 1));
       c.globalAlpha = al * (0.16 + 0.36 * (0.5 + 0.5 * Math.sin(t * (0.9 + 1.6 * h1) + i * 2.3))); c.beginPath(); c.arc(x, y, 0.8 + 1.1 * h3, 0, 6.29); c.fill(); }
   }
-  if (k === 1){                                              // туман: три полосы мягких клубов плывут вбок
+  if (kd === 'fog'){                                         // туман: три полосы мягких клубов плывут вбок
     if (!F13.fog) F13.fog = spr13(512, 120, (g, w, h) => { for (let i = 0; i < 26; i++){ const x = w * r3Hash(i * 2.7 + 0.3), y = h * (0.35 + 0.3 * r3Hash(i * 5.3 + 1)), r = 26 + 34 * r3Hash(i * 9.1 + 2);
-      for (const dx of [-w, 0, w]){ const q = g.createRadialGradient(x + dx, y, 0, x + dx, y, r); q.addColorStop(0, 'rgba(244,248,246,0.42)'); q.addColorStop(1, 'rgba(244,248,246,0)'); g.fillStyle = q; g.fillRect(x + dx - r, y - r, 2 * r, 2 * r); } } });
+      for (const dx of [-w, 0, w]){ const q = g.createRadialGradient(x + dx, y, 0, x + dx, y, r); q.addColorStop(0, 'rgba(250,242,222,0.42)'); q.addColorStop(1, 'rgba(250,242,222,0)'); g.fillStyle = q; g.fillRect(x + dx - r, y - r, 2 * r, 2 * r); } } });
     const fw = W * 1.6;
     for (let i = 0; i < 3; i++){ const y = y0 + H * [0.3, 0.55, 0.8][i], off = ((t * (5 + 3 * i) + i * 170) % fw + fw) % fw; c.globalAlpha = al * [0.22, 0.18, 0.24][i];   // v16: туман тоньше — низ не белёсый
       for (const dx of [-fw, 0]) c.drawImage(F13.fog, x0 + off + dx, y - 50, fw, 120); }
   }
-  if (k === 3){                                              // светлячки: мигают редко, плывут медленно
+  if (kd === 'night'){                                       // светлячки: мигают редко, плывут медленно
     if (!F13.glow) F13.glow = spr13(48, 48, (g, w) => { const q = g.createRadialGradient(w / 2, w / 2, 0, w / 2, w / 2, w / 2); q.addColorStop(0, 'rgba(255,255,220,1)'); q.addColorStop(0.18, 'rgba(226,255,140,0.9)'); q.addColorStop(0.5, 'rgba(190,240,90,0.25)'); q.addColorStop(1, 'rgba(190,240,90,0)'); g.fillStyle = q; g.fillRect(0, 0, w, w); });
     c.save(); c.globalCompositeOperation = 'lighter';
     for (let i = 0; i < V13.fx.flies; i++){ const h1 = r3Hash(i * 4.13 + 0.7), h2 = r3Hash(i * 8.31 + 2.9), h3 = r3Hash(i * 2.57 + 6.1);
@@ -6911,6 +6954,29 @@ function amb13(c, k, al){
     c.restore();
   }
   c.globalAlpha = 1;
+}
+// v28: дождь — косые штрихи от времени и номера (без случайности и без состояния). front = 0 — за деревом (гуще, тоньше), 1 — перед
+// сценой (редко, у краёв кадра, середина поля почти чистая); одна обводка на слой — дёшево. Всплески — на кромке корыта и траве.
+function rain28(c, al, x0, y0, W, H, front){
+  const R = V28.rain, t = REDUCED ? 0 : G.rt, n = front ? R.front : R.back, sa = Math.sin(R.ang), ca = Math.cos(R.ang), cx = CFG.W / 2;
+  c.save(); c.globalCompositeOperation = 'source-over'; c.lineCap = 'round'; c.strokeStyle = 'rgba(' + R.col + ',1)'; c.lineWidth = R.w[front]; c.globalAlpha = al * R.a[front];
+  c.beginPath();
+  for (let i = 0; i < n; i++){ const h1 = r3Hash(i * 3.71 + front * 9.1 + 0.4), h2 = r3Hash(i * 5.13 + front * 2.3 + 1.7), h3 = r3Hash(i * 8.29 + 3.1);
+    const v = R.speed * (0.8 + 0.4 * h3), len = R.len[0] + (R.len[1] - R.len[0]) * h3, HH = H + len + 40;
+    const yy = ((h2 * HH + t * v * ca) % HH + HH) % HH - len - 20, xs = ((h1 * (W + 80) + t * v * sa) % (W + 80) + (W + 80)) % (W + 80);
+    let x = x0 - 40 + xs, y = y0 + yy;
+    if (front){ const u = Math.abs(x - cx) / (W / 2); if (u < 0.55) x += (x < cx ? -1 : 1) * W * 0.3; }   // перед сценой — к краям
+    c.moveTo(x, y); c.lineTo(x - len * sa, y - len * ca); }
+  c.stroke();
+  if (front){                                               // всплески: дуга-«корона» и пара капель, живёт четверть периода
+    const T = V13.trough, gy = CFG.grindY, yR = gy + T.rim - 1, yG = gy + T.face + 14; c.lineWidth = 1.1; c.strokeStyle = 'rgba(' + R.col + ',1)'; c.fillStyle = 'rgba(' + R.col + ',1)';
+    for (let i = 0; i < R.splash; i++){ const ph = t / R.per + r3Hash(i * 2.9 + 0.7), cyc = Math.floor(ph), u = ph - cyc; if (u > 0.3) continue;
+      const h = r3Hash(i * 7.7 + cyc * 1.37), onRim = i % 3 !== 2, x = onRim ? T.x0 + 8 + h * (CFG.W - 2 * T.x0 - 16) : x0 + W * (h < 0.5 ? 0.04 + 0.2 * h : 0.76 + 0.2 * (h - 0.5) * 2), y = onRim ? yR : yG + 20 * r3Hash(i * 1.3 + cyc);
+      const k = u / 0.3, r = R.r * (0.4 + 0.8 * k); c.globalAlpha = al * R.sa * (1 - k);
+      c.beginPath(); c.ellipse(x, y, r, r * 0.32, 0, Math.PI, 2 * Math.PI); c.stroke();
+      c.beginPath(); c.arc(x - r * 0.7, y - 4 * Math.sin(k * 3.14) - 1, 0.8, 0, 6.29); c.arc(x + r * 0.8, y - 5 * Math.sin(k * 3.14) - 1, 0.7, 0, 6.29); c.fill(); }
+  }
+  c.restore();
 }
 // --- дерево (three.js): брус с фаской по контуру, волокно вдоль длинной стороны, кольца на торце штыря; свет — как у фруктов ---
 const W13_VS = `uniform float uTg; varying vec3 vW; varying vec3 vN;
@@ -8712,6 +8778,8 @@ function front13(c, s, sh){
   const A = grass13(k); c.drawImage(A.cv, Math.round(sh.x * K), A.y + Math.round(sh.y * K));
   if (F13.from >= 0 && f < 1){ const B = grass13(F13.from); c.globalAlpha = 1 - fs; c.drawImage(B.cv, Math.round(sh.x * K), B.y + Math.round(sh.y * K)); c.globalAlpha = 1; }
   c.restore(); vbase(c, sh.x, sh.y);
+  { const ra = (look28(k).kind === 'rain' ? (F13.from >= 0 && f < 1 ? fs : 1) : 0) + (F13.from >= 0 && f < 1 && look28(F13.from).kind === 'rain' ? 1 - fs : 0);   // v28: дождь перед сценой и всплески
+    if (ra > 0.01){ const x0 = -view.ox / view.k, y0 = -view.oy / view.k; rain28(c, ra, x0, y0, (cv.width / DPR) / view.k, (cv.height / DPR) / view.k, 1); } }
 }
 // v22: контактная тень корыта: тёмная земля между ножками под чашей (мягкие края) и пятно у основания ножек; рисуется под передом корыта
 function trough22Shadow(c, T, gy, W){
@@ -8757,7 +8825,7 @@ function grass16(g, im, k, xL, xR, y0, yBot, more){
   g.fillStyle = '#1f4a1c'; g.fillRect(xL - 2, y0 + H - 2, xR - xL + 4, Math.max(0, yBot - y0 - H + 44));
   for (let i = 0; i < n; i++){ const x = xL - Wt * 0.37 + i * Wt; g.save(); if (i % 2){ g.translate(x + Wt, y0); g.scale(-1, 1); g.drawImage(im, 0, 0, Wt, H); } else g.drawImage(im, x, y0, Wt, H); g.restore(); }
   if (more) more(g);
-  const tint = [null, 'rgba(196,212,206,0.14)', 'rgba(255,168,70,0.16)', 'rgba(8,22,48,0.55)'][k];   // v22: туман — 0,14 (было 0,26: трава серела)
+  const tint = look28(k).gtint;   // v28: по состоянию (V13.look.*.gtint)   // v22: туман — 0,14 (было 0,26: трава серела)
   if (tint){ g.save(); g.globalCompositeOperation = 'source-atop'; g.fillStyle = tint; g.fillRect(xL - 2, gy22Top() - 2, xR - xL + 4, yBot - gy22Top() + 48); g.restore(); }
 }
 // v22 (GPT №1, п. 6): пучки травы по бокам — 5 несимметричных групп из той же картинки (вырезка кочки, низ растворяется в полосе);
