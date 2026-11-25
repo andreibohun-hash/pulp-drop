@@ -322,7 +322,14 @@ const CFG = {
   clearSet: 'v11',      // v11: 100 уровней CLEAR11 (шаблоны + решатель, запас — в записи уровня); 'v7' — прежние 12 (CLEAR7, набор ×2, хеш #v7old)
   loop11: 51,           // v11: после последнего — по кругу с этого уровня (все механики уже введены; v15 — прежний 41-й, сдвиг на 10)
   //     Числа — DESIGN «v7: факт спайка». Твёрдое (кокос) нож и пила не берут: отскок / пила глохнет, бросок не тратится.
-  sweepAt: 0.04,        // осталось меньше этой доли кучи — остатки сметает само (падают сквозь полки в жернова)
+  sweepAt: 0.04,        // осталось меньше этой доли кучи — победа; остатки уходят в пилы сами (v29: по физике, sweepOut)
+  // v29: уборка остатков после победы: soak — крошка меньше этой доли массы впитывается на месте; скатывание — разгон ускорением rollA
+  // до скорости «путь / rollGo» (в пределах rollV–rollVmax ед./с), путь пересчитывается раз в rollRe с, не дольше rollT с (длинный
+  // путь — «путь / скорость + 0,4 с», но не больше rollTmax; стоит
+  // медленнее stuckV ед./с stuckT с — сразу прыжок); прыжок — вершина дуги на margin ед. выше
+  // преград (не ниже lift над телом, подъём не больше climb), запас скорости hopK, вращение hopSpin, прыжков hopMax, «лёг» — медленнее
+  // settleV; лежит и не успевает до пил к end с после победы (с учётом hopT на прыжок) — впитался на месте; после endMax — всё, что не падает
+  sweep29: { soak: 0.003, rollV: 90, rollVmax: 240, rollGo: 0.9, rollRe: 0.15, rollA: 900, rollT: 1.2, rollTmax: 1.7, stuckV: 10, stuckT: 0.25, settleV: 15, hopMax: 2, hopK: 1.06, hopSpin: 5, lift: 18, margin: 10, climb: 260, hopT: 0.55, end: 2.45, endMax: 2.85 },
   friction7: 0.12,      // трение целых фруктов в v7 (v2–v6 — friction 0,3): мелочь течёт в открытую щель, а не встаёт аркой везде; затор —
                         // там, где он задуман (мелочь шире щели / 1,3)
   WEAPONS7: {
@@ -1911,6 +1918,7 @@ function step(s){
       if ((v.x * v.x + v.y * v.y) * ppm * ppm > CFG.restSpeed * CFG.restSpeed || Math.abs(pb.getAngularVelocity()) > CFG.restSpin) moving = true;
     }
   }
+  if (s.sweep){ sweepStep(s); if (s.sweep.m.size) moving = true; }   // v29: остатки после победы скатываются / выскакивают
   if (s.flight){ stepFlight(s); moving = true; }              // v6: оружие летит и рубит по мере пролёта
   for (const g of s.gates) if (g.kind === 'plank' && !g.gone && g.pb.getPosition().y * ppm > gy + 30){   // v4: доска без верёвок ушла в жернова
     s.world.destroyBody(g.pb); g.gone = true; ev(s, { type: 'plank', i: s.gates.indexOf(g), x: +(g.pb.getPosition().x * ppm).toFixed(1) }); }
@@ -3635,12 +3643,165 @@ function clearCheck(s){
   if (heapLeft(s) > CFG.sweepAt * s.total) return false;
   s.won = true; s.swept = true; s.winUsed = s.used; s.winPeak = s.peakNet;
   let a = 0; const n = s.bodies.length;
-  for (const b of s.bodies){ a += b.area; b.flags.swept = true;
-    for (let f = b.pb.getFixtureList(); f; f = f.getNext()) f.setFilterMaskBits(0);
-    const v = b.pb.getLinearVelocity(); b.pb.setAwake(true); b.pb.setLinearVelocity(planck.Vec2(v.x * 0.3, Math.max(v.y, 90 / CFG.ppm))); }
+  for (const b of s.bodies) a += b.area;
   ev(s, { type: 'sweep', n, area: +a.toFixed(0), share: +(a / s.total).toFixed(3) });
+  sweepOut(s);                                                // v29: остатки уходят по физике (было: маска 0 — сквозь детали)
   ev(s, { type: 'win', juice: +(s.juice / s.total).toFixed(3), moves: s.moves, sweep: n > 0 });
   return true;
+}
+// ------------------------------------------------------------------ v29: остатки после победы уходят по физике
+// Раньше clearCheck / massCheck снимали остаткам маску столкновений, и целая слива тонула в доске. Теперь победа объявляется так же
+// (условие и момент прежние), а sweepOut выбирает каждому остатку способ уйти по геометрии уровня (детерминированно):
+// крошка (< sweep29.soak массы уровня) — впиталась на месте (сок); под телом свободный пролёт до пил — падает само; есть путь под уклон
+// к краю / щели — скатывается (мягкий разгон вдоль опоры, sweepStep); пути нет или не сорвался за rollT — выскакивает дугой над верхом
+// преграды к ближайшему свободному пролёту; не успевает до пил к sweep29.end с — впитался (страховка). Столкновения не отключаются никогда.
+function sweepSolids(s){
+  const out = [], add = (P, g) => { let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+    for (const p of P){ if (p[0] < x0) x0 = p[0]; if (p[0] > x1) x1 = p[0]; if (p[1] < y0) y0 = p[1]; if (p[1] > y1) y1 = p[1]; } out.push({ P, x0, y0, x1, y1, g: g || 0 }); };
+  for (const st of s.statics) if (st.role !== 'wall' && !(st.lazy && !s.deflOn)) add(st.poly, st.grate);
+  for (const g of s.gates) if (!g.gone) for (const P of dynPartPolys(g)) add(P);
+  for (const sp of s.spins) for (const P of dynPartPolys(sp)) add(P);
+  return out;
+}
+// вертикаль x через выпуклую деталь → [верх, низ] или null
+function colSpan(S, x){
+  if (x < S.x0 || x > S.x1) return null; const P = S.P; let a = 1e9, b = -1e9;
+  for (let i = 0; i < P.length; i++){ const p = P[i], q = P[(i + 1) % P.length];
+    if ((p[0] - x) * (q[0] - x) > 0) continue;
+    if (Math.abs(q[0] - p[0]) < 1e-9){ a = Math.min(a, p[1], q[1]); b = Math.max(b, p[1], q[1]); continue; }
+    const y = p[1] + (q[1] - p[1]) * (x - p[0]) / (q[0] - p[0]); if (y < a) a = y; if (y > b) b = y; }
+  return a <= b ? [a, b] : null;
+}
+// первая деталь вниз от (x, y0): y её верха (y0 — точка уже внутри детали); нет — Infinity
+function rayDown(SS, x, y0){
+  let best = Infinity;
+  for (const S of SS){ if (S.y1 < y0 || S.y0 > best) continue; const c = colSpan(S, x); if (!c || c[1] < y0) continue; const y = Math.max(c[0], y0); if (y < best) best = y; }
+  return best;
+}
+// свободный пролёт до пил: полоса ±0,95 r от y0 вниз без деталей
+function colFree(SS, x, y0, r){
+  const h = r * 0.95; if (x - h < 0 || x + h > CFG.W) return false;
+  for (const dx of [-h, -h / 2, 0, h / 2, h]) if (rayDown(SS, x + dx, y0) < CFG.grindY - 4) return false;
+  return true;
+}
+// путь под уклон: щуп радиуса r идёт от тела в сторону d по опоре (вниз — сколько угодно, вверх — не больше 0,35 r), упор лбом — нет пути;
+// упал на нижнюю деталь — дальше под её уклон (до трёх смен стороны). → длина пути до свободного пролёта или -1
+function rollPath(SS, x, y, r, d){
+  let px = x, py = y, flips = 0; const st = 3;
+  for (let k = 1; k <= 160; k++){
+    px += d * st; if (px < r || px > CFG.W - r) return -1;
+    if (rayDown(SS, px + d * r * 0.85, py - r * 0.45) <= py + r * 0.3) return -1;      // лоб: бортик, стенка, подъём
+    const sy = rayDown(SS, px, py - r * 0.3);
+    if (sy >= CFG.grindY - 4){ if (colFree(SS, px, py - r, r)) return k * st; continue; }   // центр за краем — катится дальше, пока не свалится всем телом
+    if (py + r - sy > r * 0.35) return -1;
+    if (sy - (py + r) > r && flips < 3){ const yl = rayDown(SS, px - 6, sy - r), yr = rayDown(SS, px + 6, sy - r), nd = yr > yl + 0.5 ? 1 : yl > yr + 0.5 ? -1 : d;
+      if (nd !== d){ d = nd; flips++; } }
+    py = sy - r;
+  }
+  return -1;
+}
+// прыжок: ближайший свободный пролёт, над которым можно пролететь дугой (верх преград между телом и пролётом, без потолка над телом)
+function hopPlan(SS, b, r){
+  const P = CFG.sweep29, R = b.rad, top0 = b.y - P.climb, pref = b.x < CFG.W / 2 ? 1 : -1;
+  let roof = Infinity;                                       // потолок над телом: низ детали над ним
+  for (const dx of [-R * 0.6, 0, R * 0.6]) for (const S of SS){ const c = colSpan(S, b.x + dx); if (c && c[1] < b.y - r * 0.5 && c[1] > top0 - 40) roof = Math.min(roof, b.y - c[1]); }
+  for (let k = 1; k <= 95; k++) for (const d of [pref, -pref]){
+    const x = b.x + d * k * 4; if (x < R + 2 || x > CFG.W - R - 2) continue;
+    let top = b.y;                                           // верх преград на пути (то, что выше низа тела и не выше полосы подъёма)
+    for (let q = d > 0 ? b.x : x - R; q <= (d > 0 ? x + R : b.x); q += 4) for (const S of SS){ const c = colSpan(S, q);   // от середины тела вперёд
+      if (c && c[0] < b.y + r * 0.5 && c[1] > b.y - 3 * r - 40 && c[0] < top) top = c[0]; }
+    const apex = Math.min(b.y - P.lift, top - R - P.margin); if (apex < top0) continue;
+    if (b.y - apex > roof - R - 4) continue;                 // упрётся в потолок
+    if (!colFree(SS, x, apex, r)) continue;
+    return { x, apex, top };
+  }
+  return null;
+}
+const sweepR = (b) => Math.sqrt(b.area / Math.PI);
+// решётка (v4 grate) пропускает тело тоньше зазора — для него прутьев нет (pre-solve ядра выключает контакт)
+const sweepPass = (SS, b) => SS.some(S => S.g) ? SS.filter(S => !(S.g && b.thick < S.g - CFG.grateSlack)) : SS;
+// куда катиться: короче путь; поровну — к середине. → { d, len } или null
+function rollPick(SS, b, r){
+  const L = rollPath(SS, b.x, b.y, r, -1), R = rollPath(SS, b.x, b.y, r, 1);
+  if (L < 0 && R < 0) return null;
+  const K = R >= 0 && (L < 0 || R < L || (R === L && b.x < CFG.W / 2)) ? { d: 1, len: R } : { d: -1, len: L };
+  if (rayDown(SS, b.x, b.y) > b.y + r * 1.5){   // под серединой провал (тело висит на углу / в горле): сперва — в сторону провала
+    const yl = rayDown(SS, b.x - r * 0.7, b.y), yr = rayDown(SS, b.x + r * 0.7, b.y); if (yl !== yr) K.d = yl > yr ? -1 : 1; }
+  return K;
+}
+function sweepSoak(s, b, why){
+  const a = b.area + (b.juiceX || 0);
+  ev(s, { type: 'sweep.soak', id: b.id, kind: b.kind, x: +b.x.toFixed(1), y: +b.y.toFixed(1), r: +sweepR(b).toFixed(1), area: +a.toFixed(1), why });
+  removeBody(s, b); addJuice(s, b.kind, a, Math.max(0, Math.min(CFG.W, b.x)));
+  s.sweep.soaked++;
+}
+function sweepOut(s){
+  const P = CFG.sweep29, SS = sweepSolids(s), n = s.bodies.length;
+  s.sweep = { t0: s.t, m: new Map(), soaked: 0 };
+  for (let i = 0; i < s.ropes.length; i++){ const r = s.ropes[i];    // висящие на черенке / верёвке остатки — верёвка рвётся от толчка
+    if (r.cut || !((r.ea.k === 'fruit' && s.bodies.some(b => b.id === r.ea.id)) || (r.eb.k === 'fruit' && s.bodies.some(b => b.id === r.eb.id)))) continue;
+    const e = ropeEnds(r); cutRope(s, { i, x: (e[0][0] + e[1][0]) / 2, y: (e[0][1] + e[1][1]) / 2, u: 0.5 }); }
+  for (const b of s.bodies.slice()){
+    b.flags.swept = true;
+    if (b.area + (b.juiceX || 0) < P.soak * s.total){ sweepSoak(s, b, 'crumb'); continue; }
+    b.pb.setAwake(true);
+    const r = sweepR(b), st = { way: 'fall', d: 0, t0: s.t, slow: 0, hops: 0, plan: null }, SB = sweepPass(SS, b);
+    if (!colFree(SB, b.x, b.y, r)){ const K = rollPick(SB, b, r);
+      if (K){ st.way = 'roll'; st.d = K.d; st.v = Math.max(P.rollV, Math.min(P.rollVmax, K.len / P.rollGo)); st.T = Math.max(P.rollT, Math.min(P.rollTmax, K.len / st.v + 0.4)); st.len = K.len; st.re = s.t; } else st.way = 'hop'; }
+    b.flags.way = st.way; s.sweep.m.set(b.id, st);
+    ev(s, { type: 'sweep.way', id: b.id, way: st.way, d: st.d, x: +b.x.toFixed(1), y: +b.y.toFixed(1) });
+  }
+  return n;
+}
+function sweepHop(s, SS, b, st){
+  const P = CFG.sweep29, r = sweepR(b), H = hopPlan(SS, b, r), g = CFG.gravity * CFG.ppm, ppm = CFG.ppm;
+  st.hops++; st.t0 = s.t; st.slow = 0; st.wedge = false;
+  if (!H){ st.way = 'stuck'; return; }
+  const h = b.y - H.apex, tUp = Math.sqrt(2 * h / g), tDn = Math.sqrt(2 * Math.max(6, H.top - b.rad - H.apex + b.rad * 0.5) / g);
+  const vy = -Math.sqrt(2 * g * h) * P.hopK, vx = (H.x - b.x) / (tUp + tDn), d = H.x > b.x ? 1 : -1;
+  b.pb.setAwake(true); b.pb.setLinearVelocity(planck.Vec2(vx / ppm, vy / ppm)); b.pb.setAngularVelocity(d * P.hopSpin);
+  st.way = 'air'; st.plan = H; st.d = d; b.flags.way = 'hop';
+  ev(s, { type: 'sweep.hop', id: b.id, kind: b.kind, x: +b.x.toFixed(1), y: +b.y.toFixed(1), r: +sweepR(b).toFixed(1), tx: +H.x.toFixed(1), apex: +H.apex.toFixed(1), n: st.hops });
+}
+function sweepStep(s){
+  const W = s.sweep; if (!W.m.size) return;
+  const P = CFG.sweep29, ppm = CFG.ppm, dt = CFG.dt, g = CFG.gravity * ppm, S0 = sweepSolids(s), t = s.t - W.t0;
+  for (const b of s.bodies.slice()){
+    const st = W.m.get(b.id); if (!st) continue;
+    const SS = sweepPass(S0, b);
+    const pb = b.pb, v = pb.getLinearVelocity(), vx = v.x * ppm, vy = v.y * ppm, sp = Math.hypot(vx, vy), r = sweepR(b);
+    const free = !st.wedge && colFree(SS, b.x, b.y, r);   // wedge — застрял в пролёте (горло уже тела): дальше как на опоре
+    if (free && st.way !== 'fall'){ if (st.way === 'air'){ pb.setLinearVelocity(planck.Vec2(v.x * 0.35, v.y)); } st.way = 'fall'; st.t0 = s.t; continue; }
+    if (st.way === 'fall'){
+      if (free){ st.slow = sp < P.settleV ? st.slow + dt : 0; if (st.slow >= 0.2){ st.wedge = true; st.slow = 0; sweepHop(s, SS, b, st); } }
+      else { st.slow = sp < P.settleV ? st.slow + dt : 0; if (st.slow >= 0.12){ const K = rollPick(SS, b, r);
+        if (K){ st.way = 'roll'; st.d = K.d; st.v = Math.max(P.rollV, Math.min(P.rollVmax, K.len / P.rollGo)); st.T = Math.max(P.rollT, Math.min(P.rollTmax, K.len / st.v + 0.4)); st.len = K.len; st.re = s.t; st.t0 = s.t; st.slow = 0; if (b.flags.way === 'fall') b.flags.way = 'roll'; } else sweepHop(s, SS, b, st); } }
+    } else if (st.way === 'roll'){
+      pb.setAwake(true);
+      if (s.t - st.re >= P.rollRe){ st.re = s.t; const K = rollPick(SS, b, r);   // сорвался на нижнюю доску — дальше под её уклон
+        if (K){ if (K.d !== st.d) st.slow = 0; st.d = K.d; st.len = K.len;
+          const left = P.end - t - Math.sqrt(2 * Math.max(0, CFG.grindY - b.y - r) / g) - 0.2;   // успеть к end: скорость по остатку пути
+          st.v = Math.max(st.v, Math.min(P.rollVmax, K.len / Math.max(0.25, left)));
+          if (Math.abs(vx) > P.rollV * 0.5) st.T = Math.max(st.T, s.t - st.t0 + K.len / st.v + 0.3); }   // катится — путь ещё есть
+        else if (sp < P.settleV){ sweepHop(s, SS, b, st); continue; } }
+      let touch = false; for (let e = pb.getContactList(); e; e = e.next) if (e.contact.isTouching()){ touch = true; break; }
+      const along = st.d * vx;
+      if (touch && along < st.v){ const k = Math.min(P.rollA * dt, st.v - along), m = pb.getMass(); pb.applyLinearImpulse(planck.Vec2(st.d * k * m / ppm, 0), pb.getWorldCenter(), true); }   // толкаем только по опоре
+      st.slow = touch && along < P.stuckV ? st.slow + dt : 0;
+      if (s.t - st.t0 >= st.T || (s.t - st.t0 > 0.2 && st.slow >= P.stuckT)) sweepHop(s, SS, b, st);
+    } else if (st.way === 'hop') sweepHop(s, SS, b, st);
+    else if (st.way === 'air'){
+      const H = st.plan;
+      if (H && (H.x - b.x) * st.d <= r * 0.2 && b.y < H.top) pb.setLinearVelocity(planck.Vec2(v.x * 0.5, v.y));   // над пролётом — вниз почти отвесно
+      if (s.t - st.t0 > 0.15 && vy >= 0){ st.slow = sp < P.settleV ? st.slow + dt : 0; if (st.slow >= 0.1){ if (st.hops < P.hopMax) sweepHop(s, SS, b, st); else st.way = 'stuck'; } }
+    }
+    // страховка: до пил не успеть к end — впитался
+    const fallT = Math.sqrt(2 * Math.max(0, CFG.grindY - b.y - r) / g);
+    // страховка: лежит (покой ≥ 0,15 с) и до пил к end не успеет; после endMax гасим всё, что не падает (в воздухе — никогда)
+    const eta = st.way === 'air' ? 0 : st.way === 'roll' ? (st.len || 0) / P.rollVmax + 0.15 : P.hopT;   // катится — остаток пути; лежит — прыжок
+    st.rest = sp < P.settleV ? (st.rest || 0) + dt : 0;   // лежит — покой подряд (разворот на доске проходит через ноль скорости — не покой)
+    if (st.way === 'stuck' || (!free && ((st.rest >= 0.15 && t + fallT + eta > P.end) || (t > P.endMax && vy < P.rollV)))){ W.m.delete(b.id); sweepSoak(s, b, st.way === 'stuck' ? 'stuck' : 'late'); }
+  }
 }
 // ------------------------------------------------------------------ v24: волна-досыпка (кормушка) и победа по массе
 // Кормушка L.feed = { x, y, w, zone: [x0, y0, x1, y1], lane, portions: [{ key, items: [[вид, масштаб, tag, угол°], …], rate, delay, plugs }] }:
@@ -3715,9 +3876,8 @@ function massCheck(s){
   if (!ok) s.valve = left;
   s.won = true; s.swept = true; s.winUsed = s.used; s.winPeak = s.peakNet;
   const n = s.bodies.length;
-  for (const b of s.bodies){ b.flags.swept = true; for (let f = b.pb.getFixtureList(); f; f = f.getNext()) f.setFilterMaskBits(0);
-    const v = b.pb.getLinearVelocity(); b.pb.setAwake(true); b.pb.setLinearVelocity(planck.Vec2(v.x * 0.3, Math.max(v.y, 90 / CFG.ppm))); }
   ev(s, { type: 'sweep', n, area: +left.toFixed(0), share: +(left / tot).toFixed(4), valve: !ok });
+  sweepOut(s);                                                // v29: остатки уходят по физике (было: маска 0 — сквозь детали)
   ev(s, { type: 'win', juice: +(massDone(s) / tot).toFixed(4), moves: s.moves, sweep: n > 0, mass: true });
   return true;
 }
@@ -5078,7 +5238,9 @@ function onEvent(e){
     case 'land': landFX(e); break;
     case 'bounce': bounceFX(e); break;              // v7: нож отскочил от твёрдого / пила заглохла
     case 'mace': maceFX(e); break;                  // v7: круг удара булавы
-    case 'sweep': sweepFX(e); break;                // v7: остатки сметает само
+    case 'sweep': sweepFX(e); break;                // v7: остатки сметает само; v29 — толчок постройки
+    case 'sweep.hop': sweepHopFX(e); break;         // v29: остаток выскочил — всплеск сока в точке отрыва
+    case 'sweep.soak': sweepSoakFX(e); break;       // v29: крошка впиталась — пятно сока на дереве
     case 'weapon': log('event', 'weapon', e.w + (e.auto ? ' auto' : '')); trayUpdate(); break;
     case 'strokeEnd': log('event', 'stroke', 'cuts=' + e.cuts + ' len=' + e.len); break;
     case 'split': splitFX(e); slabBorn(e, e.w || FX.sliceW || 'knife'); FX.sliceW = 'knife'; break;
@@ -5836,7 +5998,20 @@ function bounceFX(e){
   trayUpdate();
 }
 function maceFX(e){ log('event', 'mace', 'n=' + e.n + ' R=' + e.R); FX.rings.push({ x: e.x, y: e.y, r: e.R, t0: G.rt, col: '#c77dff' }); shake(0, 1, W6.smashShake * 0.6); }
-function sweepFX(e){ log('event', 'sweep', 'n=' + e.n + ' share=' + e.share); if (e.n) Sound.play('sweep'); FX.sweepAt = G.rt; }
+function sweepFX(e){ log('event', 'sweep', 'n=' + e.n + ' share=' + e.share); if (e.n){ Sound.play('sweep'); shake(0, 1, V29.shake); } FX.sweepAt = G.rt; }
+// v29 «Остатки по физике»: на победе постройку коротко толкает (тряска V29.shake ед. ≈ 0,3 % W, 2–3 кадра), остатки стронулись «от удара»
+// (ядро: sweepOut / sweepStep). Выскочил — всплеск сока в точке отрыва (капли вверх + пятно на дереве под ним); крошка впиталась — пятно
+// с потёком на дереве и пара капель. Пятна — spot26 (сок на дереве v26), капли — burst.
+const V29 = { shake: 1.2, hop: { drops: 5, core: [5, 7], runs: [0, 1] }, soak: { drops: 2, core: [3.5, 6], runs: [1, 2] } };
+function sweepSpot29(e, o){
+  const r = e.r || 10, core = clamp(r * 0.35, o.core[0], o.core[1]);
+  for (const dy of [r + 1.5, r * 0.6, 0]){ const q = spot26(e.x, e.y + dy, core, e.kind, Math.PI / 2, { runs: o.runs, life: V26.wood.lifeS, sat: 2 }); if (q) return q; }   // брус под телом, иначе задник
+  return null;
+}
+function sweepHopFX(e){ log('event', 'sweep.hop', e.kind + ' n=' + e.n);
+  burst(e.kind, e.x, e.y + (e.r || 10) * 0.6, V29.hop.drops, true); sweepSpot29(e, V29.hop); }
+function sweepSoakFX(e){ log('event', 'sweep.soak', e.kind + ' ' + e.why);
+  burst(e.kind, e.x, e.y, V29.soak.drops, true); sweepSpot29(e, V29.soak); }
 function landFX(e){
   log('event', 'land', e.w + ' hits=' + e.hits + ' cuts=' + e.cuts + (e.stuck ? ' stuck' : '')); log('fx.end', 'flight', e.w);
   if (e.bounce){ trayUpdate(); return; }                      // v7: отскок рисует bounceFX
@@ -6999,6 +7174,7 @@ const V28 = {
   plan: { len: [3, 2], cycle: ['L', 'L', 'L', 'fog', 'L', 'rain', 'L', 'night', 'L', 'L'], light: ['gold', 'noon', 'morn', 'glade'] },
   // дождь: штрихов за деревом и перед ним, длина (ед.), наклон (рад), скорость (ед./с), alpha за / перед, толщина за / перед (ед.);
   // всплески на кромке корыта и траве: сколько сразу, период (с), радиус (ед.), alpha
+  pre: { after: 0.25, gap: 0.06 },   // v28.1: подготовка леса следующего уровня после победы — через столько с, шаги не чаще (с)
   rain: { back: 80, front: 12, len: [18, 34], ang: 0.22, speed: 760, a: [0.42, 0.36], w: [1.25, 1.6], col: '232,240,248', splash: 10, per: 0.5, r: 6, sa: 0.85 },
 };
 V13.states = ['gold', 'noon', 'morn', 'glade', 'fog', 'rain', 'night'];
@@ -7011,7 +7187,7 @@ Object.assign(V13.look, {
     grass: ['#3f6a1c', '#a8b848', '#d09a58'], desat: 0.12, blur: 0.3, dim: 0.08, green: ['#4b5a1c', 0.1], gtint: 'rgba(255,190,140,0.08)', fill: '#c2c07a' },
   glade: { img: 'glade', kind: 'sun', ray: 0, rayK: 0.9, mote: '#fff0b0', tint: [1.01, 1.0, 0.94], wash: [250, 244, 210, 0.03, 0.0], vig: 0.16, wk: 0.96, sh: [-2, 3.5, 0.22], rim: [0.96, 0.92, 0.56, 0.22],
     grass: ['#355f1a', '#98b838', '#c89a38'], desat: 0.1, blur: 0.3, dim: 0.07, green: ['#3f5a1c', 0.1], gtint: 'rgba(255,214,110,0.06)', fill: '#8fae48' },
-  fog:   { img: 'fog', kind: 'fog', mote: '#fffaf0', tint: [1.01, 1.0, 0.97], wash: [246, 236, 214, 0.04, 0.0], vig: 0.1, wk: 0.98, sh: [-1.2, 3, 0.16], rim: [1.0, 0.93, 0.8, 0.18],
+  fog:   { img: 'fog', kind: 'fog', mote: '#fffaf0', tint: [1.01, 1.0, 0.97], wash: [246, 236, 214, 0.04, 0.0], vig: 0.1, wk: 0.96, sh: [-1.2, 3, 0.16], rim: [1.0, 0.93, 0.8, 0.18],
     grass: ['#5a6a3c', '#b4b67c', '#c8a468'], desat: 0.03, blur: 0.25, dim: 0.03, green: ['#7a7650', 0.06], gtint: 'rgba(246,234,206,0.16)', fill: '#e2d6b4' },
   rain:  { img: 'rain', kind: 'rain', tint: [0.95, 0.98, 1.02], wash: [190, 210, 206, 0.03, 0.0], vig: 0.2, wk: 0.93, sh: [-1.2, 3, 0.2], rim: [0.76, 0.88, 0.96, 0.22],
     grass: ['#24502a', '#5f8f4e', '#9a8a48'], desat: 0.04, blur: 0.3, dim: 0.07, green: ['#1f4a34', 0.1], gtint: 'rgba(110,140,160,0.16)', fill: '#5f7a66' },
@@ -7025,13 +7201,29 @@ function plan28(n){                                           // номер со
   return V13.states.indexOf(P.light[li % P.light.length]);
 }
 const look28 = (k) => V13.look[V13.states[k]];
+// v28.1: смена леса без длинного кадра. Лес следующего уровня (картинка декодирована заранее, холст леса, трава, спрайты живых слоёв)
+// готовится после победы — по шагу за кадр, пока пилы доедают; на старте уровня берётся готовым (если раскладка та же; иначе — как было).
+const P28 = { n: -1, step: 0, at: 0, k: -1, key: '', cv: null, sc: null };
+const key13 = (k) => k + '|' + cv.width + 'x' + cv.height + '|' + view.ox.toFixed(1) + ',' + view.oy.toFixed(1) + ',' + view.k.toFixed(4) + '|' + VIEW.top;
+function dec28(im){ if (!im._dec){ im._dec = 1; const ok = () => { im._dec = 2; }; if (im.decode) im.decode().then(ok, ok); else ok(); } return im._dec === 2; }
+function prewarm28(){
+  const s = G.s; if (!s || !s.won || !G.winAt || G.rt < G.winAt + V28.pre.after || F13.st < 0) return;
+  if (P28.n !== s.n){ P28.n = s.n; P28.step = 0; P28.at = 0; }
+  if (P28.step >= 4 || G.rt < P28.at) return;
+  const nk = state13(s.n + 1);
+  if (P28.step === 0){ const im = img13(nk); if (!im || !dec28(im)) return; }                 // картинка пришла и декодирована (вне кадра)
+  else if (P28.step === 1){ const key = key13(nk); if (nk !== F13.st && P28.key !== key){ P28.cv = canvas13(nk); P28.k = nk; P28.key = key; } }
+  else if (P28.step === 2){ if (nk !== F13.st) grass13(nk); }
+  else { if (!P28.sc){ const c2 = document.createElement('canvas'); c2.width = c2.height = 2; P28.sc = c2.getContext('2d'); } amb13(P28.sc, nk, 0.02); }   // спрайты лучей, тумана, светлячков
+  P28.step++; P28.at = G.rt + V28.pre.gap;
+}
 const F13 = { st: -1, from: -1, at: -9, force: -1, img: {}, cv: null, cvKey: '', prev: null, tint0: [1, 1, 1], tint1: [1, 1, 1], live: false, vst: [], vcol: [],
   baked: false, front: null, frontY: 0, sawG: null, saws: [], gates: [], frags: [], split: new Set(), sparks: [], nid: 0, shd: null, shM: null, wm: null, da: null, dw: null, om: null, dl: null, tickAt: 0, ray: null, glow: null, fog: null, css: false, stats: {} };
 const forest13 = () => V13.on && r3Game();
 const state13 = (n) => F13.force >= 0 ? F13.force : plan28(n);   // v28: блоками по 3 и 2 уровня (V28.plan)
 function img13(k){
   const nm = 'forest-' + (look28(k).img || V13.states[k]); let im = F13.img[nm]; if (im) return im.naturalWidth ? im : null;
-  im = F13.img[nm] = new Image(); im.decoding = 'async'; im.onload = () => { F13.cvKey = ''; }; const file = nm + '.jpg';
+  im = F13.img[nm] = new Image(); im.decoding = 'async'; im.onload = () => { dec28(im); if (F13.st >= 0 && 'forest-' + (look28(F13.st).img || V13.states[F13.st]) === nm) F13.cvKey = ''; }; const file = nm + '.jpg';   // v28.1: догрузка чужого леса не пересобирает текущий
   im.src = (window.PULP_ASSETS && window.PULP_ASSETS[file]) || 'assets/' + file + '?v=' + ASSET_V; return null;
 }
 function state13Set(n){                                       // состояние уровня; смена — плавно (лес, живые слои, свет)
@@ -7075,8 +7267,10 @@ function canvas13(k){                                         // лес сост
 // Кадр: лес (при смене — прежний поверх, гаснет), живые слои, свет 3D по состоянию.
 function forest13Draw(c, sh){
   const k = F13.st; if (k < 0) return;
-  const key = k + '|' + cv.width + 'x' + cv.height + '|' + view.ox.toFixed(1) + ',' + view.oy.toFixed(1) + ',' + view.k.toFixed(4) + '|' + VIEW.top;
-  if (F13.cvKey !== key){ F13.cv = canvas13(k); F13.cvKey = key; }
+  const key = key13(k);
+  if (F13.cvKey !== key){ if (P28.cv && P28.k === k && P28.key === key){ F13.cv = P28.cv; F13.stats.pre28 = (F13.stats.pre28 || 0) + 1; } else F13.cv = canvas13(k);   // v28.1: готовый лес следующего уровня
+    P28.cv = null; P28.key = ''; F13.cvKey = key; }
+  prewarm28();
   c.setTransform(1, 0, 0, 1, 0, 0); c.drawImage(F13.cv, 0, 0, cv.width, cv.height);
   const f = clamp((G.rt - F13.at) / V13.fade, 0, 1), fs = f * f * (3 - 2 * f);
   if (F13.prev && f < 1){ c.globalAlpha = 1 - fs; c.drawImage(F13.prev, 0, 0, cv.width, cv.height); c.globalAlpha = 1; } else if (f >= 1) F13.prev = null;
@@ -7713,7 +7907,7 @@ function wood13Bake(c){
   { const ig = ink.getContext('2d'); ig.drawImage(wc, 0, 0); ig.globalCompositeOperation = 'source-in'; ig.fillStyle = backs.length || w16 ? (w16 ? U16.outerCol : PL.inkCol) : Q.ink; ig.fillRect(0, 0, ink.width, ink.height); ig.globalCompositeOperation = 'source-over'; }
   dispose13(sc); const tR = performance.now();
   // перед корыта: передняя доска (верхняя грань — кромка), торцы, ножки — отдельный слой поверх сока и пил (от уровня не зависит — кэш)
-  const fkey = [cv.width, cv.height, view.ox.toFixed(1), view.oy.toFixed(1), view.k.toFixed(4), F13.st, w16].join();
+  const fkey = [cv.width, cv.height, view.ox.toFixed(1), view.oy.toFixed(1), view.k.toFixed(4), L.wk || 1, w16].join();   // v28.1: перед корыта зависит от wk состояния, не от номера (тёплые леса — без пересборки)
   if (!F13.front || F13.frontKey !== fkey){ F13.frontKey = fkey;
     const fs = new THREE.Scene(), fa = (P, o) => fs.add(wood13Mesh(P, o)), yr = gy + T.rim, yf = gy + T.face, yt = yr + T.lip;
     const pt = (o) => Object.assign({ [w16 ? 'w16' : 'w15']: true, D: 4.5, bevel: 0.9, r: 2 }, o);   // круг 3: корыто — то же рисованное дерево; v16 — текстурой
