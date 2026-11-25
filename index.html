@@ -4902,16 +4902,22 @@ function fit(){
   const top = hudB + VIEW.hudGap, bot = r.height - padB - 2 - trayH, avail = bot - top;
   let nv;
   if (LAY === VIEW7){
-    const k0 = r.width / CFG.W, kc5 = Math.min(k0, avail / (VIEW.bottom - VIEW7.top));
-    const need = G.heapTop > -1e9 && G.heapTop < 1e9 ? G.heapTop - VIEW.swing : VIEW7.top;
-    let k = Math.max(VIEW.swingFloor ? kc5 : 0.2, Math.min(k0, avail / Math.max(100, VIEW.bottom - need)));
+    // v22.1 (правило круга 6, просьба Андрея 23.11 «почему поле уменьшено»): поле всегда во всю ширину; нехватку высоты отдаём по очереди —
+    // пустому верху сцены (уходит под HUD и за экран), запасу замаха над кучей (VIEW.swing → не меньше V22.fit.swing ед.; касания под строкой
+    // «Level n» тоже доходят до поля), наезду кнопки на переднюю стенку корыта (до V22.fit.over px); мельче ширины — только если и так не
+    // влезает, и не мельче пола круга 5 (kc5). Низ корыта (VIEW7.anchor) — у верха кнопок, когда место есть.
+    const k0 = r.width / CFG.W, kc5 = Math.min(k0, avail / (VIEW.bottom - VIEW7.top)), F = V22.fit;
+    const heap = G.heapTop > -1e9 && G.heapTop < 1e9 ? G.heapTop : null;
+    const bt = trayH ? $('tray').getBoundingClientRect().top - r.top + VIEW7.pad : bot + (VIEW7.anchor - VIEW.bottom) * k0;   // низ корыта не ниже
+    const span = (sw) => VIEW7.anchor - (heap - sw), room = (ov) => bt + ov - top;                                         // нужно ед. / есть px
+    let k = k0, sw = VIEW.swing, ov = 0;
+    if (heap !== null && span(sw) * k > room(0)){
+      sw = Math.max(F.swing, room(0) / k - (VIEW7.anchor - heap));                                  // 1) меньше запаса над кучей
+      if (span(sw) * k > room(0)){ ov = Math.min(F.over, span(sw) * k - room(0));                  // 2) кнопка на передней стенке корыта
+        if (span(sw) * k > room(ov)) k = Math.max(VIEW.swingFloor ? kc5 : 0.2, room(ov) / span(sw)); } }   // 3) мельче — крайний случай
     if (k >= k0 * VIEW.swingSnap) k = k0;
-    nv = { k, ox: (r.width - CFG.W * k) / 2, oy: bot - VIEW.bottom * k, w: r.width, h: r.height, k0, kc5 };
-    if (trayH){ const bt = $('tray').getBoundingClientRect().top - r.top + VIEW7.pad, o0 = nv.oy;   // v18: корыто над кнопками — кадр выше, масштаб тот же;
-      nv.oy = Math.min(o0, bt - VIEW7.anchor * k);                                                    // но над кучей остаётся запас замаха VIEW.swing (иначе кнопка
-      if (G.heapTop > -1e9 && G.heapTop < 1e9){ const kM = (bt - top) / Math.max(100, VIEW7.anchor + VIEW.swing - G.heapTop);   // v22: запас замаха и корыто над кнопкой
-          if (kM < k){ k = kM; nv.k = k; nv.ox = (r.width - CFG.W * k) / 2; }                                                  // не влезают вместе — кадр мельче, кнопка не заходит
-          nv.oy = Math.min(bot - VIEW.bottom * k, bt - VIEW7.anchor * k); nv.oy = Math.max(nv.oy, Math.min(bot - VIEW.bottom * k, top + (VIEW.swing - G.heapTop) * k)); } }   // на корыто (было: кадр ниже)
+    nv = { k, ox: (r.width - CFG.W * k) / 2, oy: bt - VIEW7.anchor * k, w: r.width, h: r.height, k0, kc5, sw: +sw.toFixed(1), ov: +ov.toFixed(1) };
+    if (heap !== null) nv.oy = Math.min(bt + ov - VIEW7.anchor * k, Math.max(nv.oy, top + (sw - heap) * k));   // куча с запасом sw под HUD, корыто не ниже bt + ov
     const yH = (top - nv.oy) / k;                             // мир у низа HUD
     VIEW.top = yH <= VIEW7.top + 6 ? VIEW7.top : -nv.oy / k - 30;   // короб целиком под HUD — обод на месте; иначе — за верхом экрана
   } else {
@@ -6391,7 +6397,8 @@ const V15 = {
 const V22 = {
   bg: { dim: [0.13, 0.75], green: ['#173F2E', 0.13], dimK: [1, 1.55, 1.25, 0.6], greenK: [1, 1.25, 1.1, 0.8] },   // по состояниям (день, туман, вечер, ночь): туман и вечер — темнее (фон сереет и гасит дерево)
   spill: false,
-  hint: { hand: 0.88, pad: 16, idle: 1.3, title: 0.8 },   // рука ×0,88 (−23 %), запас пунктира 16 ед. (4 % W), рука после 1,3 с простоя, название уровня 0,8 с   // фон: за постройкой темнее (alpha в центре, радиус — доля прежнего), нижняя треть — зелёный слой
+  hint: { hand: 0.88, pad: 16, idle: 1.3, title: 0.8 },   // рука ×0,88 (−23 %), запас пунктира 16 ед. (4 % W), рука после 1,3 с простоя, название уровня 0,8 с
+  fit: { swing: 35, over: 22 },   // v22.1: раскладка без уменьшения поля — запас замаха над кучей не меньше swing ед., кнопка на корыте не больше over px   // фон: за постройкой темнее (alpha в центре, радиус — доля прежнего), нижняя треть — зелёный слой
   grass: { top: 58, clumps: [[6, 52, 40, 128, 60, 230, 0], [30, 30, 24, 125, 330, 470, 1], [50, 22, 10, 121, 330, 470, 0], [118, 26, 7, 118, 540, 640, 1],
     [396, 46, 33, 128, 760, 930, 1], [373, 30, 21, 125, 330, 470, 0], [352, 24, 11, 121, 80, 200, 0]] },
 };
