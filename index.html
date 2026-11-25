@@ -3804,6 +3804,7 @@ const SFX = {
   // v3: заказ
   // v6: оружие
   'w.pick'(S, t){ S.tone(t, 'triangle', 700, 1100, 0.06, 0.12); S.noise(t, 'highpass', 4000, 4000, 0.8, 0.03, 0.05); },                // выбрал оружие в лотке
+  'aim.lock'(S, t, n){ const f = 1900 * Math.pow(1.06, Math.min(8, (n || 1) - 1)); S.tone(t, 'sine', f, f * 1.25, 0.05, 0.035); S.noise(t, 'highpass', 7000, 7000, 0.7, 0.03, 0.015); },   // v27: плод взят в прицел — тихий тик, выше с числом целей
   'w.draw'(S, t, w){ const f = { knife: 2800, axe: 1500, saw: 900, mace: 600 }[w] || 1500;                                            // оружие появилось под пальцем
     S.noise(t, 'bandpass', f, f * 1.4, 2, 0.06, 0.08); S.tone(t, 'sine', f / 4, f / 3, 0.05, 0.06); },
   'w.knife'(S, t){ S.noise(t, 'bandpass', 2600, 7200, 2.2, 0.13, 0.32, null, 0.01); S.tone(t, 'sine', 2400, 3800, 0.08, 0.04); },     // нож: тонкий свист
@@ -5455,10 +5456,70 @@ function throwUp(cancel){
 // Прицел: оружие в точке касания (выскакивает), траектория своим почерком, тела под ударом — белым контуром, метки удара:
 // нож и пила — хорда реза, пила — стёсанный край пунктиром, топор — линии раскола, булава — звезда удара. Пусто — серая линия.
 function drawThrowAim(c, s){
-  const a = G.aim; if (!a || !a.throw) return;
+  const a = G.aim; if (!a || !a.throw){ if (A27.m.size) aim27Draw(c, s, null, null); return; }   // v27: подсветка целей гаснет плавно и после отпускания
   const w = a.w, W = wcfg(s, w), path = weaponPath(w, a.pts, s), pv = path ? throwPreview(s, w, path) : { hits: [], end: null }, ok = pv.hits.length > 0 || !!pv.stop;
   G.preview = pv.hits;
   return drawAim7(c, s, a, w, W, path, pv, ok);
+}
+// =====================================================================================================
+// v27 «Прицел»: цели свайпа — не белая обводка, а мягкий захват. По силуэту плода (контур тела физики = силуэт модели) —
+// ореол наружу, тонкий светлый кант, плод чуть светлее; лёгкое «дыхание» (масштаб ±1,5 %, яркость), появление с «щелчком»
+// (ореол чуть шире и ярче на 0,16 с) за 90 мс, уход за 110 мс (и после отпускания пальца). На плоде — тонкая светлая линия реза
+// с бегущим бликом. Твёрдое на пути (кокос) — тот же ореол красным. Новые цели — тихий тик, выше с числом целей.
+// Стенд (кадры v27/aim_cmp.jpg) сравнивал три варианта: тёплый ореол, ореол цвета сока и подсвеченный плод; выбран последний ('lit'),
+// два других из кода убраны. style: '' — прежняя белая обводка v7 (откат).
+// =====================================================================================================
+const V27 = {
+  aim: { style: 'lit', smooth: 9, grow: 1.025, fadeIn: 0.09, fadeOut: 0.11, pop: [0.06, 0.16], breath: [1.6, 0.015, 0.14],
+    warm: [255, 244, 214], stop: [255, 92, 80], rim: 2.1, halo: [[13, 0.1], [8, 0.18], [4.2, 0.34]], lit: [0.08, 8, 0.36],
+    path: [1.8, 0.32, 0.72], chord: [2.2, 9, 0.5], glint: [1.3, 0.18], tick: [0.045, 0.05] },
+};
+const A27 = { m: new Map(), last: 0 };
+const P27 = [];
+function aim27Path(c, b, k, add){                                  // контур тела, растянутый на k от центра; углы многоугольника скруглены (кривая через середины рёбер)
+  const cs = Math.cos(b.a) * k, sn = Math.sin(b.a) * k, V = b.verts, n = V.length, oy = introOff(b); if (!add) c.beginPath();
+  for (let i = 0; i < n; i++){ const q = P27[i] || (P27[i] = [0, 0]); q[0] = b.x + cs * V[i][0] - sn * V[i][1]; q[1] = b.y + sn * V[i][0] + cs * V[i][1] + oy; }
+  const sm = V27.aim.smooth, mid = (i, j) => [(P27[i][0] + P27[j][0]) / 2, (P27[i][1] + P27[j][1]) / 2];
+  if (!sm){ for (let i = 0; i < n; i++) if (i) c.lineTo(P27[i][0], P27[i][1]); else c.moveTo(P27[i][0], P27[i][1]); c.closePath(); return; }
+  const m0 = mid(n - 1, 0); c.moveTo(m0[0], m0[1]);
+  for (let i = 0; i < n; i++){ const m = mid(i, (i + 1) % n), p = P27[i]; const u = Math.hypot(m[0] - p[0], m[1] - p[1]); if (u > sm){   // длинное ребро: скругляем только угол
+      const pr = P27[(i + n - 1) % n], ua = Math.hypot(p[0] - pr[0], p[1] - pr[1]) || 1, r = Math.min(sm, ua / 2);
+      c.lineTo(p[0] - (p[0] - pr[0]) / ua * r, p[1] - (p[1] - pr[1]) / ua * r); c.quadraticCurveTo(p[0], p[1], p[0] + (m[0] - p[0]) / u * r, p[1] + (m[1] - p[1]) / u * r); c.lineTo(m[0], m[1]); }
+    else c.quadraticCurveTo(p[0], p[1], m[0], m[1]); }
+  c.closePath(); }
+const rgba27 = (C, a) => 'rgba(' + C[0] + ',' + C[1] + ',' + C[2] + ',' + clamp(a, 0, 1).toFixed(3) + ')';
+function aim27Draw(c, s, ids, stopId){
+  const A = V27.aim, M = A27.m, dt = clamp(G.rt - (A27.last || G.rt), 0, 0.1); A27.last = G.rt; if (!A.style) { M.clear(); return; }
+  let fresh = 0;
+  if (ids) for (const [id, how] of ids){ let e = M.get(id); if (!e){ e = { a: 0, t0: G.rt, how, on: true }; M.set(id, e); fresh++; } e.on = true; e.how = how; }
+  if (stopId !== null && stopId !== undefined){ let e = M.get(stopId); if (!e){ e = { a: 0, t0: G.rt, how: 'stop', on: true }; M.set(stopId, e); } e.on = true; e.how = 'stop'; }
+  const live = new Map(); for (const b of s.bodies) if (M.has(b.id)) live.set(b.id, b);
+  for (const [id, e] of M){ if (!ids || (!ids.has(id) && id !== stopId)) e.on = false; e.a = e.on ? Math.min(1, e.a + dt / A.fadeIn) : e.a - dt / A.fadeOut; if (e.a <= 0 || !live.has(id)) M.delete(id); }
+  if (fresh && ids){ const n = ids.size; if (G.rt - (A27.tickAt || -9) > A.tick[0]){ A27.tickAt = G.rt; Sound.play('aim.lock', n); } }
+  c.save(); c.lineJoin = 'round'; c.lineCap = 'round';
+  for (const [id, e] of M){ const b = live.get(id); if (!b) continue;
+    const ea = e.a * e.a * (3 - 2 * e.a), age = G.rt - e.t0, pop = age < A.pop[1] ? A.pop[0] * (1 - age / A.pop[1]) * (1 - age / A.pop[1]) : 0;
+    const br = 0.5 + 0.5 * Math.sin((G.rt - e.t0) * A.breath[0] * 6.2832 - 1.57), k = A.grow + A.breath[1] * br + pop, al = ea * (1 - A.breath[2] + A.breath[2] * br) * (1 + pop * 4);
+    const stop = e.how === 'stop', shave = e.how === 'shave', C = stop ? A.stop : A.warm, w = shave ? 0.6 : 1;
+    // ореол наружу: только за силуэтом (внутрь не лезет — плод и срез видны)
+    c.save(); c.beginPath(); c.rect(-200, -400, CFG.W + 400, 2000); aim27Path(c, b, k * 0.985, true); c.clip('evenodd');
+    aim27Path(c, b, k); for (const [lw, a0] of A.halo){ c.lineWidth = lw; c.strokeStyle = rgba27(C, a0 * al * w); c.stroke(); }
+    c.restore();
+    c.save(); aim27Path(c, b, k); c.clip(); c.globalCompositeOperation = 'screen';   // плод светлее, по краю изнутри — светлая кайма
+    c.fillStyle = rgba27(C, A.lit[0] * al * w); c.fill(); c.lineWidth = A.lit[1]; c.strokeStyle = rgba27(C, A.lit[2] * al * w); c.stroke(); c.restore();
+    aim27Path(c, b, k); if (shave) c.setLineDash([5, 4]); c.lineWidth = A.rim; c.strokeStyle = rgba27(stop ? [255, 150, 140] : [255, 250, 236], 0.95 * al * (shave ? 0.8 : 1)); c.stroke(); c.setLineDash([]);   // тонкий светлый кант по силуэту
+  }
+  c.restore();
+}
+function chord27(c, b, p, q){                                    // линия будущего реза по плоду: тонкая, светлая, мягкая подложка, бегущий блик
+  const A = V27.aim, e = A27.m.get(b.id), al = e ? e.a : 1, H = A.chord;
+  c.save(); aim27Path(c, b, A.grow); c.clip();
+  c.beginPath(); c.moveTo(p[0], p[1]); c.lineTo(q[0], q[1]); c.lineWidth = H[1]; c.strokeStyle = 'rgba(70,40,20,' + (0.18 * al).toFixed(3) + ')'; c.stroke();
+  c.lineWidth = H[1] * 0.6; c.strokeStyle = rgba27(A.warm, H[2] * al); c.stroke(); c.lineWidth = H[0]; c.strokeStyle = 'rgba(255,253,246,' + (0.95 * al).toFixed(3) + ')'; c.stroke();
+  const t = (G.rt * A.glint[0] + b.id * 0.137) % 1, L = A.glint[1], x0 = p[0] + (q[0] - p[0]) * Math.max(0, t - L), y0 = p[1] + (q[1] - p[1]) * Math.max(0, t - L), x1 = p[0] + (q[0] - p[0]) * Math.min(1, t), y1 = p[1] + (q[1] - p[1]) * Math.min(1, t);
+  const g = c.createLinearGradient(x0, y0, x1, y1); g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(1, 'rgba(255,255,255,' + (0.9 * al).toFixed(3) + ')');
+  c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.lineWidth = H[0] * 2.2; c.strokeStyle = g; c.stroke();
+  c.restore();
 }
 // v7: предпросмотр показывает результат удара, а не только линию. Нож — тонкая прямая и жёлтые хорды (каждое тело — надвое);
 // упрётся в твёрдое — там красная искра и стрелка отскока, дальше путь серый. Топор — трещина по телу и две стрелки разлёта.
@@ -5469,7 +5530,7 @@ function drawAim7(c, s, a, w, W, path, pv, ok){
     for (let i = 0; i < V.length; i++){ const x = b.x + cs * V[i][0] - sn * V[i][1], y = b.y + sn * V[i][0] + cs * V[i][1]; if (i) c.lineTo(x, y); else c.moveTo(x, y); } c.closePath();
     if (dash) c.setLineDash(dash); c.lineWidth = lw; c.strokeStyle = st; c.stroke(); c.setLineDash([]); };
   c.lineJoin = 'round'; c.lineCap = 'round';
-  for (const b of s.bodies){ const how = ids.get(b.id); if (how) outline(b, 'rgba(255,255,255,0.95)', 3.2, how === 'shave' ? [5, 4] : null); }
+  aim27Draw(c, s, ids, pv.stop ? pv.stop.id : null);         // v27: цели — мягкий ореол по силуэту (было: белая обводка 3,2)
   const raw = a.pts, drawn = W.curve ? raw : [raw[0], [a.x, a.y]];
   if (drawn.length >= 2){ c.setLineDash([3, 7]); c.beginPath(); c.moveTo(drawn[0][0], drawn[0][1]); for (const p of drawn) c.lineTo(p[0], p[1]);
     c.lineWidth = 2; c.strokeStyle = 'rgba(255,255,255,0.35)'; c.stroke(); c.setLineDash([]); }
@@ -5483,7 +5544,8 @@ function drawAim7(c, s, a, w, W, path, pv, ok){
       for (const sg of [-1, 1]){ c.beginPath(); for (let i = 0; i < live.length; i++){ const p = live[i], q = live[Math.min(live.length - 1, i + 1)], o = live[Math.max(0, i - 1)], dx = q[0] - o[0], dy = q[1] - o[1], L = Math.hypot(dx, dy) || 1;
         const x = p[0] - dy / L * W.kerfW / 2 * sg, y = p[1] + dx / L * W.kerfW / 2 * sg; if (i) c.lineTo(x, y); else c.moveTo(x, y); } c.stroke(); }
       c.setLineDash([]);
-    } else { line(live); const tw = { knife: 2.4, axe: 3, mace: 5 }[w]; c.lineWidth = tw + 3; c.strokeStyle = ink; c.stroke(); if (w === 'mace') c.setLineDash([10, 7]); c.lineWidth = tw; c.strokeStyle = col; c.stroke(); c.setLineDash([]); }
+    } else { line(live); const tw = { knife: 2.4, axe: 3, mace: 5 }[w], q27 = V27.aim.style && w === 'knife' ? V27.aim.path : null;   // v27: у ножа линия броска тише — на плодах загорается линия реза
+      c.lineWidth = tw + 3; c.strokeStyle = q27 ? 'rgba(43,33,64,' + q27[1] + ')' : ink; c.stroke(); if (w === 'mace') c.setLineDash([10, 7]); c.lineWidth = q27 ? q27[0] : tw; c.strokeStyle = col; if (q27) c.globalAlpha = q27[2]; c.stroke(); c.globalAlpha = 1; c.setLineDash([]); }
     if (w === 'axe' && ok){ const L = pathLen(live); for (let d = 22; d < L; d += 26){ const P = flightAt({ path: live }, d); c.beginPath(); c.arc(P[0], P[1], 5, d * 0.2, d * 0.2 + 3.6); c.lineWidth = 2; c.strokeStyle = col; c.stroke(); } }
     const t = (G.rt * 1.4) % 1, P = flightAt({ path: live }, pathLen(live) * t); c.beginPath(); c.arc(P[0], P[1], 2.6, 0, 6.29); c.fillStyle = '#ffffff'; c.fill();
   }
@@ -5492,7 +5554,8 @@ function drawAim7(c, s, a, w, W, path, pv, ok){
     c.lineWidth = 6.5; c.strokeStyle = VIEW.ink; c.stroke(); c.lineWidth = 3; c.strokeStyle = '#ffffff'; c.stroke(); };
   for (const h of pv.hits){
     const b = s.bodies.find(q => q.id === h.id); if (!b) continue;
-    if (h.how === 'cut'){ c.beginPath(); c.moveTo(h.p[0], h.p[1]); c.lineTo(h.q[0], h.q[1]);
+    if (h.how === 'cut'){ if (w !== 'saw' && V27.aim.style){ chord27(c, b, h.p, h.q); continue; }   // v27: тонкая светлая линия будущего реза
+      c.beginPath(); c.moveTo(h.p[0], h.p[1]); c.lineTo(h.q[0], h.q[1]);
       if (w === 'saw'){ c.lineWidth = W.kerfW + 2; c.strokeStyle = 'rgba(255,212,71,0.55)'; c.stroke(); }
       else { c.lineWidth = 4.6; c.strokeStyle = ink; c.stroke(); c.lineWidth = 2.4; c.strokeStyle = '#ffd447'; c.stroke(); } }
     else if (h.how === 'shave'){ c.beginPath(); c.arc(b.x, b.y, 4, 0, 6.29); c.fillStyle = 'rgba(255,212,71,0.8)'; c.fill(); }
@@ -5507,7 +5570,7 @@ function drawAim7(c, s, a, w, W, path, pv, ok){
   }
   if (pv.ring){ const R0 = pv.ring.R * (1 + 0.04 * Math.sin(G.rt * 9)); c.beginPath(); c.arc(pv.ring.x, pv.ring.y, R0, 0, 6.29); c.fillStyle = 'rgba(199,125,255,0.16)'; c.fill();
     c.setLineDash([9, 6]); c.lineWidth = 5.5; c.strokeStyle = ink; c.stroke(); c.lineWidth = 3; c.strokeStyle = '#d9a3ff'; c.stroke(); c.setLineDash([]); }
-  if (pv.stop){ const b = s.bodies.find(q => q.id === pv.stop.id); if (b) outline(b, '#ff4d4d', 3.4, null);
+  if (pv.stop){ const b = s.bodies.find(q => q.id === pv.stop.id); if (b && !V27.aim.style) outline(b, '#ff4d4d', 3.4, null);   // v27: твёрдое — красный ореол в aim27Draw
     const e = pv.stop.p, u = path ? [path[1][0] - path[0][0], path[1][1] - path[0][1]] : [0, 1], L = Math.hypot(u[0], u[1]) || 1, ux = u[0] / L, uy = u[1] / L, r = 11 + 2 * Math.sin(G.rt * 16);
     c.beginPath(); for (let k = 0; k < 16; k++){ const an = k * Math.PI / 8, rr = k % 2 ? r * 0.45 : r; c.lineTo(e[0] + Math.cos(an) * rr, e[1] + Math.sin(an) * rr); } c.closePath();
     c.fillStyle = '#ff4d4d'; c.fill(); c.lineWidth = 2; c.strokeStyle = VIEW.ink; c.stroke();
@@ -7738,7 +7801,7 @@ function cut21(kind, area, p, q, ux, uy, w){
 function sawHit21(f){                                          // v23: касание — сильный импульс жидкости (hit23), волна, струйка; крупное — отдача и одна капля на стекло
   const S = V21.saw, m = clamp((Math.sqrt(f.area) - 12) / 48, 0, 1); hit23(f); J23.lastX = f.x; saw26(f);   // v26: много массы / крупное тело — залп на экран
   const T = trough9(), xs = chew13Gap(clamp(f.x, 1, CFG.W - 1), f.kind, 0.4 + 0.6 * m); T.waves.push({ x: xs, t0: G.rt, a: lerp21(S.wave, m) }); if (T.waves.length > 8) T.waves.shift();
-  if (f.area >= S.bigA){ kick21(0, 1, 1); if (jk21(f.kind) >= 0.8) lens23(f.x, CFG.grindY - 40, f.kind); }
+  if (f.area >= S.bigA && !f.c27){ kick21(0, 1, 1); if (jk21(f.kind) >= 0.8) lens23(f.x, CFG.grindY - 40, f.kind); }   // v27: посадка куска с пил — без отдачи
 }
 function pulse21(P){                                           // выброс: веер капель вверх, жидкий сок, дуги, туман, мокрый диск
   const S = V21.saw, f = P.f, J = jk21(f.kind), hex = (KINDS[f.kind] || KINDS.melon).juice, cj = pcol(hex), lhex = juiceHex(f.kind), x = f.x, y = (f.clip || CFG.grindY) - 3, w = Math.max(8, f.rad * 1.2), room = Math.max(S.h[0], y - (F13.zt || -1e9));
@@ -8402,7 +8465,7 @@ function chain26(F6, b){                                        // бензоп�
   if (C.fired < 2 && C.ids.size >= 2 + 2 * C.fired && jk21(b.kind) >= 0.5 && salvo26(F6.x, F6.y, clamp(0.5 + C.A / 8000, 0.5, 1), b.kind, false, 'chain')) C.fired++;
 }
 function saw26(f){                                              // пилы: много массы за 0,6 с или крупное тело — залп на экран
-  if (!V26.on) return false; const M = V26.scr.mass, L = J26.saw; L.push([G.rt, f.area, f.kind, f.x]); while (L.length && G.rt - L[0][0] > M.win) L.shift();
+  if (!V26.on || f.c27) return false; const M = V26.scr.mass, L = J26.saw; L.push([G.rt, f.area, f.kind, f.x]); while (L.length && G.rt - L[0][0] > M.win) L.shift();   // v27: куски с пил — масса тела уже учтена
   let A = 0, best = null; for (const q of L){ if (jk21(q[2]) < 0.5) continue; A += q[1]; if (!best || q[1] > best[1]) best = q; }
   if (!best || !(L.length >= M.n && A >= M.nA || A >= M.area || best[1] >= M.big)) return false;
   if (!salvo26(best[3], CFG.grindY - 30, clamp(A / M.full + (L.length >= 7 ? 0.15 : 0), 0.4, 1), best[2], false, best[1] >= M.big ? 'big' : 'mass' + L.length)) return false;
@@ -9025,6 +9088,102 @@ function wet13Update(dt){
       spawnP(P_FOUNT, m.position.x + Math.cos(ph) * R0, m.position.y + Math.sin(ph) * R0, -Math.sin(ph) * sp * sg + Math.cos(ph) * 25, Math.cos(ph) * sp * sg + Math.sin(ph) * 25, 0.25 + 0.15 * R(), 0.55 + 0.6 * R(), M.cj[i]); } }
   if (up) M.tex.needsUpdate = true;
 }
+// =====================================================================================================
+// v27 «Куски с пил» (только вид, ядро не тронуто): от крупного тела в пилах (половина арбуза, кокос, апельсин и крупнее — по площади)
+// отлетают куски того же плода — настоящие части той же сетки (кожура, мякоть, грань «рвань пил»), 10–25 % площади каждый, всего 2–4:
+// первые на первом ударе о зубья (в обе стороны), остальные по ходу перемола. Кусок отрезается от тела прямой со стороны, куда летит
+// (выше обреза зубьев — съеденное не возвращается), тело теряет ровно эту часть (сумма площадей сохраняется). Кусок летит по дуге
+// на 1–3 диска (не выше зоны под кучей, не за ряд), кувыркается, тянет капли сока, садится на зубья и дальше живёт как основное тело:
+// захват, рывки, доворот, поглощение, фонтан и струйки v23, окраска диска, волна в корыте (sawHit21). От крупного отлетевшего — ещё
+// 1–2 меньших (не больше двух поколений). Потолок — V27.chunk.cap кусков сразу; смена уровня ждёт, пока они перемолоты (idle13).
+// =====================================================================================================
+V27.chunk = {
+  on: true,
+  bigA: 2000,                 // «большое тело» (ед.²): апельсин 2290, кокос 3220, половина арбуза 4000+; яблоко 1800 и мельче — без кусков
+  bigA2: 850,                 // отлетевший кусок от этой площади отбрасывает ещё (второе поколение)
+  n: [[2000, 2], [3000, 3], [4000, 4]],   // число кусков от тела по площади (второе поколение — 1–2)
+  frac: [0.15, 0.24], frac2: [0.11, 0.18], fracS: [0.2, 0.25, 3000],   // доля площади тела на кусок: первые два (на ударе) — крупнее, потом — мельче; у тел мельче 3000 ед.² — 20–25 %, иначе кусок теряется в брызгах
+  at: [0.05, 0.32, 0.58],     // когда: первый удар (с от касания; два куска в обе стороны), дальше — по доле съеденного
+  side: [38, 70],             // нормаль отреза от вертикали вниз (град): кусок — угол тела у зубьев: снаружи корка, две грани мякоти (отрез и обрез зубьев)
+  disc: [1.4, 3],             // на сколько дисков в сторону (округление; чаще 2–3 — кусок выходит из облака сока; крупный — ближе)
+  h: [55, 115],               // подлёт над точкой отрыва (ед.); не выше зоны под кучей (F13.zt)
+  g: 1500,                    // тяжесть полёта (ед./с²)
+  spin: [5, 11], tum: [7, 12, 0.5],   // вращение в плоскости (рад/с); покачивание в глубину: частота (рад/с) и размах (рад) — без полного кувырка, кусок не встаёт ребром
+  T: [0.85, 1.5],             // перемол куска не короче (с): мелкий — нижняя граница, от 1500 ед.² — верхняя
+  cap: 10,                    // кусков (летят + мелются) сразу; дальше тело мелется без отлёта
+  drip: [0.045, 1.0],         // капля сока с летящего куска раз в (с), размер
+  burst: [5, 2],              // на отрыве: капель, струй жидкости
+};
+const C27 = { st: { chips: 0, gen2: 0, landed: 0, peak: 0, skip: 0, flyMax: 0 } };
+function chip27Cut(f, frac, ux, uy){                             // отрезать от тела f угол со стороны мировой нормали (ux, uy) выше обреза зубьев, площадью ≈ frac → { A: кусок, B: остаток }
+  const ca = Math.cos(f.a), sa = Math.sin(f.a), nx = ca * ux + sa * uy, ny = -sa * ux + ca * uy, V = f.verts, F = f.cutEdges, A0 = Math.abs(polyArea(V)), D = f.clip - 1.5 - f.y;
+  const at = (m) => { const sp = splitPoly(V, F, nx * m, ny * m, nx, ny); if (!sp.A || !sp.B) return null;   // кусок: сторона нормали ∩ выше обреза (мир y ≤ clip − 1,5 ⇔ sa·x + ca·y ≤ D)
+    const up = splitPoly(sp.A.V, sp.A.F, sa * D, ca * D, -sa, -ca); return up.A ? { A: up.A, B: sp.B, fr: Math.abs(polyArea(up.A.V)) / A0 } : { A: null, B: sp.B, fr: 0 }; };
+  let lo = 1e9, hi = -1e9; for (const v of V){ const d = v[0] * nx + v[1] * ny; lo = Math.min(lo, d); hi = Math.max(hi, d); }
+  let best = null; for (let k = 0, a = lo, b = hi; k < 22; k++){ const m = (a + b) / 2, r = at(m); if (!r){ if (m > (lo + hi) / 2) b = m; else a = m; continue; }
+    if (r.A && (!best || Math.abs(r.fr - frac) < Math.abs(best.fr - frac))) best = r; if (Math.abs(r.fr - frac) < 0.008) break; if (r.fr > frac) a = m; else b = m; }
+  return best && best.A && best.fr >= frac * 0.55 ? best : null;
+}
+function kid27(src, P, gen){                                     // часть сетки src → новое тело вида (как bite13Kids, без подброса)
+  const par = R3.etool.get(src.id), cs = Math.cos(src.a), sn = Math.sin(src.a), sr = R3.st.get(src.id), c = polyCentroid(P.V), id = -(1e6 + (++F13.nid)), V = P.V.map(v => [v[0] - c[0], v[1] - c[1]]);
+  const b = { id, kind: src.kind, root: src.root, sc: src.sc, verts: V, cutEdges: P.F, artFrame: [src.artFrame[0] + c[0], src.artFrame[1] + c[1]], a: src.a, flags: {}, rad: polyRadius(V), area: Math.abs(polyArea(V)),
+    x: src.x + cs * c[0] - sn * c[1], y: src.y + sn * c[0] + cs * c[1], gen: src.gen + 1, c27: gen, ph: 'eat', t: 0, imp: 0, w: 0, vs: src.vs, clip: src.clip, H0: src.H0, zk: src.zk, jx: 0, jy: 0, ky: 0, y1: src.y1, sx: 0 };
+  R3.etool.set(id, pieceEdges(b).map(([a, q]) => { const m = edgeMatch(par, a, q, 1.2); return { a, b: q, w: m ? m.w : 'saw' }; }));
+  R3.st.set(id, { born: G.rt - V12.openT, w: 'saw', ph: sr ? sr.ph : 0, dir: 1, air: 0, axis: sr ? sr.axis : [1, 0], kick: 0, wet: 0, tum: 0 });
+  return b;
+}
+function chips27Plan(f){                                         // расписание отлёта для тела в пилах (вызывается раз)
+  const U = V27.chunk; f.p27 = []; if (!U.on || !R3T.fr[f.kind]) return;
+  const A = f.area, g = f.c27 || 0; if (g >= 2 || A < (g ? U.bigA2 : U.bigA)) return;
+  let n = 0; if (g) n = A >= 1500 ? 2 : 1; else for (const [a, k] of U.n) if (A >= a) n = k;
+  const d0 = r3Hash(f.id * 0.77 + 0.3) < 0.5 ? -1 : 1;
+  for (let i = 0; i < n; i++){ const d = i % 2 ? -d0 : d0, at = g ? (i ? 0.4 : 0.12) : (i < 2 ? -U.at[0] : U.at[Math.min(U.at.length - 1, i - 1)]);   // отрицательное — время от касания, иначе доля съеденного
+    f.p27.push({ d, at, fr: g ? 0.22 + 0.06 * R() : lerp21(A < U.fracS[2] ? U.fracS : i < 2 ? U.frac : U.frac2, R()) }); }
+  f.splitE = 0;                                                  // прежний раскол без подлёта не нужен — его роль у кусков
+}
+function chips27Step(f, sr){                                     // тело в пилах: пора отбросить кусок? → [остаток, кусок…] или null
+  const U = V27.chunk; if (f.p27 === undefined) chips27Plan(f); if (!f.p27.length || (sr && sr.ph && Math.abs(sr.ph - Math.round(sr.ph / 6.2832) * 6.2832) > 0.05)) return null;
+  const e = clamp(1 - (f.clip - f.top) / f.H0, 0, 1), due = f.p27.filter(q => q.at < 0 ? f.t >= -q.at : e >= q.at); if (!due.length) return null;
+  let live = 0; for (const q of F13.frags) if (q.c27) live++;
+  if (live + due.length > U.cap || F13.frags.length + due.length > V13.frag.max || F13.bud < due.length + 1 || (R3.stats.tris || 0) > V13.frag.trisCap){ C27.st.skip++; if (e > 0.85) f.p27.length = 0; return null; }
+  let cur = f; const out = [];
+  for (const q of due){ f.p27.splice(f.p27.indexOf(q), 1);
+    const an = lerp21(U.side, R()) * Math.PI / 180, ux = q.d * Math.sin(an), uy = Math.cos(an), cut = chip27Cut(cur, q.fr, ux, uy); if (!cut) continue;
+    const ch = kid27(cur, cut.A, (f.c27 || 0) + 1), rest = kid27(cur, cut.B, f.c27 || 0);
+    for (const k of ['ph', 't', 'imp', 'A0', 'T', 'H0', 'vs', 'clip', 'jd', 'ox', 'jk', 'nj', 'tx', 'zk', 'p27', 'splitE', 'n23', 'h23', 'w26', 'yc0']) if (cur[k] !== undefined) rest[k] = cur[k];
+    rest.w = cur.w; rest.gen = cur.gen; rest.c27 = cur.c27 || 0; rest.jx = cur.jx; rest.jy = cur.jy; bite13Ext(rest);
+    if (cur !== f){ R3.st.delete(cur.id); R3.etool.delete(cur.id); }
+    fly27Init(ch, q.d); out.push(ch); cur = rest; F13.bud--; C27.st.chips++; if (ch.c27 >= 2) C27.st.gen2++; }
+  if (cur === f) return null;
+  F13.bud--; return [cur].concat(out);
+}
+function fly27Init(b, d){                                        // кусок срывается с зубьев и летит по дуге на 1–3 диска в сторону d
+  const U = V27.chunk, n = V13.saw.n, i0 = discAt13(b.x), big = clamp((b.area - 300) / 900, 0, 1);
+  let k = Math.round(lerp21([U.disc[0], U.disc[1] - 0.6 * big], Math.pow(R(), 0.8))), i = i0 + d * k;
+  if (i < 0 || i > n - 1){ i = clamp(i0 - d * Math.max(1, k - 1), 0, n - 1); if (i === i0) i = clamp(i0 + d, 0, n - 1); }
+  const [rL, rR] = sawRow13(), tx = clamp(sawCx13(i) + (R() - 0.5) * V13.saw.pitch * 0.45, rL + V13.saw.R * 0.5, rR - V13.saw.R * 0.5);
+  bite13Ext(b); const off = b.bot - b.y, yl = sawTop13(tx) - off + 2, room = Math.max(16, b.y - (F13.zt || -1e9) - b.rad), h = Math.min(lerp21(U.h, R()), room);
+  const vy = -Math.sqrt(2 * U.g * h), T = (-vy + Math.sqrt(vy * vy + 2 * U.g * Math.max(0, yl - b.y))) / U.g;
+  b.ph = 'fly27'; b.ft = 0; b.fT = T; b.f0 = [b.x, b.y]; b.fv = [(tx - b.x) / T, vy]; b.fl = [tx, yl]; b.w = d * lerp21(U.spin, R()); b.zk = 0; b.clip = 1e9; b.jx = b.jy = b.ky = 0; b.dripAt = 0;
+  const sr = R3.st.get(b.id); if (sr){ sr.axis = [Math.cos(R() * 6.28), Math.sin(R() * 6.28)]; sr.tumW = d * lerp21(U.tum, R()); }
+  const hex = (KINDS[b.kind] || KINDS.melon).juice, cj = pcol(hex), y0 = b.y + off * 0.5;   // отрыв: брызги и струя по ходу
+  for (let j = 0; j < U.burst[0]; j++){ const a = -Math.PI / 2 + d * (0.3 + 0.8 * R()), sp = 160 + 200 * R(); spawnP(P_FOUNT, b.x - d * b.rad * 0.3, y0, Math.cos(a) * sp, Math.sin(a) * sp, 0.35 + 0.2 * R(), (0.8 + 0.6 * R()) * 1.2, cj, true); }
+  if (LIQ.on) for (let j = 0; j < U.burst[1]; j++){ const a = -Math.PI / 2 + d * (0.25 + 0.6 * R()), sp = 180 + 160 * R(); liqSpawn(L_FOUNT, b.x - d * b.rad * 0.3, y0, Math.cos(a) * sp, Math.sin(a) * sp, 0.9, 2.4 + 2 * R(), juiceHex(b.kind)); }
+  Sound.playRL('tear', 0.06, Math.round(b.area * 7)); C27.st.flyMax = Math.max(C27.st.flyMax, Math.round(Math.abs(tx - b.f0[0])));
+}
+function fly27Step(f, dt, sr){                                   // полёт: дуга, вращение, кувырок, капли; посадка → тело в пилах (churn)
+  const U = V27.chunk; f.ft = Math.min(f.fT, f.ft + dt); const t = f.ft;
+  f.x = f.f0[0] + f.fv[0] * t; f.y = f.f0[1] + f.fv[1] * t + 0.5 * U.g * t * t; f.a += f.w * dt;
+  if (sr && sr.tumW){ sr.ph = U.tum[2] * Math.sin(sr.tumW * t) * (1 - t / f.fT); }
+  if (G.rt >= f.dripAt){ f.dripAt = G.rt + U.drip[0] * (0.7 + 0.6 * R()); const cj = pcol((KINDS[f.kind] || KINDS.melon).juice);
+    spawnP(P_FOUNT, f.x + (R() - 0.5) * f.rad * 0.6, f.y + (R() - 0.5) * f.rad * 0.6, -f.fv[0] * 0.15 + (R() - 0.5) * 40, (f.fv[1] + U.g * t) * 0.3 - 40 * R(), 0.3 + 0.2 * R(), (0.7 + 0.5 * R()) * U.drip[1], cj, true); }
+  if (t < f.fT) return false;
+  f.x = f.fl[0]; f.y = f.fl[1]; const vy = f.fv[1] + U.g * f.fT; churn13Init(f, vy * 0.35);
+  const T = lerp21(U.T, clamp((f.area - 300) / 1200, 0, 1)); if (f.T < T){ f.T = T; f.vs = f.H0 / T; }
+  f.splitE = 0; f.yc0 = f.y; f.t = 0; if (sr) sr.tumW = 0;
+  sawHit21(f); sparks13(f.x); C27.st.landed++; Sound.playRL('squish', 0.05, Math.round(f.area));
+  return true;
+}
 function bite13Update(dt){
   const Q = V13.frag, C = V13.bite, n = V13.saw.n; if (dt <= 0) return;
   let pend = 0; for (const f of F13.frags) if (!R3.ents.has(f.id)) pend++;
@@ -9034,7 +9193,9 @@ function bite13Update(dt){
   for (let i = 1; i < CH.length; i++){ const a = CH[i - 1], b = CH[i], need = (a.rad + b.rad) * C.churn.sep, d = b.x - a.x; if (d < need){ const m = (need - d) * Math.min(1, 6 * dt) * 0.5; a.x -= m; b.x += m; } }
   const DL = F13.dl || (F13.dl = new Float32Array(n)), Rr = V13.saw.R, cy = CFG.grindY + V13.saw.cy;
   for (let i = F13.frags.length - 1; i >= 0; i--){ const f = F13.frags[i], sr = R3.st.get(f.id); f.t += dt;
-    if (f.ph === 'churn'){ const r = churn13Step(f, dt, sr, DL); eating++; kmax = Math.max(kmax, clamp(Math.sqrt(f.area) / 50, 0.2, 1));   // круг 5: тело в пилах
+    if (f.ph === 'fly27'){ fly27Step(f, dt, sr); continue; }   // v27: кусок, отлетевший с пил, — в полёте
+    if (f.ph === 'churn'){ let r = churn13Step(f, dt, sr, DL); eating++; kmax = Math.max(kmax, clamp(Math.sqrt(f.area) / 50, 0.2, 1));   // круг 5: тело в пилах
+      if (r === null && V27.chunk.on) r = chips27Step(f, sr);   // v27: от крупного тела отлетают куски того же плода
       if (Array.isArray(r)){ F13.frags.splice(i, 1, ...r); if (!r.includes(f)){ R3.st.delete(f.id); R3.etool.delete(f.id); }
         if (!F13.frags.some(q => q.root === f.root)) Sound.playRL('ground', 0.08, Math.round(f.area)); }
       continue; }
@@ -9069,6 +9230,7 @@ function bite13Update(dt){
   }
   if (eating && G.rt >= (F13.tickAt || 0)){ F13.tickAt = G.rt + C.tick * (0.85 + 0.3 * R()); Sound.play('grind'); rumble(0.2 + 0.5 * kmax, 0.1); }   // перемол — частыми тиками, пока ест
   F13.stats.peakFrags = Math.max(F13.stats.peakFrags || 0, F13.frags.length);
+  let c27 = 0; for (const f of F13.frags) if (f.c27) c27++; C27.st.peak = Math.max(C27.st.peak, c27);   // v27: пик кусков с пил
 }
 const idle13 = (s) => !F13.frags.length && s.grinding.every(g => F13.split.has(g.id)) && !s.bodies.some(b => b.flags.swept);   // v13 круг 5: пилы пусты
 function chew13Gap(x, kind, k){                                // сок уходит в щель между дисками: струйка в корыто, круги на соке
