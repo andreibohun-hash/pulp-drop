@@ -4140,6 +4140,7 @@ const SFX = {
   // v3: заказ
   // v6: оружие
   'w.pick'(S, t){ S.tone(t, 'triangle', 700, 1100, 0.06, 0.12); S.noise(t, 'highpass', 4000, 4000, 0.8, 0.03, 0.05); },                // выбрал оружие в лотке
+  'win.splat'(S, t){ S.tone(t, 'sine', 120, 42, 0.22, 0.55); S.noise(t, 'lowpass', 1800, 240, 1.5, 0.2, 0.5); S.noise(t + 0.02, 'bandpass', 700, 300, 4, 0.16, 0.3); S.noise(t + 0.06, 'highpass', 2600, 1800, 1, 0.09, 0.08); },   // v28.2: шлёп ляпа о стекло
   'aim.lock'(S, t, n){ const f = 1900 * Math.pow(1.06, Math.min(8, (n || 1) - 1)); S.tone(t, 'sine', f, f * 1.25, 0.05, 0.035); S.noise(t, 'highpass', 7000, 7000, 0.7, 0.03, 0.015); },   // v27: плод взят в прицел — тихий тик, выше с числом целей
   'w.draw'(S, t, w){ const f = { knife: 2800, axe: 1500, saw: 900, mace: 600 }[w] || 1500;                                            // оружие появилось под пальцем
     S.noise(t, 'bandpass', f, f * 1.4, 2, 0.06, 0.08); S.tone(t, 'sine', f / 4, f / 3, 0.05, 0.06); },
@@ -5141,6 +5142,7 @@ function tearFX(e){
   }
   Sound.playRL('tear', 0.05, Math.round(e.area) + (Math.min(8, Math.round(FX.chain)) * 10000));
   rumble(0.25 + 0.75 * k, VIEW.grindRumble[0] + (VIEW.grindRumble[1] - VIEW.grindRumble[0]) * k);   // вибрация перемола: непрерывное мурчание, сильнее и дольше на крупном куске
+  mix28(e.kind, e.area);                       // v28.2: цвет победного ляпа — по перемолотой массе
   log('event', 'grind', e.kind + ' area=' + e.area + ' dur=' + e.dur);
 }
 // Кусок исчез в жерновах: последний хлюп.
@@ -5328,7 +5330,7 @@ function celebrate(){
   const s = G.s, n = s ? s.n : G.save.level;
   const WW = s ? WIN_WORDS7 : WIN_WORDS, phrase = WW[Math.floor(mulberry32(n * 31 + 7)() * WW.length)];
   if (s) trough9().spill = G.rt;      // v10: жёлоб полон — сок переливается через кромку с искрами
-  addWord(phrase, 200, 300, { size: 58, dur: UI.winHold, rise: 12, quiet: true });   // v20: конфетти с боков сняты (Андрей: «звёздочки не вписываются»)
+  if (!win28Start(phrase)) addWord(phrase, 200, 300, { size: 58, dur: UI.winHold, rise: 12, quiet: true });   // v28.2: ляп сока с надписью; v20: конфетти с боков сняты (Андрей: «звёздочки не вписываются»)
   Sound.play('win'); Sound.play('confetti'); buzz([20, 40, 20, 40, 60]); Music.duck(0.25, 1.8);
   G.nextAt = s ? G.rt + UI.winHold : 0; G.aim = null; hideHint();
 }
@@ -7270,7 +7272,7 @@ function forest13Draw(c, sh){
   const key = key13(k);
   if (F13.cvKey !== key){ if (P28.cv && P28.k === k && P28.key === key){ F13.cv = P28.cv; F13.stats.pre28 = (F13.stats.pre28 || 0) + 1; } else F13.cv = canvas13(k);   // v28.1: готовый лес следующего уровня
     P28.cv = null; P28.key = ''; F13.cvKey = key; }
-  prewarm28();
+  prewarm28(); win28Prep();
   c.setTransform(1, 0, 0, 1, 0, 0); c.drawImage(F13.cv, 0, 0, cv.width, cv.height);
   const f = clamp((G.rt - F13.at) / V13.fade, 0, 1), fs = f * f * (3 - 2 * f);
   if (F13.prev && f < 1){ c.globalAlpha = 1 - fs; c.drawImage(F13.prev, 0, 0, cv.width, cv.height); c.globalAlpha = 1; } else if (f >= 1) F13.prev = null;
@@ -8306,12 +8308,144 @@ function lens21(wx, wy, n, hex){
   return made;
 }
 let lensCv = null, lensDirty = [];   // рамки, нарисованные в прошлый кадр (чистим только их)
+// =====================================================================================================
+// v28.2 «Победный ляп» (Андрей 25.11: «надпись при победе — не просто появление, а СОЧНЫЙ ЛЯП соком, а на нём классная надпись»).
+// Только вид. На победе от пил на стекло летит капля сока, шлёпается большой кляксой в верхней-средней части экрана (удар с
+// расплющиванием и отскоком, корона брызг, разлёт капель, потёки вниз), на ней «впечатывается» фраза победы по буквам. Держится
+// до UI.winHold, последние out с сползает и тает. Цвет — сок преобладающей перемолотой массы (группа по виду; смесь — золотой).
+// Клякса — спрайт, запечённый заранее во время уровня (под цвет, который набирается); на победе перепекается, только если цвет другой.
+// Рисуется на холсте стекла (#lens, поверх сцены и жидкости). w — ширина кляксы (доля ширины экрана, от варианта), y — центр (доля
+// высоты), hMax — высота не больше доли высоты экрана; fly — подлёт (с); pop — масштаб удара [старт, пик, отскок, покой, длительность];
+// out — сползает и тает (с), slide — на долю высоты; crown — капель короны в спрайте, spray — разлёт капель, drips — потёков [от, до];
+// font — кегль (доля ширины кляксы), letter — задержка буквы (с), arc — дуга строки, breathe — «дыхание» (Гц, доля); col — цвета групп;
+// mix — группа сока берётся, если её доля перемолотой площади не меньше (уровень 1: арбуз 39 %, слива 35 %), иначе смесь — золотой.
+const V28W = {
+  on: true, w: [0.7, 0.77], y: 0.33, hMax: 0.36, fly: 0.15, pop: [0.3, 1.12, 0.96, 1, 0.25], out: 0.35, slide: 0.07,
+  crown: 20, spray: 12, drips: [3, 5], font: 0.2, letter: 0.026, arc: 0.5, breathe: [1.1, 0.016], mix: 0.34, shake: 2.4,
+  col: { red: [236, 42, 82], orange: [255, 136, 26], yellow: [246, 182, 28], purple: [150, 52, 212], green: [150, 204, 40], gold: [238, 164, 40] },
+  grp: { melon: 'red', berry: 'red', cherry: 'red', pomelo: 'red', dragon: 'red', pepper: 'red', orange: 'orange', mango: 'orange', passion: 'orange',
+    lemon: 'yellow', banana: 'yellow', apple: 'yellow', citron: 'yellow', plum: 'purple', grape: 'purple', lime: 'green', cuke: 'green', kiwi: 'green',
+    cabbage: 'green', coco: 'gold' },
+};
+const W28 = { n: -1, mass: {}, spr: null, sprKey: '', on: false, t0: 0, T: 0, hit: false, txt: null, phrase: '', grp: 'gold', v: 0, tilt: 0, W: 0, H: 0, d: 1, cx: 0, cy: 0, drips: [], spray: [] };
+function mix28(kind, area){                                     // перемолотая масса по группам сока (событие grind ядра)
+  const s = G.s; if (!s) return; if (W28.n !== s.n){ W28.n = s.n; W28.mass = {}; }
+  const g = V28W.grp[kind] || 'gold'; W28.mass[g] = (W28.mass[g] || 0) + (area || 0);
+}
+function group28(useBodies){                                    // преобладающая группа; доля меньше mix — смесь (золотой)
+  const s = G.s, m = W28.n === (s && s.n) ? Object.assign({}, W28.mass) : {};
+  if (useBodies && s) for (const b of s.bodies) if (b.kind && !b.flags.static){ const g = V28W.grp[b.kind] || 'gold'; m[g] = (m[g] || 0) + (b.area || 0); }
+  let tot = 0, best = 'gold', bv = 0; for (const k in m){ tot += m[k]; if (m[k] > bv){ bv = m[k]; best = k; } }
+  return tot > 0 && bv / tot >= V28W.mix ? best : 'gold';
+}
+function shape28(v){                                            // силуэт кляксы (единицы: полуширина = 1): точки по кругу
+  if (W28.shp && W28.shp[v]) return W28.shp[v];
+  const r = mulberry32(v * 7919 + 13), P = [], N = 96, F = [], B = [];
+  for (let k = 2; k <= 6; k++) F.push([k, (0.09 / (k - 1)) * (0.6 + 0.8 * r()), r() * 6.283]);
+  const nb = 6 + Math.floor(r() * 4); for (let i = 0; i < nb; i++) B.push([r() * 6.283, 0.08 + 0.2 * r(), 0.07 + 0.08 * r()]);   // язычки
+  for (let i = 0; i < N; i++){ const a = i / N * 6.283; let q = 1; for (const [k, A, p] of F) q += A * Math.sin(k * a + p);
+    for (const [a0, h, w] of B){ let da = Math.abs(a - a0); da = Math.min(da, 6.283 - da); q += h * Math.exp(-(da * da) / (2 * w * w)); }
+    P.push([Math.cos(a) * q, Math.sin(a) * q * 0.6]); }
+  const crown = []; for (let i = 0; i < V28W.crown; i++){ const a = r() * 6.283, d = 1.1 + 0.32 * r(); crown.push([Math.cos(a) * d, Math.sin(a) * d * 0.64, 0.022 + 0.04 * r(), a]); }
+  let ex = 0, ey = 0; for (const [x, y] of P){ ex = Math.max(ex, Math.abs(x)); ey = Math.max(ey, Math.abs(y)); }   // вынос тела (капли короны на пике могут чуть уйти за край)
+  return (W28.shp || (W28.shp = {}))[v] = { P, crown, ex, ey };
+}
+function path28(g, P, k, ox, oy){ const n = P.length; g.beginPath(); const m = (i) => [(P[i % n][0] + P[(i + 1) % n][0]) / 2 * k + ox, (P[i % n][1] + P[(i + 1) % n][1]) / 2 * k + oy];
+  let [x, y] = m(0); g.moveTo(x, y); for (let i = 1; i <= n; i++){ const [ex, ey] = m(i); g.quadraticCurveTo(P[i % n][0] * k + ox, P[i % n][1] * k + oy, ex, ey); } g.closePath(); }
+function bake28(v, grp, W, d){                                  // спрайт кляксы: W — полуширина (px CSS), d — DPR
+  const key = [v, grp, Math.round(W), d].join(); if (W28.spr && W28.sprKey === key) return W28.spr;
+  const t0 = performance.now(), S = shape28(v), c0 = V28W.col[grp], R = W * d, cw = Math.ceil(R * 2.9), ch = Math.ceil(R * 2.0), cx = cw / 2, cy = ch * 0.46;
+  const c = document.createElement('canvas'); c.width = cw; c.height = ch; const g = c.getContext('2d');
+  const col = c0.join(','), dk = c0.map(x => Math.round(x * 0.66)).join(','), dk2 = c0.map(x => Math.round(x * 0.3)).join(','), lt = mixRgb(c0, [255, 250, 232], 0.42).map(Math.round).join(',');
+  g.save(); g.shadowColor = 'rgba(' + dk2 + ',0.45)'; g.shadowBlur = R * 0.06; g.shadowOffsetY = R * 0.035; g.fillStyle = 'rgba(' + dk + ',1)'; path28(g, S.P, R, cx, cy); g.fill(); g.restore();   // толща и тень на стекле
+  for (const [x, y, rr, a] of S.crown){ const X = cx + x * R, Y = cy + y * R, rx = rr * R; g.fillStyle = 'rgba(' + dk + ',1)'; g.beginPath(); g.ellipse(X, Y, rx * 1.15, rx, a, 0, 6.283); g.fill();   // корона: капли и перемычки к кромке
+    g.fillStyle = 'rgba(' + col + ',1)'; g.beginPath(); g.ellipse(X - rx * 0.1, Y - rx * 0.15, rx * 0.85, rx * 0.72, a, 0, 6.283); g.fill();
+    g.fillStyle = 'rgba(255,250,240,0.7)'; g.beginPath(); g.arc(X - rx * 0.35, Y - rx * 0.35, rx * 0.25, 0, 6.283); g.fill(); }
+  const gr = g.createRadialGradient(cx - R * 0.22, cy - R * 0.2, R * 0.05, cx, cy, R * 1.1);   // тело: светлее в середине, к кромке — цвет и толща
+  gr.addColorStop(0, 'rgba(' + lt + ',1)'); gr.addColorStop(0.45, 'rgba(' + col + ',1)'); gr.addColorStop(0.85, 'rgba(' + c0.map(x => Math.round(x * 0.82)).join(',') + ',1)'); gr.addColorStop(1, 'rgba(' + dk + ',1)');
+  g.fillStyle = gr; path28(g, S.P.map(([x, y]) => [x * 0.968 - 0.01, y * 0.95 - 0.016]), R, cx, cy); g.fill();
+  g.save(); path28(g, S.P, R, cx, cy); g.clip();                 // свет сквозь сок снизу и мокрые блики сверху слева
+  const lg = g.createRadialGradient(cx + R * 0.25, cy + R * 0.3, 0, cx + R * 0.25, cy + R * 0.3, R * 0.75); lg.addColorStop(0, 'rgba(' + lt + ',0.45)'); lg.addColorStop(1, 'rgba(' + lt + ',0)');
+  g.fillStyle = lg; g.fillRect(0, 0, cw, ch);
+  for (const [hx, hy, hw, hh, ha, al] of [[-0.5, -0.3, 0.3, 0.09, -0.35, 0.75], [0.52, -0.22, 0.12, 0.05, -0.5, 0.5]]){ g.save(); g.translate(cx + hx * R, cy + hy * R); g.rotate(ha); g.scale(1, hh / hw);
+    const h = g.createRadialGradient(0, 0, 0, 0, 0, hw * R); h.addColorStop(0, 'rgba(255,255,250,' + al + ')'); h.addColorStop(0.55, 'rgba(255,255,250,' + (al * 0.45).toFixed(2) + ')'); h.addColorStop(1, 'rgba(255,255,250,0)');
+    g.fillStyle = h; g.beginPath(); g.arc(0, 0, hw * R, 0, 6.283); g.fill(); g.restore(); }
+  g.restore();
+  W28.spr = { c, cx, cy, S, R, ms: performance.now() - t0 }; W28.sprKey = key; F13.stats.bake28 = +(performance.now() - t0).toFixed(1); return W28.spr;
+}
+function geom28(n){                                             // размер и место кляксы на экране (px CSS) — под плашкой уровня, выше пил
+  const vw = cv.clientWidth || 393, vh = cv.clientHeight || 780, v = ((n | 0) % 4 + 4) % 4, wf = V28W.w[0] + (V28W.w[1] - V28W.w[0]) * ((v * 0.37) % 1);
+  const S = shape28(v), pk = V28W.pop[1] * 1.06; let W = vw * wf / 2; W = Math.min(W, vw * 0.485 / (S.ex * pk), vh * V28W.hMax / 2 / (S.ey * pk));   // на пике удара — целиком в экране
+  return { v, W, cx: vw / 2, cy: vh * V28W.y, d: DPR };
+}
+function win28Prep(){                                           // во время уровня: спрайт под цвет, который набирается (дёшево, раз в уровень)
+  const s = G.s; if (!V28W.on || !s || s.won || W28.on || s.t < 0.8 || !cv.clientWidth) return;
+  const q = geom28(s.n), grp = group28(true), key = [q.v, grp, Math.round(q.W), q.d].join(); if (W28.sprKey !== key) bake28(q.v, grp, q.W, q.d);
+}
+function win28Start(phrase){                                    // celebrate(): true — победа показана ляпом (слово addWord не нужно)
+  const s = G.s; if (!V28W.on || !s) return false;
+  const q = geom28(s.n), r = mulberry32(s.n * 131 + 7); Object.assign(W28, { on: true, t0: G.rt, T: UI.winHold, hit: false, txt: null, phrase, grp: group28(false), v: q.v, W: q.W, cx: q.cx, cy: q.cy, d: q.d,
+    tilt: (r() - 0.5) * 0.12, n2: s.n });
+  bake28(W28.v, W28.grp, W28.W, W28.d);
+  const nd = V28W.drips[0] + Math.floor(r() * (V28W.drips[1] - V28W.drips[0] + 1)); W28.drips = [];
+  const SP = W28.spr.S.P, yb = (x) => { let m = 0.3; for (const [px, py] of SP) if (py > 0 && Math.abs(px - x) < 0.07) m = Math.max(m, py); return m; };   // нижняя кромка силуэта
+  for (let i = 0; i < nd; i++){ const x = -0.66 + 1.32 * (i + 0.15 + 0.7 * r()) / nd; W28.drips.push({ x, yb: yb(x), w: 0.026 + 0.03 * r(), L: 0.12 + 0.62 * r() * r() + 0.1 * r(), sw: (r() - 0.5) * 2, ph: r() * 6 }); }
+  W28.spray = []; for (let i = 0; i < V28W.spray; i++){ const a = -Math.PI * (0.05 + 0.9 * r()) + (r() < 0.3 ? Math.PI : 0), sp = 0.9 + 1.4 * r(); W28.spray.push({ a, sp, r: 0.018 + 0.03 * r() }); }
+  log('fx.start', 'win28', phrase + ' ' + W28.grp); return true;
+}
+function text28(g, d){                                          // раскладка надписи: строки, буквы, ширины (один раз на победу)
+  const S = Math.round(W28.W * 2 * V28W.font) * d, words = W28.phrase.split(' '), maxW = W28.W * 2 * 0.84 * d; g.font = '700 ' + S + 'px ' + FONT;
+  let lines = [W28.phrase]; if (g.measureText(W28.phrase).width > maxW && words.length > 1){ let best = null;
+    for (let i = 1; i < words.length; i++){ const a = words.slice(0, i).join(' '), b = words.slice(i).join(' '), m = Math.max(g.measureText(a).width, g.measureText(b).width); if (!best || m < best[0]) best = [m, [a, b]]; } lines = best[1]; }
+  let fs = S; for (const l of lines) fs = Math.min(fs, S * maxW / Math.max(1, g.measureText(l).width)); fs = Math.floor(fs); g.font = '700 ' + fs + 'px ' + FONT;
+  const L = [], lh = fs * 0.98; let k = 0;
+  lines.forEach((l, li) => { const ws = [...l].map(ch => g.measureText(ch).width), tw = ws.reduce((a, b) => a + b, 0); let x = -tw / 2;
+    const y = (li - (lines.length - 1) / 2) * lh; ws.forEach((w, i) => { L.push({ ch: l[i], x: x + w / 2, y, xn: (x + w / 2) / (tw / 2 || 1), k: k++ }); x += w; }); });
+  return { L, fs, n: k };
+}
+const ease28 = (t, a, b) => a + (b - a) * (t < 0 ? 0 : t > 1 ? 1 : t * t * (3 - 2 * t));
+function win28Draw(g, d){                                       // на холсте стекла (из lens21Draw); true — нарисовано
+  if (!W28.on) return false; const s = G.s, t = G.rt - W28.t0, F = V28W;
+  if (!s || s.n !== W28.n2 || t > W28.T || G.screen !== 'win' && G.screen !== 'game'){ W28.on = false; log('fx.end', 'win28'); return false; }
+  const sp = W28.spr || bake28(W28.v, W28.grp, W28.W, W28.d), R = W28.W * d, cx = W28.cx * d, cy0 = W28.cy * d, c0 = F.col[W28.grp], col = c0.join(','), dk = c0.map(x => Math.round(x * 0.56)).join(',');
+  if (t < F.fly){                                               // подлёт: капля от пил к стеклу, растёт
+    const u = t / F.fly, e = u * u, sy = (view.oy + view.k * CFG.grindY) * d, x = cx + (cx * 0.04) * (1 - e), y = sy + (cy0 - sy) * e, r = R * (0.06 + 0.22 * e);
+    g.globalAlpha = 0.6 + 0.4 * u; g.fillStyle = 'rgba(' + dk + ',1)'; g.beginPath(); g.arc(x, y, r, 0, 6.283); g.fill();
+    g.fillStyle = 'rgba(' + col + ',1)'; g.beginPath(); g.arc(x - r * 0.08, y - r * 0.1, r * 0.86, 0, 6.283); g.fill(); g.globalAlpha = 1; return true; }
+  const th = t - F.fly; if (!W28.hit){ W28.hit = true; shake(0, 1, F.shake); Sound.play('win.splat'); }
+  const P = F.pop, ts = th / P[4], sc = REDUCED ? 1 : ts < 0.36 ? ease28(ts / 0.36, P[0], P[1]) : ts < 0.7 ? ease28((ts - 0.36) / 0.34, P[1], P[2]) : ease28((ts - 0.7) / 0.3, P[2], P[3]);
+  const sq = Math.max(0, 1 - ts) * 0.06, sx = sc * (1 + sq), sy2 = sc * (1 - sq);   // расплющивание на ударе
+  const to = W28.T - F.out, fo = t > to ? (t - to) / F.out : 0, al = 1 - fo * fo, slide = (REDUCED ? 0 : fo * fo) * F.slide * cv.clientHeight * d, cy = cy0 + slide;
+  g.save(); g.globalAlpha = al;
+  for (const q of W28.drips){ const gr = Math.min(1, Math.max(0, th - 0.12) / 1.1), L = q.L * R * (1 - Math.pow(1 - gr, 2)) * (1 + 0.04 * Math.sin(t * 2 + q.ph)) + fo * R * 0.3;   // потёки вниз
+    if (L < 2) continue; const w = q.w * R, x = cx + q.x * R * sx, y0 = cy + (q.yb * R - w * 1.2) * sy2, y1 = y0 + L + w * 1.2, xm = x + q.sw * w * 0.9, xe = x + q.sw * w * 0.5;   // шейка у кляксы, тоньше книзу, капля на конце
+    for (const [cc, k, ox, oy] of [[dk, 1, 0, 0], [col, 0.62, -w * 0.08, -w * 0.1]]){ g.fillStyle = 'rgba(' + cc + ',1)'; g.beginPath();
+      g.moveTo(x - w * 1.9 * k, y0); g.bezierCurveTo(x - w * 0.6 * k, y0 + w * 1.4, xm - w * 0.42 * k + ox, (y0 + y1) / 2, xe - w * 0.5 * k + ox, y1 - w * 0.6 + oy); g.arc(xe + ox, y1 + oy, w * 1.02 * k, Math.PI + 0.3, -0.3, true);
+      g.bezierCurveTo(xm + w * 0.42 * k + ox, (y0 + y1) / 2, x + w * 0.6 * k, y0 + w * 1.4, x + w * 1.9 * k, y0); g.closePath(); g.fill(); }
+    g.fillStyle = 'rgba(255,252,242,0.75)'; g.beginPath(); g.arc(xe - w * 0.38, y1 - w * 0.32, w * 0.24, 0, 6.283); g.fill(); }
+  g.save(); g.translate(cx, cy); g.rotate(W28.tilt); g.scale(sx, sy2); g.drawImage(sp.c, -sp.cx, -sp.cy); g.restore();   // клякса (спрайт)
+  if (th < 0.55 && !REDUCED) for (const q of W28.spray){ const u = th / 0.55, dd = R * (1.0 + q.sp * u * 0.9), x = cx + Math.cos(q.a) * dd, y = cy + Math.sin(q.a) * dd * 0.62 + R * 1.2 * u * u, rr = q.r * R * (1 - 0.6 * u);   // разлёт капель
+    g.globalAlpha = al * (1 - u * u); g.fillStyle = 'rgba(' + dk + ',1)'; g.beginPath(); g.arc(x, y, rr, 0, 6.283); g.fill(); g.fillStyle = 'rgba(' + col + ',1)'; g.beginPath(); g.arc(x - rr * 0.12, y - rr * 0.15, rr * 0.78, 0, 6.283); g.fill(); }
+  g.globalAlpha = al;
+  if (!W28.txt) W28.txt = text28(g, d);                        // надпись: буквы впечатываются по очереди, дуга и наклон строки, дышит
+  const T = W28.txt, fs = T.fs, br = 1 + F.breathe[1] * Math.sin(t * F.breathe[0] * 6.283), ink = c0.map(x => Math.round(x * 0.28)).join(',');
+  g.font = '700 ' + fs + 'px ' + FONT; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round';
+  const fill = g.createLinearGradient(0, -fs * 0.5, 0, fs * 0.5); fill.addColorStop(0, '#ffffff'); fill.addColorStop(0.38, '#fffdf6'); fill.addColorStop(0.55, '#fff3dc'); fill.addColorStop(1, '#ffe6c2');
+  g.save(); g.translate(cx, cy - fs * 0.05); g.rotate(W28.tilt * 0.8); g.scale(br * sc, br * sc);
+  for (const q of T.L){ const lt = th - q.k * F.letter; if (lt <= 0) continue; const u = Math.min(1, lt / 0.16), ls = REDUCED ? 1 : u < 0.6 ? ease28(u / 0.6, 1.7, 0.88) : ease28((u - 0.6) / 0.4, 0.88, 1);
+    const ya = -F.arc * fs * 0.25 * (1 - q.xn * q.xn), ang = Math.atan(F.arc * 0.5 * q.xn * fs * 0.25 / (fs * 2));
+    g.save(); g.translate(q.x, q.y + ya); g.rotate(ang); g.scale(ls, ls); g.globalAlpha = al * Math.min(1, u * 2.5);
+    g.fillStyle = 'rgba(' + ink + ',0.42)'; g.fillText(q.ch, 0, fs * 0.09);   // вдавленность: тень на кляксе
+    g.lineWidth = fs * 0.2; g.strokeStyle = 'rgb(' + ink + ')'; g.strokeText(q.ch, 0, 0);
+    g.fillStyle = fill; g.fillText(q.ch, 0, 0); g.restore(); }
+  g.restore(); g.restore(); g.globalAlpha = 1; return true;
+}
 function lens21Draw(){
-  const L = J21.lens, full26 = J26.scr.length > 0 || J26.was; if (!L.length && !lensDirty.length && !full26) return;   // v26: залпы — полная очистка
+  const L = J21.lens, full26 = J26.scr.length > 0 || J26.was || W28.on; if (!L.length && !lensDirty.length && !full26) return;   // v28.2: ляп победы — тоже полная очистка   // v26: залпы — полная очистка
   if (!lensCv){ lensCv = document.createElement('canvas'); lensCv.id = 'lens'; lensCv.style.pointerEvents = 'none'; $('game').appendChild(lensCv); }
   if (lensCv.width !== cv.width || lensCv.height !== cv.height){ lensCv.width = cv.width; lensCv.height = cv.height; }
   const g = lensCv.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); if (full26) g.clearRect(0, 0, lensCv.width, lensCv.height); else for (const b of lensDirty) g.clearRect(b[0], b[1], b[2], b[3]); lensDirty = [];
-  const d = DPR, A = V21.lens.a, Z = V21.lens.zoom; J26.was = scr26Draw(g, d); if (!L.length) return;
+  const d = DPR, A = V21.lens.a, Z = V21.lens.zoom; J26.was = scr26Draw(g, d); if (win28Draw(g, d)) J26.was = true; if (!L.length) return;
   for (let i = L.length - 1; i >= 0; i--){ const q = L[i]; q.t = G.rt - q.t0; if (q.t >= q.T){ L.splice(i, 1); continue; }
     if (q.v23){ lensDirty.push(lens23Draw(g, q, d)); continue; }   // v23: мелкая чистая капля без линзы
     const u = q.t / q.T, sl = Math.max(0, q.t - 0.18); q.y = q.y0 + q.v * sl * sl * 1.6 + q.v * sl * 0.4;   // держится миг, потом стекает с ускорением
