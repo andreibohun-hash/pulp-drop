@@ -533,6 +533,17 @@ const KINDS = {
   // v4: мелочь для гроздей (вишня — красный, виноград — фиолетовый)
   cherry:  { label: 'cherry',       shape: ['circle', 14, 10],      density: 1.0,  skin: '#c8102e', flesh: '#a3112a', juice: '#e01a3c' },
   grape:   { label: 'grape',        shape: ['circle', 12, 10],      density: 1.0,  skin: '#7a2a7a', flesh: '#cfe8a0', juice: '#9b3fe0' },
+  // v38: фрукты со свойством (правила перенесены из пробы дизайнера design37, бит в бит). Флаги вида:
+  //   shape 'arc' — составное тело-«гамак» (банан-дуга): n выпуклых сегментов (полухорда оси, полутолщина, прогиб оси, сегментов); угол 0 — «аркой», концы вниз.
+  //     Любой удар разламывает его по сегментам (задетые линией ещё и режутся); целый сквозь нагели не проходит (thick = ∞).
+  //   special 'peel' + peeled — корка: нож только снимает её → на том же месте целый плод вида peeled; топор, пила и булава берут сразу.
+  //   friction — трение целого плода (вместо CFG.friction): кожура банана и корка ананаса не скользят, чистый ананас скользкий.
+  nana:      { label: 'banana',    shape: ['arc', 50, 11.5, 22, 4], density: 1.0, friction: 0.7, skin: '#ffe14d', flesh: '#fff3c4', juice: '#ffe58a' },
+  pineapple: { label: 'pineapple', shape: ['ellipse', 32, 36, 12], density: 1.0, friction: 0.7, skin: '#c98a2b', flesh: '#ffd84a', juice: '#ffd21f', special: 'peel', peeled: 'pine' },   // v38: форма пробы 64 × 72 (models37 давал 60 × 76 — уровни дизайнера запечены на 64 × 72)
+  pine:      { label: 'peeled pineapple', shape: ['ellipse', 24, 27, 12], density: 1.0, friction: 0.02, skin: '#ffd84a', flesh: '#ffd84a', juice: '#ffd21f' },   // ананас без корки: ровно 0,75
+  // тыква и гранат — только вид (модели v37); правила «гиря» и «залп зёрен» — следующим кругом (v37/design_fruits.md, 1.3–1.4)
+  pomegranate: { label: 'pomegranate', shape: ['circle', 28, 12],      density: 1.0, skin: '#b3122e', flesh: '#d81b45', juice: '#c2183a' },
+  pumpkin:     { label: 'pumpkin',     shape: ['ellipse', 50, 42, 12], density: 1.0, skin: '#f07a13', flesh: '#ffb648', juice: '#ff9416' },
 };
 // v3. Вкус = цвет сока + значок фрукта (не только цвет). Сок в стакане и в сливе — цвет вкуса, а не вида.
 // В заказе вкусы резко разные: красный, жёлтый, зелёный, фиолетовый; оранжевый — пятым, рядом с ними его не ставить.
@@ -546,11 +557,36 @@ const FLAVORS = {
 };
 { const FL = { melon: 'red', berry: 'red', apple: 'green', orange: 'orange', lemon: 'yellow', cuke: 'green', cabbage: 'green', lime: 'green',   // v4: яблоко зелёное (арт)
     kiwi: 'green', pomelo: 'red', mango: 'orange', dragon: 'red', banana: 'yellow', passion: 'yellow', pepper: 'red', coco: 'cream', plum: 'purple', citron: 'yellow',
-    cherry: 'red', grape: 'purple' };
+    cherry: 'red', grape: 'purple', nana: 'yellow', pineapple: 'yellow', pine: 'yellow', pumpkin: 'orange', pomegranate: 'red' };
   for (const k in KINDS) KINDS[k].flavor = FL[k] || 'red'; }
 // Локальные вершины вида (центр — центроид), масштаб sc. Выпуклая оболочка гарантирует совпадение с planck.
+// v37 (проба): банан-дуга. Ось — дуга окружности радиуса Rc (полухорда a, прогиб sag), толщина 2r, концы сужены и с носиком. Сегмент — выпуклый
+// многоугольник; F — рёбра-швы между сегментами (после разлома — срезы). Начало координат — центр масс (лежит внутри тела). → { parts: [{ V, F }], hull, area }
+const ARC37 = new Map();
+function arcShape(kind, sc){
+  const key = kind + '|' + sc; let S = ARC37.get(key); if (S) return S;
+  const sh = KINDS[kind].shape, a = sh[1] * sc, r = sh[2] * sc, sag = sh[3] * sc, n = sh[4];
+  const Rc = (a * a + sag * sag) / (2 * sag), al = Math.asin(Math.min(1, a / Rc)), P = (t, rho) => [rho * Math.sin(t), Rc - rho * Math.cos(t)], tip = 0.6 * r / Rc;
+  const raw = [];
+  for (let k = 0; k < n; k++){
+    const t0 = -al + 2 * al * k / n, t1 = -al + 2 * al * (k + 1) / n, tm = (t0 + t1) / 2, k0 = k === 0 ? 0.6 : 1, k1 = k === n - 1 ? 0.6 : 1, V = [];
+    if (k === 0) V.push(P(t0 - tip, Rc));
+    V.push(P(t0, Rc + r * k0), P(tm, Rc + r * (k0 * k1 < 1 ? 0.92 : 1)), P(t1, Rc + r * k1));
+    if (k === n - 1) V.push(P(t1 + tip, Rc));
+    V.push(P(t1, Rc - r * k1), P(t0, Rc - r * k0));
+    raw.push({ V: convexHull(V), t0, t1 });
+  }
+  let A = 0, cx = 0, cy = 0; for (const q of raw){ const ar = polyArea(q.V), c = polyCentroid(q.V); A += ar; cx += c[0] * ar; cy += c[1] * ar; } cx /= A; cy /= A;
+  const ang = (v) => Math.atan2(v[0], Rc - v[1]), near = (x, y) => Math.abs(x - y) < 1e-6;
+  const parts = raw.map((q, k) => { const F = q.V.map((v, i) => { const w = q.V[(i + 1) % q.V.length], av = ang(v), aw = ang(w);
+      return (k > 0 && near(av, q.t0) && near(aw, q.t0)) || (k < n - 1 && near(av, q.t1) && near(aw, q.t1)); });
+    return { V: q.V.map(v => [v[0] - cx, v[1] - cy]), F }; });
+  const all = []; for (const q of parts) for (const v of q.V) all.push(v);
+  S = { parts, hull: convexHull(all), area: A, Rc, al, c: [cx, cy] }; ARC37.set(key, S); return S;
+}
 function kindVerts(kind, sc){
   const sh = KINDS[kind].shape, t = sh[0], P = [];
+  if (t === 'arc') return arcShape(kind, sc).hull.map(v => [v[0], v[1]]);
   if (t === 'circle' || t === 'ellipse'){
     const rx = sh[1] * sc, ry = (t === 'circle' ? sh[1] : sh[2]) * sc, m = sh[sh.length - 1];
     for (let k = 0; k < m; k++){ const a = (k + 0.5) * 2 * Math.PI / m; P.push([rx * Math.cos(a), ry * Math.sin(a)]); }
@@ -1429,6 +1465,10 @@ function levelData(n, attempt){
     const T = CLEAR33, k = (((n - 1) % T.length) + T.length) % T.length;
     return Object.assign({ tier: 0, tpl: 'clear', theme: 0, specials: [], mode: 'clear' }, V32, T[k], { n, idx: k + 1, set: 'v7', v11: true });
   }
+  if (CFG.goalMode === 'clear' && CFG.clearSet === 'v38'){   // v38: стенд правил банана и ананаса (STAND38) — вне линейки
+    const T = STAND38, k = (((n - 1) % T.length) + T.length) % T.length;
+    return Object.assign({ tier: 0, tpl: 'clear', theme: 0, specials: [], mode: 'clear' }, V32, T[k], { n, idx: k + 1, set: 'v7', v11: true, stand38: true });
+  }
   if (CFG.goalMode === 'clear' && CFG.clearSet === 'v15'){   // v25: прежние десять из досок (CLEAR15) — только для lab15 и тестов, в линейке их нет
     const T = CLEAR15, k = (((n - 1) % T.length) + T.length) % T.length;
     return Object.assign({ tier: 0, tpl: 'clear', theme: 0, specials: [], mode: 'clear' }, T[k], { n, idx: k + 1, set: 'v7', v11: true });
@@ -1657,11 +1697,11 @@ function addBody(s, rec, vx, vy, w, awake, at){
   const pb = s.world.createBody({ type: 'dynamic', position: planck.Vec2(rec.x / ppm, rec.y / ppm), angle: rec.a,
     linearVelocity: planck.Vec2(vx / ppm, vy / ppm), angularVelocity: w, linearDamping: CFG.linDamp, angularDamping: CFG.angDamp,
     awake: awake !== false });
-  const cut = rec.cutEdges.some(Boolean);
-  pb.createFixture(planck.Polygon(rec.verts.map(v => planck.Vec2(v[0] / ppm, v[1] / ppm))),
-    { density: K.density, friction: cut ? CFG.pieceFriction : s.level && s.level.set === 'v7' ? CFG.friction7 : CFG.friction, restitution: CFG.restitution });
+  const cut = rec.cutEdges.some(Boolean), fr = cut ? CFG.pieceFriction : K.friction !== undefined ? K.friction : s.level && s.level.set === 'v7' ? CFG.friction7 : CFG.friction;   // v37: трение вида (банан, ананас в корке и без)
+  for (const P of (rec.parts ? rec.parts.map(q => q.V) : [rec.verts]))                      // v37: составное тело — фикстура на каждый выпуклый сегмент
+    pb.createFixture(planck.Polygon(P.map(v => planck.Vec2(v[0] / ppm, v[1] / ppm))), { density: K.density, friction: fr, restitution: CFG.restitution });
   Object.defineProperty(rec, 'pb', { value: pb, writable: true, enumerable: false, configurable: true });
-  rec.thick = polyThick(rec.verts); pb.setUserData(rec);     // v4: наименьшая ширина — проходит ли решётку
+  rec.thick = rec.parts ? 1e9 : polyThick(rec.verts); pb.setUserData(rec);   // v37: целый банан-дуга сквозь нагели не проходит (длинный и кривой), куски — по толщине     // v4: наименьшая ширина — проходит ли решётку
   if (at === undefined) s.bodies.push(rec); else s.bodies.splice(at, 0, rec);
   return rec;
 }
@@ -1695,9 +1735,10 @@ function reattachRopes(s, old, born){
   hangDamp(s);
 }
 function makeFruit(s, kind, x, y, a, sc, tag){
-  const V = kindVerts(kind, sc);
+  const V = kindVerts(kind, sc), A = KINDS[kind].shape[0] === 'arc' ? arcShape(kind, sc) : null;
   const rec = { id: s.nextId++, kind, root: 0, x, y, a, verts: V, cutEdges: V.map(() => false), artFrame: [0, 0], sc,
-    area: polyArea(V), rad: polyRadius(V), flags: { chew: false, cut: false, tag: tag || null } };
+    area: A ? A.area : polyArea(V), rad: polyRadius(V), flags: { chew: false, cut: false, tag: tag || null } };
+  if (A) rec.parts = A.parts;                                  // v37: сегменты составного тела (локальные; общие на вид — не менять)
   rec.root = rec.id;
   return addBody(s, rec, 0, 0, 0, true);
 }
@@ -1893,6 +1934,39 @@ function spawnPiece(s, P, part, kick, nx, ny, keepId, at, extra){
   const vx = (pv.x - w * ry) * ppm + kick * nx + (extra ? extra.vx : 0), vy = (pv.y + w * rx) * ppm + kick * ny + (extra ? extra.vy : 0);
   return addBody(s, rec, vx, vy, w + (extra ? extra.w : 0), true, at);
 }
+// v37 (проба): хорда отрезка (локальные концы) по телу — у составного тела по сегментам (в «кармане» дуги реза нет). → [t0, t1] или null
+function bodyChord(b, la, lb){
+  if (!b.parts) return clipChord(b.verts, la[0], la[1], lb[0], lb[1]);
+  let t0 = Infinity, t1 = -Infinity; for (const P of b.parts){ const ch = clipChord(P.V, la[0], la[1], lb[0], lb[1]); if (ch && ch[1] - ch[0] > 1e-9){ t0 = Math.min(t0, ch[0]); t1 = Math.max(t1, ch[1]); } }
+  return t1 > t0 ? [t0, t1] : null;
+}
+// v38: расстояние от локальной точки до тела (0 — внутри); у составного тела — по сегментам (булава и топор не «задевают» карман дуги)
+function bodyDist(b, x, y){
+  if (!b.parts) return polyDist(b.verts, x, y);
+  let d = Infinity; for (const P of b.parts){ const q = polyDist(P.V, x, y); if (q < d) d = q; } return d;
+}
+// v37 (проба): составное тело разламывается по сегментам; линии lines [{ p, n }] (мир) режут задетые сегменты с пропилом kw. Швы — срезы. → новые тела
+function breakParts(s, b, lines, kw, carry, vel, w, ch, nx, ny){
+  const cs = Math.cos(b.a), sn = Math.sin(b.a); let parts = b.parts.map(P => ({ V: P.V, F: P.F })); const a0 = b.area, id = b.id, kind = b.kind;
+  for (const L of lines){ const lp = toLocal(b, L.p[0], L.p[1]), ln = [cs * L.n[0] + sn * L.n[1], -sn * L.n[0] + cs * L.n[1]], nxt = [];
+    for (const P of parts){ const r = cutPart(P, lp[0], lp[1], ln[0], ln[1], kw); if (r) nxt.push(r[0], r[1]); else nxt.push(P); } parts = nxt; }
+  const lost = a0 - parts.reduce((a, P) => a + partArea(P), 0), mine = spawnParts(s, b, parts, lost, carry, vel);
+  s.spec.arcs = (s.spec.arcs || 0) + 1;
+  ev(s, { type: 'split', id, kind, into: mine.map(r => r.id), p: ch[0].map(v => +v.toFixed(1)), q: ch[1].map(v => +v.toFixed(1)), nx: +nx.toFixed(3), ny: +ny.toFixed(3), w, arc: true });
+  return mine;
+}
+// v37 (проба): ананас — нож снимает корку: на месте тела в корке встаёт целый плод вида KINDS[kind].peeled (тот же масштаб, угол и скорость),
+// разница площадей — сразу в сок (корка летит щепой — это вид). Ход потрачен. → новое тело
+function peelFruit(s, b){
+  const K = KINDS[b.kind], v = b.pb.getLinearVelocity(), w = b.pb.getAngularVelocity(), at = removeBody(s, b), a0 = b.area + (b.juiceX || 0);
+  const V = kindVerts(K.peeled, b.sc), rec = { id: s.nextId++, kind: K.peeled, root: 0, x: b.x, y: b.y, a: b.a, verts: V, cutEdges: V.map(() => false), artFrame: [0, 0], sc: b.sc,
+    area: polyArea(V), rad: polyRadius(V), flags: { chew: false, cut: false, tag: b.flags.tag || null, peeled: true } };
+  rec.root = rec.id; addBody(s, rec, v.x * CFG.ppm, v.y * CFG.ppm - 30, w, true, at < 0 ? undefined : at);
+  s.spec.peels = (s.spec.peels || 0) + 1; for (const o of s.bodies) o.pb.setAwake(true);
+  crumb(s, b, a0 - rec.area, b.x, b.y);
+  ev(s, { type: 'peel', id: b.id, into: rec.id, kind: b.kind, x: +b.x.toFixed(1), y: +b.y.toFixed(1), area: +(a0 - rec.area).toFixed(0) });
+  return rec;
+}
 // Разрез тела мировой прямой (точка, нормаль) → { A, B } в локальных координатах тела.
 function splitBody(b, px, py, nx, ny){
   const cs = Math.cos(b.a), sn = Math.sin(b.a), dx = px - b.x, dy = py - b.y;
@@ -2057,6 +2131,11 @@ function previewCut(s, ax, ay, bx, by){
 // удара лезвием по срезу: момент силы вдоль u, приложенной к хорде, относительно центра куска (стороны реза — в разные стороны).
 function splitHit(s, b, px, py, nx, ny, kick, p, q, born, ux, uy, opt){   // opt (v6, оружие): { kerfW — ширина пропила, push, spin, carry }
   const chord = Math.hypot(q[0] - p[0], q[1] - p[1]), k = (opt ? opt.kerfW : Math.min(CFG.kerfMax, CFG.kerf * chord)) / 2;
+  if (b.parts){                                                // v37: банан-дуга разламывается по сегментам
+    const bp = opt ? opt.push : CFG.bladePush, sp7 = opt ? opt.spin : CFG.cutSpin;
+    const mine = breakParts(s, b, [{ p: [px, py], n: [nx, ny] }], 2 * k, opt ? opt.carry : true, (x, y) => { const sd = (x - px) * nx + (y - py) * ny, sg = sd >= 0 ? 1 : -1;
+      return { vx: nx * sg * kick + (ux || 0) * bp * 0.5, vy: ny * sg * kick + (uy || 0) * bp * 0.5, w: -sg * sp7 * 0.5 }; }, 'knife', [p, q], nx, ny);
+    if (born) for (const r of mine) born.push(r); return mine.map(r => r.id); }
   // v5: сок пропила и мелочи не уходит в стакан мгновенно — едет с кусками (juiceX) и приходит, когда их перемелют: зарядка
   // верхних фруктов не съедает их запас раньше времени. В v2–v4 — как было: сразу в сок.
   const carry = opt ? opt.carry : heapSet(s.level.set); let carried = b.juiceX || 0;
@@ -2688,7 +2767,7 @@ function segBodyDist(b, ax, ay, bx, by){
 }
 // Тела, внутри которых точка (оружие появилось в них) — броском не задеваются.
 function startSkip(s, x, y){ const out = new Set();
-  for (const b of s.bodies){ if (b.flags.chew || Math.hypot(b.x - x, b.y - y) > b.rad) continue; const l = toLocal(b, x, y); if (polyDist(b.verts, l[0], l[1]) === 0) out.add(b.id); }
+  for (const b of s.bodies){ if (b.flags.chew || Math.hypot(b.x - x, b.y - y) > b.rad) continue; const l = toLocal(b, x, y); if (bodyDist(b, l[0], l[1]) === 0) out.add(b.id); }   // v38: составное — по сегментам
   return out; }
 // Разрез части { V, F } (локальные координаты тела) линией с пропилом kw → [A, B] или null (линия мимо или у самого края).
 function cutPart(P, px, py, nx, ny, kw){
@@ -2734,6 +2813,12 @@ function lineChord(b, p, ux, uy){ const a = toLocal(b, p[0] - ux * 400, p[1] - u
 // соседи вздрагивают (shakePile). Скорлупа колется сразу. → новые тела.
 function chop(s, F, W, b, px, py, ux, uy){
   const nx = -uy, ny = ux, L = axeLines(W, b, px, py, ux, uy), lu = [Math.cos(b.a) * nx + Math.sin(b.a) * ny, -Math.sin(b.a) * nx + Math.cos(b.a) * ny];
+  if (b.parts){                                                // v37: банан-дуга — разлом по сегментам, линия топора — через точку удара
+    const mine = breakParts(s, b, [{ p: [px, py], n: [nx, ny] }], W.kerf, W.carry, (x, y) => { const sd = (x - px) * nx + (y - py) * ny, sg = sd >= 0 ? 1 : -1;
+      return { vx: nx * sg * W.kick * 0.6 + ux * W.push, vy: ny * sg * W.kick * 0.6 + uy * W.push + 40, w: -sg * W.spin * 0.5 }; }, 'axe', [[px, py], [px + ux, py + uy]], nx, ny);
+    for (const r of mine) F.skip.add(r.id); shakePile(s, px, py, W.shakeR, W.shakeV, F.skip);
+    ev(s, { type: 'chop', id: b.id, kind: b.kind, area: +b.area.toFixed(0), x: +px.toFixed(1), y: +py.toFixed(1), ux: +ux.toFixed(3), uy: +uy.toFixed(3), big: false, n: mine.length, k: F.hits });
+    return mine; }
   let parts = [{ V: b.verts, F: b.cutEdges }]; const a0 = partArea(parts[0]);
   for (const p of L){ const lp = toLocal(b, p[0], p[1]), nxt = [];
     for (const P of parts){ const r = cutPart(P, lp[0], lp[1], lu[0], lu[1], W.kerf); if (r) nxt.push(r[0], r[1]); else nxt.push(P); } parts = nxt; }
@@ -2752,6 +2837,12 @@ function chop(s, F, W, b, px, py, ux, uy){
 // касанием и центром, дальше крупнейший кусок колется поперёк своей длинной оси (сид — номер тела и шаг). Пропилы трещин —
 // сразу в сок (взрыв), куски разлетаются от точки удара. → новые тела.
 function smash(s, F, W, b, px, py, ux, uy){
+  if (b.parts){                                                // v37: банан-дуга — разлом по сегментам и трещина через точку удара вдоль и поперёк полёта
+    const mine = breakParts(s, b, [{ p: [px, py], n: [-uy, ux] }, { p: [px, py], n: [ux, uy] }], W.kerfW, W.carry, (x, y) => { const dx = x - px, dy = y - py, d = Math.hypot(dx, dy) || 1;
+      return { vx: dx / d * W.kick + ux * W.push, vy: dy / d * W.kick + uy * W.push - 40, w: (dx > 0 ? 1 : -1) * W.spin * 0.5 }; }, 'mace', [[px, py], [px + ux, py + uy]], -uy, ux);
+    for (const r of mine) F.skip.add(r.id); if (!F.noShake) shakePile(s, px, py, W.shakeR, W.shakeV, F.skip);
+    ev(s, { type: 'smash', id: b.id, kind: b.kind, area: +b.area.toFixed(0), x: +px.toFixed(1), y: +py.toFixed(1), ux: +ux.toFixed(3), uy: +uy.toFixed(3), n: mine.length, k: F.hits, splash: 0 });
+    return mine; }
   const n = Array.isArray(W.pieceArea) ? (b.area < W.pieceArea[0] ? 3 : b.area < W.pieceArea[1] ? 4 : 5) : Math.max(W.pieces[0], Math.min(W.pieces[1], Math.round(b.area / W.pieceArea))),
     rnd = mulberry32(b.id * 7919 + (s.level.set === 'v7' ? F.hits * 131 : s.steps * 31) + 7);   // v7: раскол не зависит от шага (повтор броска — тот же)
   const cs = Math.cos(b.a), sn = Math.sin(b.a), lu = [cs * ux + sn * uy, -sn * ux + cs * uy], lc = toLocal(b, px, py);
@@ -2777,6 +2868,7 @@ function smash(s, F, W, b, px, py, ux, uy){
 }
 // Пила стёсывает край тела, которое ближе W.shave к оси, но ось его не пересекла: полоса до линии на W.shave от оси — сразу в сок.
 function shave(s, F, W, b, ax, ay, bx, by){
+  if (b.parts) return null;                                    // v37: край банана-дуги пила не стёсывает
   const sd = segBodyDist(b, ax, ay, bx, by); if (!sd.v || sd.d >= W.shave) return null;
   const dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy || 1, t = Math.max(0, Math.min(1, ((sd.v[0] - ax) * dx + (sd.v[1] - ay) * dy) / L2));
   const cx = ax + dx * t, cy = ay + dy * t, vl = Math.hypot(sd.v[0] - cx, sd.v[1] - cy) || 1, nx = (sd.v[0] - cx) / vl, ny = (sd.v[1] - cy) / vl;
@@ -2795,7 +2887,7 @@ function exitCuts(s, F, W, ax, ay, x, y){
     if (b.flags.chew || F.skip.has(b.id)) continue;
     const ent = F.inside.get(b.id);
     if (!ent && segPtDist(ax, ay, x, y, b.x, b.y) > b.rad + reach + 0.5) continue;
-    const la = toLocal(b, ax, ay), lb = toLocal(b, x, y), ch = clipChord(b.verts, la[0], la[1], lb[0], lb[1]);
+    const la = toLocal(b, ax, ay), lb = toLocal(b, x, y), ch = bodyChord(b, la, lb);
     if (!ch || ch[1] <= 0 || ch[0] >= 1){ if (ent) F.inside.delete(b.id); else if (reach && F.shaveIds.has(b.id) && !F.shaved.has(b.id)) near.push(b); continue; }
     let e = ent;
     if (ch[0] > 0){ e = [la[0] + (lb[0] - la[0]) * ch[0], la[1] + (lb[1] - la[1]) * ch[0]]; F.inside.set(b.id, e); }
@@ -2811,6 +2903,7 @@ function exitCuts(s, F, W, ax, ay, x, y){
     ev(s, { type: 'slice', id: b.id, kind: b.kind, area: +b.area.toFixed(0), p: P.map(v => +v.toFixed(1)), q: Q.map(v => +v.toFixed(1)), ux: +ux.toFixed(3), uy: +uy.toFixed(3), k: F.cuts, w: F.w });
     if (s.mode === 'clear' && KINDS[b.kind].special === 'bomb'){ detonate(s, b, 0); F.cuts++; continue; }   // v11: перец — разрезал, взрыв
     if (KINDS[b.kind].special === 'shell' && !b.flags.cracked && F.w === 'knife'){ crackShell(s, b); F.skip.add(b.id); F.cuts++; continue; }
+    if (KINDS[b.kind].special === 'peel' && F.w === 'knife'){ const r = peelFruit(s, b); F.skip.add(r.id); F.cuts++; continue; }   // v37: ананас — нож снимает корку
     const kw = W.kerfW !== undefined ? W.kerfW : Math.min(W.kerfMax, W.kerf * cl);
     splitHit(s, b, P[0], P[1], nx, ny, W.kick, P, Q, born, ux, uy, { kerfW: kw, push: W.push, spin: W.spin, carry: W.carry });
     for (const r of born){ F.skip.add(r.id); if (reach) F.shaved.add(r.id); }
@@ -2829,7 +2922,7 @@ function entryHits(s, F, W, ax, ay, x, y){
     for (const b of list){
       if (b.flags.chew || F.skip.has(b.id) || F.hit.has(b.id)) continue;
       if (Math.hypot(b.x - px, b.y - py) > b.rad + W.r) continue;
-      const l = toLocal(b, px, py); if (polyDist(b.verts, l[0], l[1]) > W.r) continue;
+      const l = toLocal(b, px, py); if (bodyDist(b, l[0], l[1]) > W.r) continue;   // v38: составное — по сегментам
       if (W.R){ smashCircle(s, F, W, px, py, ux, uy); return k / n; }   // v7: булава — всё в круге удара
       F.hit.add(b.id); F.hits++; F.slow *= W.slow;
       if (s.mode === 'clear' && KINDS[b.kind].special === 'bomb') detonate(s, b, 0);   // v11: перец — от любого удара
@@ -2858,11 +2951,11 @@ function throwPreview(s, w, path, noStop){
       for (let i = 1; i < path.length && !hit; i++){
         const a = path[i - 1], c = path[i], sl = Math.hypot(c[0] - a[0], c[1] - a[1]);
         if (segPtDist(a[0], a[1], c[0], c[1], b.x, b.y) > b.rad + (W.shave || 0) + 0.5){ ent = null; d0 += sl; continue; }
-        const la = toLocal(b, a[0], a[1]), lc = toLocal(b, c[0], c[1]), ch = clipChord(b.verts, la[0], la[1], lc[0], lc[1]);
+        const la = toLocal(b, a[0], a[1]), lc = toLocal(b, c[0], c[1]), ch = bodyChord(b, la, lc);
         if (!ch || ch[1] <= 0 || ch[0] >= 1){ ent = null; if (W.shave) near = Math.min(near, segBodyDist(b, a[0], a[1], c[0], c[1]).d); d0 += sl; continue; }
         const at = (t) => [a[0] + (c[0] - a[0]) * t, a[1] + (c[1] - a[1]) * t];
         if (ch[0] > 0 || !ent) ent = at(Math.max(0, ch[0]));
-        if (ch[1] < 1){ const q = at(ch[1]); if (Math.hypot(q[0] - ent[0], q[1] - ent[1]) >= CFG.minChord) hit = { id: b.id, how: 'cut', p: ent, q, d: d0 + sl * ch[1] }; ent = null; }
+        if (ch[1] < 1){ const q = at(ch[1]); if (Math.hypot(q[0] - ent[0], q[1] - ent[1]) >= CFG.minChord) hit = { id: b.id, how: 'cut', p: ent, q, d: d0 + sl * ch[1] }; if (w === 'knife' && KINDS[b.kind].special === 'peel') hit.peel = true; ent = null; }   // v38: нож по корке — снимет её (не промах, но и не рез)
         d0 += sl;
       }
       if (hit) out.push(hit); else if (W.shave && near < W.shave) out.push({ id: b.id, how: 'shave', p: [b.x, b.y], q: [b.x, b.y], d: 0 });
@@ -2880,10 +2973,10 @@ function throwPreview(s, w, path, noStop){
     const px = a[0] + (c[0] - a[0]) * k / n, py = a[1] + (c[1] - a[1]) * k / n;
     for (const b of s.bodies){
       if (b.flags.chew || skip.has(b.id) || got.has(b.id) || Math.hypot(b.x - px, b.y - py) > b.rad + W.r) continue;
-      const l = toLocal(b, px, py); if (polyDist(b.verts, l[0], l[1]) > W.r) continue;
+      const l = toLocal(b, px, py); if (bodyDist(b, l[0], l[1]) > W.r) continue;   // v38: составное — по сегментам
       got.add(b.id);
       const lines = w === 'axe' ? axeLines(W, b, px, py, ux, uy).map(p => lineChord(b, p, ux, uy)).filter(Boolean) : [];
-      let m = 0; for (let j = k; j <= n; j += 2){ const lj = toLocal(b, a[0] + (c[0] - a[0]) * j / n, a[1] + (c[1] - a[1]) * j / n); m = Math.max(m, W.r - polyDist(b.verts, lj[0], lj[1])); if (m >= 12) break; }   // запас касания: насколько глубоко голова зайдёт в тело
+      let m = 0; for (let j = k; j <= n; j += 2){ const lj = toLocal(b, a[0] + (c[0] - a[0]) * j / n, a[1] + (c[1] - a[1]) * j / n); m = Math.max(m, W.r - bodyDist(b, lj[0], lj[1])); if (m >= 12) break; }   // запас касания: насколько глубоко голова зайдёт в тело
       out.push({ id: b.id, how: w === 'axe' ? 'chop' : 'smash', p: [px, py], q: [px, py], lines, d: L * k / n, m: +m.toFixed(1) });
       if (out.length >= W.hits){ end = [px, py]; break; }
     }
@@ -2959,6 +3052,8 @@ function aimScore(s, w, path, own){
   const pv = throwPreview(s, w, path), W = wcfg(s, w), pass = CFG.bowlGap - CFG.grateSlack; let v = 0, mine = 0;
   for (const h of pv.hits){ const ok = own.has(h.id); if (h.how === 'shave'){ v += ok ? 0.3 : -0.8; continue; }
     if (!ok){ v -= 2; continue; } mine++;
+    if (h.how === 'cut' && h.peel){ const b = s.bodies.find(q => q.id === h.id); v += polyThick(kindVerts(KINDS[b.kind].peeled, b.sc)) < pass ? 1 : 0.6; continue; }   // v38: нож снимет корку — целый чистый плод пройдёт ли
+    if (h.how === 'cut' && s.bodies.find(q => q.id === h.id).parts){ v += 1; continue; }   // v38: банан-дуга — разлом на дольки (толщина ≈ 20) — проходят
     if (h.how === 'cut'){ const b = s.bodies.find(q => q.id === h.id), dx = h.q[0] - h.p[0], dy = h.q[1] - h.p[1], L = Math.hypot(dx, dy) || 1;   // пролезут ли оба куска
       const kw = W.kerfW !== undefined ? W.kerfW : Math.min(W.kerfMax, W.kerf * L), lp = toLocal(b, h.p[0], h.p[1]), cs = Math.cos(b.a), sn = Math.sin(b.a);
       const nx = -dy / L, ny = dx / L, r = cutPart({ V: b.verts, F: b.cutEdges }, lp[0], lp[1], cs * nx + sn * ny, -sn * nx + cs * ny, kw);
@@ -3781,8 +3876,8 @@ const CLEAR30 = [
 // клубника 7 %), длинные (огурец, банан ≈ 20 × 5 %). Куча — на весь кадр, преграды внутри неё — дерево набора уровня 1: тумбы (торец
 // бревна, деталь 'stump' — круг в физике), бруски-ромбы и кубики, клинья, короткие наклонные доски, стенки «песочные часы» (W15.hopper).
 // Сплошных полов нет: целое крупное и среднее лежит на преградах, его куски проходят в зазоры; мелочь проходит часть зазоров сама.
-const SZ32 = { melon: 0.893, coco: 0.94, orange: 0.963, apple: 0.9, lemon: 0.86, lime: 1.05, plum: 0.85, cherry: 1.0, grape: 1.17, berry: 0.82, cuke: 0.86, banana: 0.86 };
-const CLS32 = { melon: 'L', coco: 'L', orange: 'M', apple: 'M', lemon: 'M', lime: 'M', plum: 'S', cherry: 'S', grape: 'S', berry: 'S', cuke: 'Q', banana: 'Q', pepper: 'Q' };   // L крупные, M средние, S мелкие, Q длинные
+const SZ32 = { melon: 0.893, coco: 0.94, orange: 0.963, apple: 0.9, lemon: 0.86, lime: 1.05, plum: 0.85, cherry: 1.0, grape: 1.17, berry: 0.82, cuke: 0.86, banana: 0.86, nana: 0.86, pineapple: 1, pine: 1, pumpkin: 1, pomegranate: 1 };
+const CLS32 = { melon: 'L', coco: 'L', orange: 'M', apple: 'M', lemon: 'M', lime: 'M', plum: 'S', cherry: 'S', grape: 'S', berry: 'S', cuke: 'Q', banana: 'Q', pepper: 'Q', nana: 'Q', pineapple: 'L', pine: 'M', pumpkin: 'L', pomegranate: 'M' };   // L крупные, M средние, S мелкие, Q длинные
 const R2_32 = (v) => [+v[0].toFixed(2), +v[1].toFixed(2)];
 const ROT32 = (P, cx, cy, deg) => { const a = deg * Math.PI / 180, c = Math.cos(a), s = Math.sin(a); return P.map(v => R2_32([cx + c * v[0] - s * v[1], cy + s * v[0] + c * v[1]])); };
 const SQ32 = (s) => [[-s / 2, -s / 2], [s / 2, -s / 2], [s / 2, s / 2], [-s / 2, s / 2]];
@@ -4060,6 +4155,18 @@ const CLEAR33 = [
     pile: B32([['coco', 51.7, 665.1, 0, 0.846], ['coco', 104.4, 665, 0.2, 0.846], ['coco', 77.9, 619.4, 0, 0.846], ['coco', 50.1, 525.5, 3.3], ['melon', 69.4, 364.4, -3.3], ['orange', 180.5, 669.4, -0.2], ['orange', 231.5, 669.4, -0.7], ['orange', 188.9, 619.7, -0.1], ['orange', 238.8, 619.3, 0], ['coco', 196.6, 518.4, 12.6], ['orange', 178.7, 404.2, -1.6], ['orange', 233.3, 404.2, 1.4], ['orange', 187.2, 354.6, -4.2], ['orange', 237.8, 353.3, -10], ['coco', 334, 633.9, 0, 1.504], ['coco', 360.1, 527.6, 9.4], ['melon', 325.4, 364.4, -3.3], ['orange', 179.2, 570.4, 0], ['orange', 230.9, 569.4, 0.8], ['orange', 187.2, 303.6, -9.5], ['orange', 237.8, 303, -10], ['orange', 104, 534.7, 2.4], ['orange', 305, 530.8, -2.8]]) },
 ];
 const LINE11 = CLEAR33.map(L => Object.assign({}, V32, L));
+// v38: стенд правил банана и ананаса — два показательных уровня пробы дизайнера (design37, CLEAR33 № 21 и 26) вне линейки игры.
+// Набор CFG.clearSet = 'v38' (PULP_DROP.stand38(k), хеш #stand38=k; tools/v38, тесты «v38: …»). Записи — бит в бит из пробы.
+const STAND38 = [
+  // 21 · Hammocks — Гамаки: банан-гамак держит то, что само прошло бы в просвет. Срежь гамак — апельсины и кокосы уйдут в пилы целыми; арбуз сядет на нагели — ему один рез
+  { num: 21, name: 'Hammocks', role: 'i', pass: 40, hint: ["Cut the hammock!"], loadout: {knife:12}, solution: [{"w":"knife","pts":[[18.4,560.5],[134.1,560.5]]},{"w":"knife","pts":[[76,471.1],[76,583.2]]},{"w":"knife","pts":[[142.2,560.5],[258,560.5]]},{"w":"knife","pts":[[199.9,469.3],[199.9,581.4]]},{"w":"knife","pts":[[266.6,560.5],[382.4,560.5]]},{"w":"knife","pts":[[324.1,471.1],[324.1,583.1]]}],
+    parts: [["wood","post",[[6,300],[20,300],[20,606],[6,606]]],["wood","post",[[131,300],[145,300],[145,606],[131,606]]],["wood","post",[[255,300],[269,300],[269,606],[255,606]]],["wood","post",[[380,300],[394,300],[394,606],[380,606]]],["wood","beam",[[6,286],[394,286],[394,300],[6,300]]],["back",[[6,292],[394,292],[394,600],[6,600]]],["grate",38.5,566,113.5,566,64,5.5],["grate",162.5,566,237.5,566,64,5.5],["grate",286.5,566,361.5,566,64,5.5]],
+    pile: B32([['nana', 76.2, 555.5, 179.8, 0.86], ['orange', 73.1, 525.5, -6.5, 0.963], ['melon', 72.1, 451, 3.2, 0.893], ['orange', 46.1, 381.8, -8.8, 0.963], ['orange', 104.6, 384.3, 14.5, 0.963], ['nana', 200.1, 555.5, 179.9, 0.86], ['coco', 200, 520.8, -0.2, 0.94], ['melon', 199.6, 443, -0.2, 0.893], ['coco', 171.6, 372.6, 0, 0.846], ['coco', 228.4, 373.2, -0.1, 0.846], ['nana', 324.4, 555.5, 179.5, 0.86], ['orange', 321.1, 525.5, -6.9, 0.963], ['melon', 320.4, 451.1, 3.3, 0.893], ['orange', 295.1, 381.5, -8.2, 0.963], ['orange', 353.6, 385, 15.2, 0.963]]) },
+  // 26 · Pineapple Corks — Пробки: ананас в корке запирает горло. Нож корку только снимает — чистый ананас меньше, он проваливается в горло, а мелочь над ним уходит в пилы целой. Чистые ананасы садятся на сито в ряд
+  { num: 26, name: 'Pineapple Corks', role: 'i', pass: 40, hint: ["Peel it!"], loadout: {knife:10}, solution: [{"w":"knife","pts":[[26.3,451.9],[113.7,451.9]]},{"w":"knife","pts":[[156.3,451.9],[243.7,451.9]]},{"w":"knife","pts":[[286.3,451.9],[373.7,451.9]]},{"w":"knife","pts":[[28.6,638],[364.6,638]]},{"w":"knife","pts":[[51,402.9],[51,454.8]]},{"w":"knife","pts":[[181,402.8],[181,454.7]]},{"w":"knife","pts":[[311,402.8],[311,454.7]]}],
+    parts: [["wood","cheek",[[6,340],[41,470],[41,500],[6,500]]],["wood","cheek",[[134,340],[134,500],[99,500],[99,470]]],["wood","cheek",[[136,340],[171,470],[171,500],[136,500]]],["wood","cheek",[[264,340],[264,500],[229,500],[229,470]]],["wood","cheek",[[266,340],[301,470],[301,500],[266,500]]],["wood","cheek",[[394,340],[394,500],[359,500],[359,470]]],["grate",8,650,392,650,44,5.5],["wood","post",[[0,600],[8,600],[8,664],[0,664]]],["wood","post",[[392,600],[400,600],[400,664],[392,664]]],["back",[[6,348],[394,348],[394,500],[6,500]]]],
+    pile: B32([['pineapple', 70, 452, 0.1, 1], ['lime', 44.4, 404.3, -1.5, 1.05], ['lime', 95.6, 404.2, 0.4, 1.05], ['cherry', 30.2, 374.5, -1.5, 1], ['cherry', 69.9, 383.7, -1, 1], ['cherry', 109.8, 374.4, 0.4, 1], ['pineapple', 200, 452, 0.1, 1], ['lime', 174.4, 404.3, -1.5, 1.05], ['lime', 225.6, 404.2, 0.4, 1.05], ['cherry', 160.2, 374.5, -1.5, 1], ['cherry', 199.9, 383.7, -1, 1], ['cherry', 239.8, 374.4, 0.4, 1], ['pineapple', 330, 452, 0.1, 1], ['lime', 304.4, 404.3, -1.5, 1.05], ['lime', 355.6, 404.2, 0.4, 1.05], ['cherry', 290.2, 374.5, -1.5, 1], ['cherry', 329.9, 383.7, -1, 1], ['cherry', 369.8, 374.4, 0.4, 1]]) },
+];
 
 // Цель одна — пропихнуть всю кучу в жернова. Куча лежит на клиньях и полках со щелями (детали v1–v3: funnel, twin, bin, shelf,
 // plate, peg); пролезает то, что уже щели. Помехи: крупное (шире щели), твёрдое (кокос: нож отскакивает, пила глохнет), длинное
@@ -4106,7 +4213,7 @@ function maceImpact(s, W, a, c, skip){
   const L = Math.hypot(c[0] - a[0], c[1] - a[1]), ux = (c[0] - a[0]) / (L || 1), uy = (c[1] - a[1]) / (L || 1), n = Math.max(1, Math.ceil(L / 3));
   for (let k = 0; k <= n; k++){ const px = a[0] + (c[0] - a[0]) * k / n, py = a[1] + (c[1] - a[1]) * k / n;
     for (const b of s.bodies){ if (b.flags.chew || (skip && skip.has(b.id)) || Math.hypot(b.x - px, b.y - py) > b.rad + W.r) continue;
-      const l = toLocal(b, px, py); if (polyDist(b.verts, l[0], l[1]) > W.r) continue;
+      const l = toLocal(b, px, py); if (bodyDist(b, l[0], l[1]) > W.r) continue;   // v38: составное — по сегментам
       const dx = b.x - px, dy = b.y - py, dd = Math.hypot(dx, dy) || 1, m = Math.min(dd, W.dip);   // центр удара — внутри задетого тела
       return { px, py, cx: px + dx / dd * m, cy: py + dy / dd * m, ux, uy, d: L * k / n }; } }
   return null;
@@ -4114,7 +4221,7 @@ function maceImpact(s, W, a, c, skip){
 function maceTargets(s, W, cx, cy, skip){
   const out = [];
   for (const b of s.bodies){ if (b.flags.chew || (skip && skip.has(b.id)) || Math.hypot(b.x - cx, b.y - cy) > b.rad + W.R) continue;
-    const l = toLocal(b, cx, cy), d = polyDist(b.verts, l[0], l[1]); if (d <= W.R) out.push({ b, d }); }
+    const l = toLocal(b, cx, cy), d = bodyDist(b, l[0], l[1]); if (d <= W.R) out.push({ b, d }); }   // v38: составное — по сегментам
   return out.sort((p, q) => p.d - q.d);
 }
 function macePreview(s, W, path, skip, out){
@@ -4661,7 +4768,7 @@ const SFX = {
 };
 const CUT_SOUND = { melon: 'cut.melon', apple: 'cut.apple', orange: 'cut.citrus', lemon: 'cut.citrus', berry: 'cut.berry', cuke: 'cut.cuke',
   cabbage: 'cut.cabbage', lime: 'cut.citrus', kiwi: 'cut.berry', pomelo: 'cut.citrus', mango: 'cut.soft', dragon: 'cut.soft', banana: 'cut.soft',
-  passion: 'cut.berry', pepper: 'cut.apple', coco: 'cut.coco', plum: 'cut.soft', citron: 'cut.citrus', cherry: 'cut.berry', grape: 'cut.berry' };
+  passion: 'cut.berry', pepper: 'cut.apple', coco: 'cut.coco', plum: 'cut.soft', citron: 'cut.citrus', cherry: 'cut.berry', grape: 'cut.berry', nana: 'cut.soft', pineapple: 'cut.apple', pine: 'cut.apple', pumpkin: 'cut.apple', pomegranate: 'cut.apple' };
 
 // Музыка-петля: 100 BPM, F–Dm–B♭–C, бас, маримба аккордами на офбит, мелодия по пентатонике, хай-хэт.
 // Планировщик с упреждением 0,25 с; приглушение (duck) на крупных событиях.
@@ -4760,6 +4867,16 @@ const ART = {
             col: { skin: '#ffb52e', blush: '#ff5a3c', green: '#9ccf3a', speck: '#fff1b0', flesh: '#ffc53d', flesh2: '#ffe48a', rind: '#ff9a1f', edge: '#e88a10', fiber: '#f0a820' } },
   dragon: { ell: [26, 22], band: [0.38, 6, 10], rind: 0.14,
             col: { skin: '#ff3fa4', scale: '#ff7cc4', tip: '#7ccf4a', dark: '#c4207a', flesh: '#e8206e', flesh2: '#ff6aa0', rind: '#ff3fa4', edge: '#c4207a', seed: '#2b2140' } },
+  nana:   { ell: [55, 19], band: [0.58, 5, 8], rind: 0.14,
+            col: { skin: '#ffe14d', ridge: '#e8bf26', tip: '#6b4a1f', speck: '#a8782e', flesh: '#fff3c4', flesh2: '#fffbe6', rind: '#ffd83a', edge: '#e8bf26', seed: '#c9a46a' } },
+  pineapple: { ell: [32, 36], band: [0.34, 6, 10], rind: 0.22,
+            col: { skin: '#c98a2b', pore: '#8a5a1e', shine: '#e8b85a', flesh: '#ffd84a', flesh2: '#fff1a8', rind: '#e0a030', edge: '#8a5a1e', seg: '#f0c030', seed: '#fff1a8', nub: '#2f8f3a' } },
+  pumpkin: { ell: [50, 42], band: [0.3, 8, 14], rind: 0.1,
+            col: { skin: '#f07a13', pore: '#c95a0a', shine: '#ffb04a', flesh: '#ffb648', flesh2: '#ffcb72', rind: '#f9a23a', edge: '#c95a0a', seg: '#f0a030', seed: '#ffe0a0', nub: '#6b7a2a' } },
+  pomegranate: { ell: [28, 28], band: [0.34, 6, 10], rind: 0.12,
+            col: { skin: '#b3122e', pore: '#8a0c22', shine: '#d6344a', flesh: '#d81b45', flesh2: '#e8466a', rind: '#f6dfc8', edge: '#7a0c20', seg: '#c2183a', seed: '#f6dfc8', nub: '#b3122e' } },
+  pine:   { ell: [24, 27], band: [0.34, 6, 10], rind: 0.04,
+            col: { skin: '#ffd84a', pore: '#b8862a', shine: '#fff1a8', flesh: '#ffd84a', flesh2: '#fff1a8', rind: '#ffe070', edge: '#e0b020', seg: '#f0c030', seed: '#fff1a8', nub: '#b8862a' } },
   banana: { ell: [46, 12], band: [0.58, 5, 8], rind: 0.14,
             col: { skin: '#ffe14d', ridge: '#e8bf26', tip: '#6b4a1f', speck: '#a8782e', flesh: '#fff3c4', flesh2: '#fffbe6', rind: '#ffd83a', edge: '#e8bf26', seed: '#c9a46a' } },
   passion: { ell: [18, 18], band: [0.42, 5, 8], rind: 0.24,
@@ -5091,7 +5208,7 @@ const FX = {
   inflow: 0, load: 0, spin: 0, jig: 0,
   shake: null, fadeAcc: 0, win: null, cutKinds: new Set(), lastBlade: [1, 0], cutN: 1,
   hitstopOn: false, slowOn: false, goalAt: 0, fountain: 0, tut: { on: false, line: null, t0: 0, n: 0 }, lowWarned: false,
-  rings: [], cracks: [], ropeAt: {}, netAt: {}, gateW: [],   // этап 3 (v4: netAt — когда снято звено сетки): кольца взрыва, вспышки трещин, когда лопнула верёвка, прошлая угл. скорость доски
+  rings: [], cracks: [], peels: [], ropeAt: {}, netAt: {}, gateW: [],   // этап 3 (v4: netAt — когда снято звено сетки): кольца взрыва, вспышки трещин, когда лопнула верёвка, прошлая угл. скорость доски
   rollKick: [], wet: 0, wetCol: '#ff4d6d',          // v2: подскок валиков от удара куска, мокрый блик на валиках
   rwet: [], chain: 0, gpop: new Map(),  // v5: сок на каждом валике { a, col }, капли на стекле витрины, цепочка перемола, «лопнул» ли кусок в жерновах
   trail: [], frenzyAt: -9, frenzyEnd: -9, frenzyGlow: 0, chargeShow: 0,   // v2: след пальца { x, y, t, cut }, FRENZY
@@ -5099,7 +5216,7 @@ const FX = {
   slab: new Map(), etool: new Map(), sdrips: [], sliceW: 'knife',   // v8: доли (переворот, кувырок), кромки по инструменту, пятна, капли
 };
 function resetFX(){
-  PT.n = 0; for (const k of ['drips', 'stamps', 'slashes', 'words', 'wq', 'confetti', 'streams', 'rings', 'cracks', 'gateW', 'rollKick', 'trail', 'rwet']) FX[k].length = 0;
+  PT.n = 0; for (const k of ['drips', 'stamps', 'slashes', 'words', 'wq', 'confetti', 'streams', 'rings', 'cracks', 'peels', 'gateW', 'rollKick', 'trail', 'rwet']) FX[k].length = 0;
   FX.chain = 0; FX.gpop.clear(); if (typeof LIQ !== 'undefined') LIQ.n = 0;
   FX.film = null; FX.stampTok = undefined;   // v9: плёнка на валиках, ведро пятен (v31: жёлоба нет)
   FX.w6.landed.length = 0; FX.w6.fizzle = null; FX.w6.bounced = null; FX.sweepAt = 0; FX.clang = null; FX.shiver.clear(); if (Sound.saw) Sound.sawOff(); G.autoThrow = null;
@@ -5558,6 +5675,18 @@ function crackFX(e){
   shake(0, 1, 4); Sound.play('crack'); buzz(15);
   FX.cracks.push({ x: e.x, y: e.y, t0: G.rt });
 }
+// v38: корка ананаса снята ножом — на месте тела в корке четыре дуги кожуры (толстые полосы по контуру прежнего плода, с ромбами)
+// разлетаются от центра, кувыркаются и гаснут за V38.peel.t с; под ними уже чистый жёлтый плод (меньше на четверть). Без частиц-«звёздочек».
+const V38 = { peel: { t: 0.55, n: 4, v: [150, 230], up: 140, g: 900, spin: 7, w: 0.32, col: '#b5782a', dk: '#6e4414', lt: '#e2a94a' } };
+function peelFX(e){
+  log('event', 'peel', 'id=' + e.id + ' → ' + e.into);
+  const P = V38.peel, b = G.s && G.s.bodies.find(q => q.id === e.into), a = b ? b.a : 0, sh = KINDS[e.kind].shape, sc = b ? b.sc : 1, rx = sh[1] * sc, ry = sh[2] * sc, a0 = R() * 6.28;
+  const arcs = [];
+  for (let k = 0; k < P.n; k++){ const m = a0 + (k + 0.5) * 6.283 / P.n, sp = P.v[0] + R() * (P.v[1] - P.v[0]);
+    arcs.push({ m, sp: 6.283 / P.n * 0.86, vx: Math.cos(m) * sp, vy: Math.sin(m) * sp - P.up, w: (R() - 0.5) * 2 * P.spin }); }
+  FX.peels.push({ x: e.x, y: e.y, a, rx, ry, t0: G.rt, arcs });
+  shake(0, 1, 2); buzz(10);
+}
 // Верёвка лопнула: волокна, щелчок; доска падает (удар доски — по скорости, когда упрётся).
 function ropeFX(e){
   log('event', 'rope', 'i=' + e.i + ' f=' + e.f + (e.id ? ' id=' + e.id : '') + (e.snap ? ' snap' : ''));
@@ -5714,6 +5843,7 @@ function onEvent(e){
     case 'ground': groundFX(e); F13.split.delete(e.id); break;
     case 'explode': explodeFX(e); break;
     case 'crack': crackFX(e); break;
+    case 'peel': peelFX(e); break;                 // v38: нож снял корку ананаса — кольца кожуры отлетают
     case 'rope': ropeFX(e); break;
     case 'feed': feedFX24(e); break;                 // v24: плод порции выпал из кормушки
     case 'feed.open': case 'feed.arm': case 'feed.done': case 'feed.blocked': log('event', e.type, 'i=' + e.i); break;
@@ -5727,7 +5857,7 @@ function onEvent(e){
       log('event', 'level.win', 'level=' + s.n + ' juice=' + e.juice + ' movesLeft=' + s.moves);
       Sound.play('goal'); FX.goalAt = G.rt; G.winAt = G.rt; G.endAt = s.t + UI.endWinDelay; G.endKind = 'win';
       prepLevel(s.n + 1);
-      { G.save[okey()] = Math.max(G.save[okey()] || 1, s.n + 1); }   // v30: прогресс — номер игры (после 20-го — круг с 6-го, levelData сам)
+      if (!s.level.stand38){ G.save[okey()] = Math.max(G.save[okey()] || 1, s.n + 1); }   // v38: стенд прогресс не трогает   // v30: прогресс — номер игры (после 20-го — круг с 6-го, levelData сам)
       save(); break;
     case 'lose':
       log('event', 'level.lose', 'level=' + s.n + ' juice=' + e.juice + (e.reason ? ' reason=' + e.reason : '') + (e.flavor ? ' flavor=' + e.flavor : ''));
@@ -6027,9 +6157,24 @@ function drawRings(c){
     if (p < 0.3){ c.globalAlpha = 1 - p / 0.3; c.beginPath(); c.arc(q.x, q.y, q.r * (0.3 + p), 0, 6.29); c.fillStyle = '#fff3c4'; c.fill(); }
     c.globalAlpha = 1 - p; c.beginPath(); c.arc(q.x, q.y, q.r * (0.35 + 0.8 * p), 0, 6.29); c.lineWidth = 9 * (1 - p) + 1; c.strokeStyle = q.col || '#ffb21f'; c.stroke();
     c.globalAlpha = 1; }
+  drawPeels38(c);
   for (const q of FX.cracks){ const p = (G.rt - q.t0) / 0.22; if (p >= 1) continue;
     const r = 10 + 16 * p; c.globalAlpha = 1 - p; c.fillStyle = '#ffffff'; c.beginPath();
     for (let k = 0; k < 8; k++){ const a = k * Math.PI / 4, rr = k % 2 ? r * 0.3 : r; c.lineTo(q.x + Math.cos(a) * rr, q.y - 6 + Math.sin(a) * rr); } c.closePath(); c.fill(); c.globalAlpha = 1; }
+}
+function drawPeels38(c){
+  const P = V38.peel;
+  for (let i = FX.peels.length - 1; i >= 0; i--){ const q = FX.peels[i], t = G.rt - q.t0, p = t / P.t; if (p >= 1){ FX.peels.splice(i, 1); continue; }
+    const th = Math.max(3, q.rx * P.w), al = p < 0.6 ? 1 : 1 - (p - 0.6) / 0.4;
+    for (const r of q.arcs){ const cx = q.x + r.vx * t, cy = q.y + r.vy * t + 0.5 * P.g * t * t, rot = r.w * t;
+      c.save(); c.globalAlpha = al; c.translate(cx - Math.cos(r.m) * q.rx * 0.9, cy - Math.sin(r.m) * q.ry * 0.9); c.rotate(q.a + rot);
+      const e0 = r.m - q.a - r.sp / 2, e1 = r.m - q.a + r.sp / 2, s0 = 1 + 0.12 * p;
+      c.beginPath(); c.ellipse(0, 0, q.rx * s0, q.ry * s0, 0, e0, e1); c.lineCap = 'round';
+      c.lineWidth = th + 2; c.strokeStyle = P.dk; c.stroke();                       // тёмный край кожуры
+      c.lineWidth = th; c.strokeStyle = P.col; c.stroke();
+      c.setLineDash([th * 0.55, th * 0.7]); c.lineWidth = th * 0.45; c.strokeStyle = P.dk; c.stroke(); c.setLineDash([]);   // ромбы-глазки
+      c.beginPath(); c.ellipse(0, 0, q.rx * s0 - th * 0.5, q.ry * s0 - th * 0.5, 0, e0, e1); c.lineWidth = 2; c.strokeStyle = P.lt; c.stroke();   // светлая изнанка
+      c.restore(); } }
 }
 function hintText(s){
   if (s.level.v11) return s.level.hint && !s.used && s.n <= LINE11.length ? s.level.hint[0] : '';   // v11: слова — только к первому броску знакомства; v30: на кругу после 20-го — без подсказок
@@ -6569,10 +6714,21 @@ const K3 = {
     c: { rim: '#c81a14', rimIn: '#ff6a4a', flesh0: '#ff8a5c', flesh1: '#ffc4a0', pit: '#fff0c0', pitDk: '#d0b080', juiceDk: '#c83a16' } },
   apple:  { def: 'K_APPLE', dark: '#a8182e',                    // яблоко — светлая мякоть, сердечко с семечками
     c: { rim: '#c8102a', rimIn: '#f6e6b0', flesh0: '#fbeeb4', flesh1: '#fffbe2', core: '#d9c26a', seed: '#6b3a1e', juiceDk: '#c8a44a' } },
+  nana:   { def: 'K_LONG', dark: '#c89400', long: 0,            // v37 проба: банан-дуга — как банан
+    c: { rim: '#f6be02', rimIn: '#ffe27a', flesh0: '#f8e08e', flesh1: '#fff4cc', core: '#f2d47a', seed: '#8a5a2a', juiceDk: '#d0a020' } },
+  pine:   { def: 'K_APPLE', dark: '#c89400',                    // v37 проба (заглушка): ананас без корки
+    c: { rim: '#f0b820', rimIn: '#ffe27a', flesh0: '#ffd23a', flesh1: '#ffe98a', core: '#fff1a8', seed: '#d9a520', juiceDk: '#d0a020' } },
   banana: { def: 'K_LONG', dark: '#c89400', long: 0,            // банан и огурец — круглое сечение со своей серединой
     c: { rim: '#f6be02', rimIn: '#ffe27a', flesh0: '#f8e08e', flesh1: '#fff4cc', core: '#f2d47a', seed: '#8a5a2a', juiceDk: '#d0a020' } },
   cuke:   { def: 'K_LONG', dark: '#1e6e30', long: 1,
     c: { rim: '#3f6a12', rimIn: '#7e9e2c', flesh0: '#cfe28a', flesh1: '#ebf4bc', core: '#e2eeb0', seed: '#f8fbe4', juiceDk: '#6a8a1a' } },   // v19: оливковее
+  // v37: ананас — светлое сердечко (K_APPLE: мякоть, кольцо сердцевины), гранат — рубиновая мякоть в кремовой кромке, тыква — толстая светло-оранжевая стенка (K_STONE без косточки)
+  pineapple:   { def: 'K_APPLE', dark: '#8a5a1e',
+    c: { rim: '#c98a2b', rimIn: '#e8b95a', flesh0: '#ffd84a', flesh1: '#ffe676', core: '#fff1a8', seed: '#fff1a8', juiceDk: '#d9a400' } },
+  pomegranate: { def: 'K_POME', dark: '#7a0c20',
+    c: { rim: '#b3122e', rimIn: '#f6dfc8', flesh0: '#d81b45', flesh1: '#e8466a', pit: '#f6dfc8', pitDk: '#d9b99a', juiceDk: '#a8102c' } },
+  pumpkin:     { def: 'K_STONE', dark: '#a8480a', pit: 0,
+    c: { rim: '#f07a13', rimIn: '#f9a23a', flesh0: '#ffb648', flesh1: '#ffcb72', pit: '#ffe0a0', pitDk: '#e8a050', juiceDk: '#d98a20' } },
   coco:   { def: 'K_COCO', dark: '#3a1a08',                     // кокос — скорлупа, белое кольцо, полость
     c: { shell: '#7a3410', shellDk: '#4e1e06', flesh1: '#f7f5f0', cav: '#cfe4f0', cavDk: '#8fb2c8', juiceDk: '#9a8a70' } },
 };
@@ -6592,6 +6748,9 @@ function r3Shape(kind, sc){                                 // гладкая ф
   const sh = KINDS[kind].shape, t = sh[0], m = V12.smooth, P = [];
   const nPhys = sh[sh.length - 1], fk = V12.fit === 'mean' && (t === 'circle' || t === 'ellipse') ? (1 + Math.cos(Math.PI / nPhys)) / 2 : 1;
   let rx = sh[1] * sc * fk, ry = (t === 'circle' ? sh[1] : sh[2]) * sc * fk, cap = 0;
+  if (t === 'arc'){ const A = arcShape(kind, sc), r = sh[2] * sc; rx = r * 1.05; ry = r * 1.05; cap = sh[1] * sc;      // v37 проба: дуга — контур из сегментов, высота как у «длинного»
+    for (const q of A.parts) for (const v of q.V) P.push([v[0], v[1]]);
+    const H = convexHull(P); S = { pts: H, cx: 0, cy: 0, rx, ry, D: r * V12.depth, cap, R: polyRadius(H), arc: A }; R3SH.set(key, S); return S; }
   if (t === 'capsule'){ const hl = sh[1] * sc, r = sh[2] * sc; cap = hl - r; rx = r; ry = r;
     for (let k = 0; k <= 24; k++){ const a = -Math.PI / 2 + k * Math.PI / 24; P.push([cap + r * Math.cos(a), r * Math.sin(a)]); }
     for (let k = 0; k <= 24; k++){ const a = Math.PI / 2 + k * Math.PI / 24; P.push([-cap + r * Math.cos(a), r * Math.sin(a)]); } }
@@ -6679,6 +6838,9 @@ uniform vec3 cSkin, cSkinDk, cSeed, cRim, cFlesh0, cFlesh1, cCore, cJuiceDk;
 #endif
 #ifdef K_STONE
 uniform vec3 cRim, cRimIn, cFlesh0, cFlesh1, cPit, cPitDk, cJuiceDk; uniform float uPit;
+#endif
+#ifdef K_POME
+uniform vec3 cRim, cRimIn, cFlesh0, cFlesh1, cPit, cPitDk, cJuiceDk;
 #endif
 #ifdef K_APPLE
 uniform vec3 cRim, cRimIn, cFlesh0, cFlesh1, cCore, cSeed, cJuiceDk;
@@ -6812,6 +6974,17 @@ void main(){
       float m = 1.0 - smoothstep(1.0 - pe, 1.0 + pe, d);
       vec3 pc = mix(cPit, cPitDk, smoothstep(0.55, 1.0, d) * 0.7 + (1.0 - smoothstep(0.0, 0.05, abs(q.x) * (1.0 - d * 0.5))) * 0.5 * step(d, 0.85));   // кромка и шов
       col = mix(mix(col, cFlesh0 * 0.86, (1.0 - smoothstep(1.0, 1.25, d)) * 0.6), pc, m); inner *= 1.0 - m; }
+  }
+#endif
+#ifdef K_POME
+  if (!skin){                                                  // v37 гранат: рубиновые зёрна-ячейки с бликом, кремовые перепонки между ними, тонкая кожура
+    vec3 v = vor2(uv * 6.4); float w = smoothstep(0.02, 0.085, v.y);
+    vec3 ar = mix(cFlesh0, cFlesh1, smoothstep(0.55, 0.0, v.x) * (0.45 + 0.55 * v.z));
+    ar = mix(ar, vec3(1.0, 0.80, 0.86), smoothstep(0.2, 0.05, length(v.x - 0.0) + 0.25 * (v.z - 0.5)) * 0.45);
+    col = mix(cRimIn, ar, w);
+    col = mix(col, cRimIn, lay(s, 0.82, aa));
+    col = mix(col, cRim, lay(s, 0.92, aa));
+    inner = (1.0 - lay(s, 0.92, aa)) * w;
   }
 #endif
 #ifdef K_APPLE
@@ -6958,7 +7131,7 @@ function r3Mark(k){ R3.marks[k] = +performance.now().toFixed(1); }
 function r3Load(cb){
   if (R3.ready){ if (cb) cb(); return; } if (cb) (R3.waiters = R3.waiters || []).push(cb); if (R3.loading) return;
   R3.loading = true; r3Mark('loadStart');
-  if (!R3.tbufs){ R3.tbufs = {}; for (const k of V12T.models) R3.tbufs[k] = fetch('assets/models/' + k + '.glb?v=' + V12T.ver).then(r => r.ok ? r.arrayBuffer() : null).catch(() => null); }   // этап 2: нет файла — вид рисуется 2D
+  if (!R3.tbufs){ R3.tbufs = {}; for (const k of V12T.models) R3.tbufs[k] = fetch('assets/models/' + ((V12T.src || {})[k] || k) + '.glb?v=' + V12T.ver).then(r => r.ok ? r.arrayBuffer() : null).catch(() => null); }   // этап 2: нет файла — вид рисуется 2D
   const sc = document.createElement('script'); sc.src = 'vendor/three.js?v=' + V12T.ver;
   sc.onload = () => { r3Mark('threeParsed'); try { r3Init(); } catch (e) { R3.failed = String(e && e.message || e); log('event', 'r3.fail', R3.failed); } };
   sc.onerror = () => { R3.failed = 'three.js не загрузился'; log('event', 'r3.fail', R3.failed); };
@@ -7140,8 +7313,9 @@ function r3Level(){                                             // новый у
 // лучами из центра; замкнутость сетки Tripo не нужна) и остальными стенками. Нутро красит прежний шейдер стенки (R3FS, TCAP).
 // =====================================================================================================
 const V12T = {
-  models: ['melon', 'plum', 'lime', 'orange', 'berry', 'grape', 'cherry', 'apple', 'lemon', 'coco', 'pepper', 'banana', 'cuke'],   // этап 2: 13 видов линейки v11; инструменты — спрайты 2D (модели ножа, топора, пилы и булавы лежат в assets/models, не грузятся)
-  ver: 12,                  // версия файлов моделей в адресе (кэш браузера и Pages): круг 4 — перекраска tools/repaint-model.mjs; круг 5 — фактура tools/texture-model.mjs; круг 7 — клубника tools/berry-model.mjs
+  models: ['melon', 'plum', 'lime', 'orange', 'berry', 'grape', 'cherry', 'apple', 'lemon', 'coco', 'pepper', 'banana', 'cuke', 'pineapple', 'pumpkin', 'pomegranate', 'nana', 'pine'],   // v38: + nana (банан-дуга: сетка banana гнётся по дуге), pine (заглушка: сетка orange в жёлтый) · v37: +3 вида; этап 2: 13 видов линейки v11; инструменты — спрайты 2D (модели ножа, топора, пилы и булавы лежат в assets/models, не грузятся)
+  src: { nana: 'banana', pine: 'orange' },   // v38: вид → файл модели (своих файлов у nana и pine нет)
+  ver: 37,                  // версия файлов моделей в адресе (кэш браузера и Pages): круг 4 — перекраска tools/repaint-model.mjs; круг 5 — фактура tools/texture-model.mjs; круг 7 — клубника tools/berry-model.mjs
   rmap: [128, 64],          // карта радиуса тела: долгота × широта
   slope: 1.5,               // наклон передней стенки к прежней фаске (1 — тот же угол, полоса мякоти в покое — половина прежней; 1,5 — купол и мякоть поровну)
   look: { melon: [1, 1], orange: [1, 1], berry: [1, 1], tool: [1, 1], plum: [0.9, 0.86], grape: [0.92, 0.9] },   // v16: слива и виноград — глубже и спокойнее (как на рефе)   // насыщенность и яркость текстуры по виду (круг 4: палитра спрайтов уже в текстуре — tools/repaint-model.mjs)
@@ -7152,7 +7326,9 @@ const V12T = {
   // круг 5: фактура кожуры — bump: сила рельефа карты высот (ед. мира на всю шкалу карты), spec: отсвет (сила, степень), rim: кромочный свет (налёт сливы и винограда)
   tex: { melon: { bump: 1.2, spec: [0.1, 5] }, orange: { bump: 1.0 }, lemon: { bump: 1.0 }, lime: { bump: 0.8 }, berry: { bump: 1.2, spec: [0.1, 12] }, apple: { bump: 0.8, spec: [0.07, 10] },
          plum: { bump: 0.8, rim: 0.3, spec: [0.02, 8] }, grape: { bump: 0.6, rim: 0.3, spec: [0.02, 8] }, cherry: { spec: [0.3, 26] }, coco: { bump: 1.2, spec: [0.02, 8] },
-         banana: { bump: 3.5 }, cuke: { bump: 1.2, spec: [0.06, 10] }, pepper: { spec: [0.22, 20] } },
+         banana: { bump: 3.5 }, cuke: { bump: 1.2, spec: [0.06, 10] }, pepper: { spec: [0.22, 20] },
+         pineapple: { bump: 1.4, spec: [0.02, 8] }, pumpkin: { bump: 0.9, spec: [0.03, 8] }, pomegranate: { bump: 0.7, spec: [0.12, 14] },
+         nana: { bump: 3.5 }, pine: { bump: 0.6, spec: [0.3, 22] } },
 };
 const R3T = { fr: {}, tool: {}, marks: {} };
 async function r3GLB(buf){
@@ -7190,6 +7366,14 @@ function r3TGeo(pos, nrm, uv, idx){ const g = new THREE.BufferGeometry(); g.setA
 // Вписать фрукт: проекция модели спереди против многоугольника физики (kindVerts, sc = 1) — подбор масштаба, сжатия (±12%) и сдвига
 // по наибольшему пересечению/объединению; z — тем же масштабом. Ось glTF: y вверх → у нас вниз.
 function r3FitFruit(kind, g, noMap){
+  if (KINDS[kind].shape[0] === 'arc'){                      // v37 проба: прямая сетка банана гнётся по дуге вида (ось x — вдоль плода; y — поперёк, вверх)
+    const A = arcShape(kind, 1), m = g.pos.length / 3; let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+    for (let i = 0; i < m; i++){ x0 = Math.min(x0, g.pos[3 * i]); x1 = Math.max(x1, g.pos[3 * i]); y0 = Math.min(y0, g.pos[3 * i + 1]); y1 = Math.max(y1, g.pos[3 * i + 1]); }
+    const sh = KINDS[kind].shape, len = 2 * A.Rc * (A.al + 0.6 * sh[2] / A.Rc), k = len / (x1 - x0), Rm = A.Rc / k, xm = (x0 + x1) / 2, ym = (y0 + y1) / 2, pos = new Float32Array(g.pos.length), nrm = new Float32Array(g.nrm.length);
+    for (let i = 0; i < m; i++){ const th = (g.pos[3 * i] - xm) / Rm, d = g.pos[3 * i + 1] - ym, cs = Math.cos(th), sn = Math.sin(th);
+      pos[3 * i] = (Rm + d) * sn; pos[3 * i + 1] = (Rm + d) * cs - Rm; pos[3 * i + 2] = g.pos[3 * i + 2];
+      const ax = g.nrm[3 * i], ay = g.nrm[3 * i + 1]; nrm[3 * i] = ax * cs + ay * sn; nrm[3 * i + 1] = -ax * sn + ay * cs; nrm[3 * i + 2] = g.nrm[3 * i + 2]; }
+    g = Object.assign({}, g, { pos, nrm }); }
   const n = g.pos.length / 3, P = g.pos; let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9, z0 = 1e9, z1 = -1e9;
   for (let i = 0; i < n; i++){ const x = P[3 * i], y = -P[3 * i + 1], z = P[3 * i + 2]; x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); z0 = Math.min(z0, z); z1 = Math.max(z1, z); }
   const G = 128, ext = Math.max(x1 - x0, y1 - y0), pad = 0.04 * ext, mx0 = x0 - pad, my0 = y0 - pad, cs = (ext + 2 * pad) / G, mask = new Uint8Array(G * G), ix = g.idx;
@@ -7547,6 +7731,7 @@ const V19 = {
   fruit: { wrap: [-0.5, 0.96], shade: [1.35, 0.57], bounce: [1.06, 0.96, 0.86, 0.26], hi: [0.2, 2.6, 0.06, 9], green: 0.85, sat: 1.04,
     kind: { plum: { shade: [1.2, 0.56], bounce: [1.12, 0.85, 1.0, 0.28], look: [0.96, 0.88], tint: [1.0, 1.02, 0.86] }, grape: { shade: [1.2, 0.56], bounce: [1.1, 0.88, 1.0, 0.26], look: [0.96, 0.96], tint: [1.0, 1.0, 0.88] },
       lime: { green: 0.8, look: [1.02, 0.92] },   // v23: лайм не кислотный (было green 0,62, sat 1,22)
+      pine: { look: [1.0, 1.08], tint: [1.0, 1.42, 1.5] },   // v37 проба: заглушка «ананас без корки» — апельсин в жёлтый (ананас в корке, тыква, гранат — модели треда моделей)
       coco: { look: [1.0, 0.96] }, melon: { green: 0.95, look: [1.0, 0.84] }, cuke: { green: 0.9, look: [1.0, 0.92] }, berry: { look: [0.94, 1.0] }, cherry: { look: [0.94, 1.0] }, pepper: { look: [0.92, 1.0] } } },
 };
 const V13 = {
@@ -10051,7 +10236,10 @@ window.PULP_DROP = {
         waste: +(s.waste / Math.max(1, s.waste + s.poured)).toFixed(3), spare: Object.fromEntries(Object.keys(s.spare0).map(f => [f, +spareOf(s, f).toFixed(3)])),
         served: s.served, loseReason: s.loseReason, short: s.short } : {}) } : { screen: G.screen, blade: CFG.bladeMode, mode: CFG.goalMode };
   },
-  play(n){ G.sample = false; startLevel(n || 1); return this.state(); },
+  play(n){ G.sample = false; CFG.clearSet = 'v11'; startLevel(n || 1); return this.state(); },
+  // v38: стенд правил банана и ананаса — STAND38 вне линейки (1 — «Hammocks», 2 — «Pineapple Corks»); stand38(0) — назад к линейке.
+  // Автоигра стенда — stand38(1), затем liveAuto(1, 2); прогресс линейки стенд не трогает.
+  stand38(k){ G.sample = false; k = k | 0; CFG.clearSet = k ? 'v38' : 'v11'; setUnlockAll(true); startLevel(k || curLevel()); return this.state(); },
   // v16.1: образец дерева — пустой уровень n (без фруктов, подсказки, руки, названия), игра стоит; sample(0) — выйти. Хеш: #sample=N
   sample(n){ return sample16(n); },
   // slab() — счётчики: долек, кувыркаются, капель висит, пятен, кромки по инструментам
@@ -10251,7 +10439,8 @@ function setUserTest(){ CFG.userTest = true; document.body.classList.add('ut'); 
 if (CFG.userTest){ setUserTest(); startHash = 'game'; }
 if (startHash === '' || startHash === 'menu' || startHash === 'help'){ startLevel(curLevel()); goto(startHash || 'menu'); }   // v14: меню — поверх уровня в лесу
 else if (startHash === 'win' || startHash === 'lose'){ startLevel(curLevel()); goto(startHash); }
-else if (sampleHash(startHash)) sample16(sampleHash(startHash));   // v16.1: #sample=N — образец дерева
+else if (sampleHash(startHash)) sample16(sampleHash(startHash));
+else if (/^stand38=\d+/.test(startHash)){ CFG.clearSet = 'v38'; setUnlockAll(true); startLevel(+startHash.split('=')[1] || 1); }   // v38: #stand38=k — стенд правил банана и ананаса   // v16.1: #sample=N — образец дерева
 else if (startHash !== 'slice') startLevel(curLevel());   // #game и прежние хеши режимов (#v3…#v7old, #order, #tank, #direct, #aim, #2d, #3d, #style=…, #pieces=…, #cutlab) — обычная игра
 loadAssets();   // спрайты инструментов, рука, верёвка и крюк
 requestAnimationFrame(frame);
