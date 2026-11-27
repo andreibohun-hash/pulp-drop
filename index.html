@@ -389,6 +389,14 @@ const CFG = {
   // v32: встряска от пил — когда мир затих (quiet ≥ calm с), раз в every шагов кусок тоньше зазора уровня (L.pass, иначе pass), лежащий (≤ rest ед./с)
   // на дереве, получает толчок (вбок vx, вверх vy, поворот w рад/с; знак — по номеру тела и шагу): мостик над зазором и свод не стоят вечно
   shake32: { every: 30, calm: 0.35, rest: 4, vx: 45, vy: 80, w: 7, pass: 34, max: 12 },
+  // v40: тыква-гиря — порог скорости сближения по нормали (ед./с; свободное падение ≈ 25 ед.), раскол как у булавы (кусок на pieceArea, 3–6),
+  // разлёт от точки касания вниз (push), скорость тыквы × keep после каждого раздавленного плода. Куски под падающей гирей тоже давятся (иначе дольки
+  // гамака, упавшие первыми, гасят удар): мелкий — в сок, крупный — раскол
+  crush40: { v: 260, pieceArea: 350, pieces: [3, 6], iters: 8, kerfW: 1.5, kick: 120, push: 90, spin: 7, carry: false, keep: 0.9, squash: 1500, keepS: 1 },   // squash — кусок не больше этой площади давится сразу в сок (скорость × keepS)
+  // v40: гранат-заряд — по 5 зёрен в обе стороны поперёк реза (углы fan, град.), скорость v ед./с; булава и тыква — 10 по кругу; разбуженный
+  // зерном — 10 веером ± fwd град. по ходу зерна; зерно медленнее cold ед./с больше ничего не лопает; лопает целый мягкий плод площадью ≤ popMax
+  // (вишня, виноград, клубника, слива, лимон, лайм); живёт life с; зёрен на поле не больше max; половинкам граната остаётся ≥ 1 − share площади
+  burst40: { fan: [0, 12, -12, 24, -24], v: 620, ring: 10, fwd: 40, cold: 150, popMax: 1250, life: 3.0, max: 40, share: 0.42, out: 0.55, kerfW: 2, push: 60, spin: 4 },
   massFrag30: 0.015,   // v30: на уровнях v30 обломок меньше этой доли массы (половинка-две мелочи) победе не мешает — сметает само (слова планировщика: «добивающих крошку резов нет»)
 };
 
@@ -541,9 +549,13 @@ const KINDS = {
   nana:      { label: 'banana',    shape: ['arc', 50, 11.5, 22, 4], density: 1.0, friction: 0.7, skin: '#ffe14d', flesh: '#fff3c4', juice: '#ffe58a' },
   pineapple: { label: 'pineapple', shape: ['ellipse', 32, 36, 12], density: 1.0, friction: 0.7, skin: '#c98a2b', flesh: '#ffd84a', juice: '#ffd21f', special: 'peel', peeled: 'pine' },   // v38: форма пробы 64 × 72 (models37 давал 60 × 76 — уровни дизайнера запечены на 64 × 72)
   pine:      { label: 'peeled pineapple', shape: ['ellipse', 24, 27, 12], density: 1.0, friction: 0.02, skin: '#ffd84a', flesh: '#ffd84a', juice: '#ffd21f' },   // ананас без корки: ровно 0,75
-  // тыква и гранат — только вид (модели v37); правила «гиря» и «залп зёрен» — следующим кругом (v37/design_fruits.md, 1.3–1.4)
-  pomegranate: { label: 'pomegranate', shape: ['circle', 28, 12],      density: 1.0, skin: '#b3122e', flesh: '#d81b45', juice: '#c2183a' },
-  pumpkin:     { label: 'pumpkin',     shape: ['ellipse', 50, 42, 12], density: 1.0, skin: '#f07a13', flesh: '#ffb648', juice: '#ff9416' },
+  // v40: тыква и гранат (v37/design_fruits.md, 1.3–1.4; правила — ниже, «v40: тыква-гиря и гранат-заряд»). Флаги вида:
+  //   special 'crush' — гиря: целая тыква, упав на целый мягкий плод (не твёрдый, не гирю) быстрее CFG.crush40.v, дробит его, как булава, и летит дальше;
+  //   special 'burst' — заряд: рез целого граната выбрасывает зёрна (вид seed) поперёк линии реза; зерно лопает мелкий плод и будит следующий гранат;
+  //   seed — зерно: малое тело, всегда «кусок» (все рёбра — срезы), гаснет через CFG.burst40.life с (в сок).
+  pomegranate: { label: 'pomegranate', shape: ['circle', 28, 12],      density: 1.0, skin: '#b3122e', flesh: '#d81b45', juice: '#c2183a', special: 'burst' },
+  pumpkin:     { label: 'pumpkin',     shape: ['ellipse', 50, 42, 12], density: 3.0, skin: '#f07a13', flesh: '#ffb648', juice: '#ff9416', special: 'crush' },   // v40: втрое тяжелее
+  seed:        { label: 'pomegranate seed', shape: ['circle', 5.5, 8], density: 2.0, friction: 0.02, skin: '#c2183a', flesh: '#e8274f', juice: '#c2183a', seed: true },
 };
 // v3. Вкус = цвет сока + значок фрукта (не только цвет). Сок в стакане и в сливе — цвет вкуса, а не вида.
 // В заказе вкусы резко разные: красный, жёлтый, зелёный, фиолетовый; оранжевый — пятым, рядом с ними его не ставить.
@@ -557,7 +569,7 @@ const FLAVORS = {
 };
 { const FL = { melon: 'red', berry: 'red', apple: 'green', orange: 'orange', lemon: 'yellow', cuke: 'green', cabbage: 'green', lime: 'green',   // v4: яблоко зелёное (арт)
     kiwi: 'green', pomelo: 'red', mango: 'orange', dragon: 'red', banana: 'yellow', passion: 'yellow', pepper: 'red', coco: 'cream', plum: 'purple', citron: 'yellow',
-    cherry: 'red', grape: 'purple', nana: 'yellow', pineapple: 'yellow', pine: 'yellow', pumpkin: 'orange', pomegranate: 'red' };
+    cherry: 'red', grape: 'purple', nana: 'yellow', pineapple: 'yellow', pine: 'yellow', pumpkin: 'orange', pomegranate: 'red', seed: 'red' };
   for (const k in KINDS) KINDS[k].flavor = FL[k] || 'red'; }
 // Локальные вершины вида (центр — центроид), масштаб sc. Выпуклая оболочка гарантирует совпадение с planck.
 // v37 (проба): банан-дуга. Ось — дуга окружности радиуса Rc (полухорда a, прогиб sag), толщина 2r, концы сужены и с носиком. Сегмент — выпуклый
@@ -1465,6 +1477,10 @@ function levelData(n, attempt){
     const T = CLEAR33, k = (((n - 1) % T.length) + T.length) % T.length;
     return Object.assign({ tier: 0, tpl: 'clear', theme: 0, specials: [], mode: 'clear' }, V32, T[k], { n, idx: k + 1, set: 'v7', v11: true });
   }
+  if (CFG.goalMode === 'clear' && CFG.clearSet === 'v40'){   // v40: стенд правил тыквы и граната (STAND40) — вне линейки
+    const T = STAND40, k = (((n - 1) % T.length) + T.length) % T.length;
+    return Object.assign({ tier: 0, tpl: 'clear', theme: 0, specials: [], mode: 'clear' }, V32, T[k], { n, idx: k + 1, set: 'v7', v11: true, stand38: true, stand40: true });
+  }
   if (CFG.goalMode === 'clear' && CFG.clearSet === 'v38'){   // v38: стенд правил банана и ананаса (STAND38) — вне линейки
     const T = STAND38, k = (((n - 1) % T.length) + T.length) % T.length;
     return Object.assign({ tier: 0, tpl: 'clear', theme: 0, specials: [], mode: 'clear' }, V32, T[k], { n, idx: k + 1, set: 'v7', v11: true, stand38: true });
@@ -1570,7 +1586,7 @@ function placePile(L, polys, gaps){
 function newState(L){
   const s = {
     n: L.n, level: L, mode: L.mode || 'tank', world: new planck.World({ gravity: planck.Vec2(0, CFG.gravity), allowSleep: true }),
-    bodies: [], statics: [], gaps: partGaps(L.parts), events: [], nextId: 1,
+    bodies: [], statics: [], gaps: partGaps(L.parts), events: [], nextId: 1, q40: [],
     t: 0, steps: 0, quiet: 0, juice: 0, juiceBy: {}, total: 0, goal: 0,
     moves: L.moves, used: 0, refunds: 0, peakNet: 0, won: false, lost: false, lastCutT: -1e9,
     cutWin: null, cutLog: [], settleLoss: 0, escaped: 0, crumbs: 0,
@@ -1607,7 +1623,7 @@ function newState(L){
   // v4: решётка пропускает то, что тоньше зазора (половинки), — контакт с прутом выключается до решателя
   s.world.on('pre-solve', (ct) => {
     const fa = ct.getFixtureA(), fb = ct.getFixtureB(), ua = fa.getUserData(), ub = fb.getUserData();
-    const g = ua && ua.grate ? ua.grate : ub && ub.grate ? ub.grate : 0; if (!g) return;
+    const g = ua && ua.grate ? ua.grate : ub && ub.grate ? ub.grate : 0; if (!g){ if (s.r40) touch40(s, ct, fa, fb); return; }   // v40: тыква, гранат
     const rec = (ua && ua.grate ? fb : fa).getBody().getUserData();
     if (rec && rec.thick !== undefined && rec.thick < g - CFG.grateSlack) ct.setEnabled(false);
   });
@@ -1701,7 +1717,8 @@ function addBody(s, rec, vx, vy, w, awake, at){
   for (const P of (rec.parts ? rec.parts.map(q => q.V) : [rec.verts]))                      // v37: составное тело — фикстура на каждый выпуклый сегмент
     pb.createFixture(planck.Polygon(P.map(v => planck.Vec2(v[0] / ppm, v[1] / ppm))), { density: K.density, friction: fr, restitution: CFG.restitution });
   Object.defineProperty(rec, 'pb', { value: pb, writable: true, enumerable: false, configurable: true });
-  rec.thick = rec.parts ? 1e9 : polyThick(rec.verts); pb.setUserData(rec);   // v37: целый банан-дуга сквозь нагели не проходит (длинный и кривой), куски — по толщине     // v4: наименьшая ширина — проходит ли решётку
+  rec.thick = rec.parts ? 1e9 : polyThick(rec.verts); pb.setUserData(rec);
+  if (K.seed || K.special === 'crush' || K.special === 'burst') s.r40 = true;   // v40: в мире есть гиря, заряд или зёрна — правила касаний включены   // v37: целый банан-дуга сквозь нагели не проходит (длинный и кривой), куски — по толщине     // v4: наименьшая ширина — проходит ли решётку
   if (at === undefined) s.bodies.push(rec); else s.bodies.splice(at, 0, rec);
   return rec;
 }
@@ -1967,6 +1984,97 @@ function peelFruit(s, b){
   ev(s, { type: 'peel', id: b.id, into: rec.id, kind: b.kind, x: +b.x.toFixed(1), y: +b.y.toFixed(1), area: +(a0 - rec.area).toFixed(0) });
   return rec;
 }
+// ------------------------------------------------------------------ v40: тыква-гиря и гранат-заряд (v37/design_fruits.md, 1.3–1.4)
+// Правила — только за флагами видов (special 'crush' / 'burst', seed) и только в мирах, где такие тела есть (s.r40): касания копятся
+// в pre-solve (touch40, контакт выключается), применяются после шага мира (apply40) — гиря по возрастанию id плода, зёрна по
+// возрастанию id зерна. Цепочка конечна: каждый целый гранат взрывается один раз, каждое зерно действует один раз.
+const isBurst40 = (b) => KINDS[b.kind].special === 'burst' && isWholeBody(b) && !b.flags.chew;
+const vel40 = (b) => { const v = b.pb.getLinearVelocity(); return [v.x * CFG.ppm, v.y * CFG.ppm]; };
+// Направления зёрен: 'cut' — нормаль реза (nx, ny), по вееру fan в обе стороны (стороны чередуются: усечённый залп симметричен);
+// 'ring' — ring штук по кругу от направления (ax, ay); 'fwd' — ring штук веером ± fwd° по ходу (ax, ay)
+function dirs40(mode, ax, ay){
+  const B = CFG.burst40, L = Math.hypot(ax, ay) || 1, ux = ax / L, uy = ay / L, out = [], rot = (x, y, d) => { const a = d * Math.PI / 180, c = Math.cos(a), sn = Math.sin(a); return [c * x - sn * y, sn * x + c * y]; };
+  if (mode === 'cut'){ for (const d of B.fan) for (const sg of [1, -1]) out.push(rot(sg * ux, sg * uy, d)); }
+  else if (mode === 'ring'){ for (let k = 0; k < B.ring; k++) out.push(rot(ux, uy, k * 360 / B.ring)); }
+  else { for (let k = 0; k < B.ring; k++) out.push(rot(ux, uy, -B.fwd + 2 * B.fwd * k / (B.ring - 1))); }
+  return out;
+}
+// Для прицела: откуда и куда полетят зёрна
+const fan40 = (b, dirs) => ({ x: +b.x.toFixed(1), y: +b.y.toFixed(1), r: +(b.rad * CFG.burst40.out).toFixed(1), v: CFG.burst40.v, dirs: dirs.map(d => [+d[0].toFixed(3), +d[1].toFixed(3)]) });
+// Кусок сжимается подобием к своему центру (форма, рисунок и масштаб вида — вместе): площадь × f²
+function shrink40(s, r, f){
+  const K = KINDS[r.kind], pb = r.pb, ppm = CFG.ppm;
+  r.verts = r.verts.map(v => [v[0] * f, v[1] * f]); r.artFrame = [r.artFrame[0] * f, r.artFrame[1] * f]; r.sc *= f; r.area *= f * f; r.rad *= f;
+  for (let fx = pb.getFixtureList(); fx;){ const nx = fx.getNext(); pb.destroyFixture(fx); fx = nx; }
+  pb.createFixture(planck.Polygon(r.verts.map(v => planck.Vec2(v[0] / ppm, v[1] / ppm))), { density: K.density, friction: CFG.pieceFriction, restitution: CFG.restitution });
+  r.thick = polyThick(r.verts);
+}
+// Залп: целый гранат b (уже снят из мира) → его куски born ужимаются, площадь разницы — зёрна по направлениям dirs (не больше max на поле).
+// Зёрна — того же корня, что куски: с ними и друг с другом не сталкиваются (вылетают сквозь свои половинки). → зёрна
+function burst40(s, b, born, dirs, v0, F){
+  const B = CFG.burst40, sv = kindVerts('seed', 1), sa = polyArea(sv), live = born.filter(r => s.bodies.includes(r)), Ah = live.reduce((a, r) => a + r.area, 0);
+  let alive = 0; for (const q of s.bodies) if (q.flags.seed) alive++;
+  let n = Math.min(dirs.length, Math.max(0, B.max - alive)); while (n > 0 && n * sa > B.share * Ah) n--;
+  const out = [];
+  if (n > 0){ const f = Math.sqrt(1 - n * sa / Ah); for (const r of live) shrink40(s, r, f);
+    for (let k = 0; k < n; k++){ const d = dirs[k], o = b.rad * B.out, x = b.x + d[0] * o, y = b.y + d[1] * o;
+      const rec = { id: s.nextId++, kind: 'seed', root: b.root, x, y, a: 0, verts: sv.map(v => [v[0], v[1]]), cutEdges: sv.map(() => true), artFrame: [0, 0], sc: 1,
+        area: sa, rad: polyRadius(sv), flags: { chew: false, cut: true, tag: null, seed: true } };
+      rec.cutT = s.t; addBody(s, rec, v0[0] + d[0] * B.v, v0[1] + d[1] * B.v, 0, true); if (F) F.skip.add(rec.id); out.push(rec); } }
+  s.spec.bursts = (s.spec.bursts || 0) + 1;
+  ev(s, { type: 'burst', id: b.id, x: +b.x.toFixed(1), y: +b.y.toFixed(1), n, seeds: out.map(r => r.id), dirs: dirs.slice(0, n).map(d => [+d[0].toFixed(3), +d[1].toFixed(3)]) });
+  return out;
+}
+// Зерно лопает: целый мягкий плод без особого свойства, не длинный, площадью ≤ popMax
+const pop40 = (q) => { const K = KINDS[q.kind]; return !K.hard && !K.special && !K.seed && !q.parts && q.area <= CFG.burst40.popMax; };
+function touch40(s, ct, fa, fb){
+  const A = fa.getBody().getUserData(), B = fb.getBody().getUserData(); if (!A || !B || !A.kind || !B.kind) return;
+  const KA = KINDS[A.kind], KB = KINDS[B.kind];
+  if (KA.seed || KB.seed){ const P = KA.seed ? A : B, Q = P === A ? B : A;
+    if (Q.root === P.root){ ct.setEnabled(false); return; }                    // свои половинки и свои зёрна — насквозь
+    if (P.flags.cold || P.flags.chew || Q.flags.chew) return;
+    for (const e of s.q40) if (e.t === 's' && e.id === P.id){ ct.setEnabled(false); return; }
+    const v = P.pb.getLinearVelocity(), sp = Math.hypot(v.x, v.y) * CFG.ppm;
+    if (sp < CFG.burst40.cold){ P.flags.cold = true; return; }               // остыло — дальше обычная крошка
+    if (!isWholeBody(Q) || !(KINDS[Q.kind].special === 'burst' || pop40(Q))) return;
+    s.q40.push({ t: 's', id: P.id, to: Q.id, ux: v.x * CFG.ppm / sp, uy: v.y * CFG.ppm / sp }); ct.setEnabled(false); return; }
+  if (KA.special !== 'crush' && KB.special !== 'crush') return;
+  const P = KA.special === 'crush' ? A : B, Q = P === A ? B : A, KQ = KINDS[Q.kind];
+  if (!isWholeBody(P) || P.flags.chew || Q.flags.chew || isHard(Q) || KQ.special === 'crush') return;   // куски (и кокоса) — тоже
+  for (const e of s.q40) if (e.t === 'c' && e.to === Q.id){ ct.setEnabled(false); return; }
+  const vp = P.pb.getLinearVelocity(), dx = Q.x - P.x, dy = Q.y - P.y, d = Math.hypot(dx, dy) || 1;
+  if (Q.flags.by40 === P.id){ if (Math.hypot(vp.x, vp.y) * CFG.ppm >= CFG.crush40.v) ct.setEnabled(false); return; }   // свои осколки летящая гиря проходит насквозь (они падают в пилы)
+  if (P.y >= Q.y) return;                                                    // давит только сверху
+  if ((vp.x * dx + vp.y * dy) / d * CFG.ppm < CFG.crush40.v) return;   // лежит или катится — не давит (скорость гири к цели; куски под ней сами падают)
+  s.q40.push({ t: 'c', id: P.id, to: Q.id }); ct.setEnabled(false);
+}
+function apply40(s){
+  const Q = s.q40; s.q40 = [];
+  Q.sort((a, b) => (a.t === b.t ? 0 : a.t === 'c' ? -1 : 1) || (a.t === 'c' ? a.to - b.to : a.id - b.id));
+  for (const e of Q){ const P = s.bodies.find(b => b.id === e.id), T = s.bodies.find(b => b.id === e.to);
+    if (!P || !T || T.flags.chew || (e.t === 's' && !isWholeBody(T))) continue;
+    if (e.t === 'c') crush40(s, P, T); else seed40(s, P, T, e.ux, e.uy); }
+}
+// Гиря P раздавила плод T: раскол, как от булавы (банан-дуга — по швам), тыква летит дальше медленнее
+function crush40(s, P, T){
+  const K = CFG.crush40, dx = T.x - P.x, dy = T.y - P.y, d = Math.hypot(dx, dy) || 1, ux = dx / d, uy = dy / d, px = T.x - ux * T.rad * 0.5, py = T.y - uy * T.rad * 0.5;
+  const F = { skip: new Set(), hit: new Set(), hits: 9, cuts: 0, noShake: true, slow: 1, w: 'crush' }, kind = T.kind, area = T.area, sq = !isWholeBody(T) && area + (T.juiceX || 0) <= K.squash;
+  if (sq){ removeBody(s, T); crumb(s, T, area + (T.juiceX || 0), T.x, T.y); }
+  else if (T.parts) for (const r of breakParts(s, T, [], K.kerfW, true, (x, y) => { const ex = x - P.x, ey = y - P.y, e = Math.hypot(ex, ey) || 1; return { vx: ex / e * K.kick * 0.5, vy: ey / e * K.kick * 0.5 + K.push, w: (ex > 0 ? 1 : -1) * K.spin * 0.5 }; }, 'crush', [[px, py], [px + ux, py + uy]], -uy, ux)) r.flags.by40 = P.id;
+  else for (const r of smash(s, F, K, T, px, py, ux, uy)) r.flags.by40 = P.id;
+  const v = P.pb.getLinearVelocity(), kp = sq ? K.keepS : K.keep, v1 = Math.hypot(v.x, v.y) * CFG.ppm; P.pb.setLinearVelocity(planck.Vec2(v.x * kp, v.y * kp));
+  if (!sq) s.spec.crush = (s.spec.crush || 0) + 1; else s.spec.squash = (s.spec.squash || 0) + 1;
+  ev(s, { type: 'crush', id: P.id, into: T.id, kind, area: +area.toFixed(0), x: +px.toFixed(1), y: +py.toFixed(1), v: +v1.toFixed(0), squash: sq });
+}
+// Зерно P попало в целый плод T: мелкий лопается пополам по линии полёта, гранат — пополам и залп веером вперёд; зерно гаснет (в сок)
+function seed40(s, P, T, ux, uy){
+  const B = CFG.burst40, wake = KINDS[T.kind].special === 'burst', v0 = wake ? vel40(T) : null, born = [], x = T.x, y = T.y, id = T.id, kind = T.kind;
+  removeBody(s, P); crumb(s, P, P.area + (P.juiceX || 0), P.x, P.y);
+  splitHit(s, T, T.x, T.y, -uy, ux, CFG.cutKick, [T.x - ux * T.rad, T.y - uy * T.rad], [T.x + ux * T.rad, T.y + uy * T.rad], born, ux, uy, { kerfW: B.kerfW, push: B.push, spin: B.spin, carry: true });
+  if (wake) burst40(s, T, born, dirs40('fwd', ux, uy), v0, null);
+  s.spec.pops = (s.spec.pops || 0) + 1;
+  ev(s, { type: 'pop', id: P.id, into: id, kind, x: +x.toFixed(1), y: +y.toFixed(1), ux: +ux.toFixed(3), uy: +uy.toFixed(3), wake });
+}
 // Разрез тела мировой прямой (точка, нормаль) → { A, B } в локальных координатах тела.
 function splitBody(b, px, py, nx, ny){
   const cs = Math.cos(b.a), sn = Math.sin(b.a), dx = px - b.x, dy = py - b.y;
@@ -2010,6 +2118,7 @@ function stepGrind(s){
 function step(s){
   s.world.step(CFG.dt, CFG.velIters, CFG.posIters);
   s.t += CFG.dt; s.steps++;
+  if (s.q40.length) apply40(s);                               // v40: касания гири и зёрен — после шага, по порядку
   if (s.frenzy > 0){ s.frenzy -= CFG.dt; if (s.frenzy <= 0){ s.frenzy = 0; ev(s, { type: 'frenzy', on: false }); } }
   const ppm = CFG.ppm, gy = CFG.grindY;
   let moving = s.grinding.length > 0;
@@ -2020,6 +2129,7 @@ function step(s){
     const pb = b.pb, p = pb.getPosition();
     b.x = p.x * ppm; b.y = p.y * ppm; b.a = pb.getAngle();
     if (b.y + b.rad > gy){ const [yTop, yLow] = bodyLowHigh(b); if (yLow >= gy){ startGrind(s, b, yTop, yLow); moving = true; continue; } }
+    if (b.flags.seed && s.t - b.cutT > CFG.burst40.life){ removeBody(s, b); crumb(s, b, b.area + (b.juiceX || 0), b.x, b.y); continue; }   // v40: зерно погасло — в сок
     if (pb.isAwake()){ const v = pb.getLinearVelocity(), v2 = (v.x * v.x + v.y * v.y) * ppm * ppm;
       if (v2 > CFG.maxSpeed * CFG.maxSpeed){ const k = CFG.maxSpeed / Math.sqrt(v2); pb.setLinearVelocity(planck.Vec2(v.x * k, v.y * k)); } }
     if (b.y > CFG.H + 200 || b.x < -CFG.wallT || b.x > CFG.W + CFG.wallT){   // страховка: вылетело из короба
@@ -2824,13 +2934,14 @@ function chop(s, F, W, b, px, py, ux, uy){
     for (const P of parts){ const r = cutPart(P, lp[0], lp[1], lu[0], lu[1], W.kerf); if (r) nxt.push(r[0], r[1]); else nxt.push(P); } parts = nxt; }
   if (parts.length < 2) return null;
   const lost = a0 - parts.reduce((a, P) => a + partArea(P), 0), main = L[Math.floor(L.length / 2)], ch = lineChord(b, main, ux, uy) || [[px, py], [px + ux, py + uy]];
-  const kind = b.kind, id = b.id, area = b.area, big = b.rad >= W.bigR;
+  const kind = b.kind, id = b.id, area = b.area, big = b.rad >= W.bigR, b40 = isBurst40(b) ? vel40(b) : null;
   const mine = spawnParts(s, b, parts, lost, W.carry, (x, y) => { const sd = (x - main[0]) * nx + (y - main[1]) * ny, sg = sd >= 0 ? 1 : -1, f = Math.min(1, Math.abs(sd) / 12 + 0.4);
     return { vx: nx * sg * W.kick * f + ux * W.push, vy: ny * sg * W.kick * f + uy * W.push + 40, w: -sg * W.spin }; });
   for (const r of mine) F.skip.add(r.id);
   shakePile(s, px, py, W.shakeR, W.shakeV, F.skip);
   ev(s, { type: 'split', id, kind, into: mine.map(r => r.id), p: ch[0].map(v => +v.toFixed(1)), q: ch[1].map(v => +v.toFixed(1)), nx: +nx.toFixed(3), ny: +ny.toFixed(3), w: 'axe' });
   ev(s, { type: 'chop', id, kind, area: +area.toFixed(0), x: +px.toFixed(1), y: +py.toFixed(1), ux: +ux.toFixed(3), uy: +uy.toFixed(3), big, n: mine.length, k: F.hits });
+  if (b40) burst40(s, b, mine, dirs40('cut', nx, ny), b40, F);   // v40: гранат под топором — залп поперёк линии удара
   return mine;
 }
 // Булава: удар по входу — тело разбивается на 3–5 кусков (по площади: pieceArea) трещинами: первая вдоль полёта через точку между
@@ -2856,7 +2967,7 @@ function smash(s, F, W, b, px, py, ux, uy){
     const r = cutPart(P, c[0], c[1], nx0 * ca - ny0 * sa, nx0 * sa + ny0 * ca, W.kerfW); if (!r) break;
     parts.splice(k, 1, r[0], r[1]);
   }
-  const lost = a0 - parts.reduce((a, P) => a + partArea(P), 0), kind = b.kind, id = b.id, area = b.area;
+  const lost = a0 - parts.reduce((a, P) => a + partArea(P), 0), kind = b.kind, id = b.id, area = b.area, b40 = isBurst40(b) ? vel40(b) : null;
   const ch = lineChord(b, [b.x + (px - b.x) * 0.35, b.y + (py - b.y) * 0.35], ux, uy) || [[px, py], [px + ux, py + uy]];
   const mine = spawnParts(s, b, parts, lost, W.carry, (x, y) => { const dx = x - px, dy = y - py, d = Math.hypot(dx, dy) || 1;
     return { vx: dx / d * W.kick + ux * W.push, vy: dy / d * W.kick + uy * W.push - 40, w: (rnd() - 0.5) * 2 * W.spin }; });
@@ -2864,6 +2975,7 @@ function smash(s, F, W, b, px, py, ux, uy){
   if (!F.noShake) shakePile(s, px, py, W.shakeR, W.shakeV, F.skip);
   ev(s, { type: 'split', id, kind, into: mine.map(r => r.id), p: ch[0].map(v => +v.toFixed(1)), q: ch[1].map(v => +v.toFixed(1)), nx: +(-uy).toFixed(3), ny: +ux.toFixed(3), w: 'mace' });
   ev(s, { type: 'smash', id, kind, area: +area.toFixed(0), x: +px.toFixed(1), y: +py.toFixed(1), ux: +ux.toFixed(3), uy: +uy.toFixed(3), n: mine.length, k: F.hits, splash: +lost.toFixed(0) });
+  if (b40) burst40(s, b, mine, dirs40('ring', b.x - px, b.y - py), b40, F);   // v40: гранат под булавой (и под тыквой) — зёрна по кругу
   return mine;
 }
 // Пила стёсывает край тела, которое ближе W.shave к оси, но ось его не пересекла: полоса до линии на W.shave от оси — сразу в сок.
@@ -2904,9 +3016,10 @@ function exitCuts(s, F, W, ax, ay, x, y){
     if (s.mode === 'clear' && KINDS[b.kind].special === 'bomb'){ detonate(s, b, 0); F.cuts++; continue; }   // v11: перец — разрезал, взрыв
     if (KINDS[b.kind].special === 'shell' && !b.flags.cracked && F.w === 'knife'){ crackShell(s, b); F.skip.add(b.id); F.cuts++; continue; }
     if (KINDS[b.kind].special === 'peel' && F.w === 'knife' && isWholeBody(b)){ const r = peelFruit(s, b); F.skip.add(r.id); F.cuts++; continue; }   // v37: ананас — нож снимает корку
-    const kw = W.kerfW !== undefined ? W.kerfW : Math.min(W.kerfMax, W.kerf * cl);
+    const kw = W.kerfW !== undefined ? W.kerfW : Math.min(W.kerfMax, W.kerf * cl), b40 = isBurst40(b) ? vel40(b) : null;
     splitHit(s, b, P[0], P[1], nx, ny, W.kick, P, Q, born, ux, uy, { kerfW: kw, push: W.push, spin: W.spin, carry: W.carry });
     for (const r of born){ F.skip.add(r.id); if (reach) F.shaved.add(r.id); }
+    if (b40) burst40(s, b, born, dirs40('cut', nx, ny), b40, F);   // v40: гранат — залп поперёк реза
     F.cuts++;
   }
   for (const b of near) if (s.bodies.includes(b) && !F.shaved.has(b.id)) shave(s, F, W, b, ax, ay, x, y);
@@ -2955,7 +3068,7 @@ function throwPreview(s, w, path, noStop){
         if (!ch || ch[1] <= 0 || ch[0] >= 1){ ent = null; if (W.shave) near = Math.min(near, segBodyDist(b, a[0], a[1], c[0], c[1]).d); d0 += sl; continue; }
         const at = (t) => [a[0] + (c[0] - a[0]) * t, a[1] + (c[1] - a[1]) * t];
         if (ch[0] > 0 || !ent) ent = at(Math.max(0, ch[0]));
-        if (ch[1] < 1){ const q = at(ch[1]); if (Math.hypot(q[0] - ent[0], q[1] - ent[1]) >= CFG.minChord) hit = { id: b.id, how: 'cut', p: ent, q, d: d0 + sl * ch[1] }; if (hit && w === 'knife' && KINDS[b.kind].special === 'peel' && isWholeBody(b)) hit.peel = true; ent = null; }   // v38: нож по корке — снимет её (не промах, но и не рез)
+        if (ch[1] < 1){ const q = at(ch[1]); if (Math.hypot(q[0] - ent[0], q[1] - ent[1]) >= CFG.minChord) hit = { id: b.id, how: 'cut', p: ent, q, d: d0 + sl * ch[1] }; if (hit && w === 'knife' && KINDS[b.kind].special === 'peel' && isWholeBody(b)) hit.peel = true; if (hit && isBurst40(b)){ const L = Math.hypot(hit.q[0] - hit.p[0], hit.q[1] - hit.p[1]) || 1; hit.burst = fan40(b, dirs40('cut', -(hit.q[1] - hit.p[1]) / L, (hit.q[0] - hit.p[0]) / L)); } ent = null; }   // v38: нож по корке — снимет её (не промах, но и не рез)
         d0 += sl;
       }
       if (hit) out.push(hit); else if (W.shave && near < W.shave) out.push({ id: b.id, how: 'shave', p: [b.x, b.y], q: [b.x, b.y], d: 0 });
@@ -2978,6 +3091,7 @@ function throwPreview(s, w, path, noStop){
       const lines = w === 'axe' ? axeLines(W, b, px, py, ux, uy).map(p => lineChord(b, p, ux, uy)).filter(Boolean) : [];
       let m = 0; for (let j = k; j <= n; j += 2){ const lj = toLocal(b, a[0] + (c[0] - a[0]) * j / n, a[1] + (c[1] - a[1]) * j / n); m = Math.max(m, W.r - bodyDist(b, lj[0], lj[1])); if (m >= 12) break; }   // запас касания: насколько глубоко голова зайдёт в тело
       out.push({ id: b.id, how: w === 'axe' ? 'chop' : 'smash', p: [px, py], q: [px, py], lines, d: L * k / n, m: +m.toFixed(1) });
+      if (isBurst40(b)) out[out.length - 1].burst = fan40(b, w === 'axe' ? dirs40('cut', -uy, ux) : dirs40('ring', b.x - px, b.y - py));   // v40: веера зёрен в прицеле
       if (out.length >= W.hits){ end = [px, py]; break; }
     }
   }
@@ -3876,8 +3990,8 @@ const CLEAR30 = [
 // клубника 7 %), длинные (огурец, банан ≈ 20 × 5 %). Куча — на весь кадр, преграды внутри неё — дерево набора уровня 1: тумбы (торец
 // бревна, деталь 'stump' — круг в физике), бруски-ромбы и кубики, клинья, короткие наклонные доски, стенки «песочные часы» (W15.hopper).
 // Сплошных полов нет: целое крупное и среднее лежит на преградах, его куски проходят в зазоры; мелочь проходит часть зазоров сама.
-const SZ32 = { melon: 0.893, coco: 0.94, orange: 0.963, apple: 0.9, lemon: 0.86, lime: 1.05, plum: 0.85, cherry: 1.0, grape: 1.17, berry: 0.82, cuke: 0.86, banana: 0.86, nana: 0.86, pineapple: 1, pine: 1, pumpkin: 1, pomegranate: 1 };
-const CLS32 = { melon: 'L', coco: 'L', orange: 'M', apple: 'M', lemon: 'M', lime: 'M', plum: 'S', cherry: 'S', grape: 'S', berry: 'S', cuke: 'Q', banana: 'Q', pepper: 'Q', nana: 'Q', pineapple: 'L', pine: 'M', pumpkin: 'L', pomegranate: 'M' };   // L крупные, M средние, S мелкие, Q длинные
+const SZ32 = { melon: 0.893, coco: 0.94, orange: 0.963, apple: 0.9, lemon: 0.86, lime: 1.05, plum: 0.85, cherry: 1.0, grape: 1.17, berry: 0.82, cuke: 0.86, banana: 0.86, nana: 0.86, pineapple: 1, pine: 1, pumpkin: 1, pomegranate: 1, seed: 1 };
+const CLS32 = { melon: 'L', coco: 'L', orange: 'M', apple: 'M', lemon: 'M', lime: 'M', plum: 'S', cherry: 'S', grape: 'S', berry: 'S', cuke: 'Q', banana: 'Q', pepper: 'Q', nana: 'Q', pineapple: 'L', pine: 'M', pumpkin: 'L', pomegranate: 'M', seed: 'S' };   // L крупные, M средние, S мелкие, Q длинные
 const R2_32 = (v) => [+v[0].toFixed(2), +v[1].toFixed(2)];
 const ROT32 = (P, cx, cy, deg) => { const a = deg * Math.PI / 180, c = Math.cos(a), s = Math.sin(a); return P.map(v => R2_32([cx + c * v[0] - s * v[1], cy + s * v[0] + c * v[1]])); };
 const SQ32 = (s) => [[-s / 2, -s / 2], [s / 2, -s / 2], [s / 2, s / 2], [-s / 2, s / 2]];
@@ -4207,6 +4321,17 @@ const STAND38 = [
     parts: [["wood","cheek",[[6,340],[41,470],[41,500],[6,500]]],["wood","cheek",[[134,340],[134,500],[99,500],[99,470]]],["wood","cheek",[[136,340],[171,470],[171,500],[136,500]]],["wood","cheek",[[264,340],[264,500],[229,500],[229,470]]],["wood","cheek",[[266,340],[301,470],[301,500],[266,500]]],["wood","cheek",[[394,340],[394,500],[359,500],[359,470]]],["grate",8,650,392,650,44,5.5],["wood","post",[[0,600],[8,600],[8,664],[0,664]]],["wood","post",[[392,600],[400,600],[400,664],[392,664]]],["back",[[6,348],[394,348],[394,500],[6,500]]]],
     pile: B32([['pineapple', 70, 452, 0.1, 1], ['lime', 44.4, 404.3, -1.5, 1.05], ['lime', 95.6, 404.2, 0.4, 1.05], ['cherry', 30.2, 374.5, -1.5, 1], ['cherry', 69.9, 383.7, -1, 1], ['cherry', 109.8, 374.4, 0.4, 1], ['pineapple', 200, 452, 0.1, 1], ['lime', 174.4, 404.3, -1.5, 1.05], ['lime', 225.6, 404.2, 0.4, 1.05], ['cherry', 160.2, 374.5, -1.5, 1], ['cherry', 199.9, 383.7, -1, 1], ['cherry', 239.8, 374.4, 0.4, 1], ['pineapple', 330, 452, 0.1, 1], ['lime', 304.4, 404.3, -1.5, 1.05], ['lime', 355.6, 404.2, 0.4, 1.05], ['cherry', 290.2, 374.5, -1.5, 1], ['cherry', 329.9, 383.7, -1, 1], ['cherry', 369.8, 374.4, 0.4, 1]]) },
 ];
+// v40: стенд правил тыквы-гири и граната-заряда (tools/v40/stand40.mjs) — вне линейки: CFG.clearSet = 'v40' (PULP_DROP.stand40(k), хеш #stand40=k; тесты «v40: …»)
+const STAND40 = [
+  // 1 · Pumpkin Drop — Стенд v40: тыква-гиря. Срежь гамак — тыква падает и давит столб апельсинов, встаёт на сито; на сите — топор
+  { num: 1, name: 'Pumpkin Drop', role: 'i', pass: 40, hint: ["Drop the pumpkin!"], loadout: {knife:12,axe:3}, solution: [{"w":"knife","pts":[[127.9,348.9],[295.9,348.9]]},{"w":"axe","pts":[[196.7,721.5],[196.7,578]]},{"w":"knife","pts":[[14.6,505.6],[135.9,505.6]]},{"w":"knife","pts":[[67.9,560.8],[67.9,666.8]]},{"w":"knife","pts":[[264.1,505.6],[385.4,505.6]]},{"w":"knife","pts":[[332.1,560.8],[332.1,666.8]]},{"w":"knife","pts":[[28,479.7],[28,531.6]]},{"w":"knife","pts":[[372.1,479.5],[372.1,531.4]]}],
+    parts: [["wood","post",[[136,300],[144,300],[144,664],[136,664]]],["wood","post",[[256,300],[264,300],[264,664],[256,664]]],["grate",144,650,256,650,44,5.5],["grate",147.5,388,252.5,388,94,5.5],["back",[[140,300],[260,300],[260,664],[140,664]]],["grate",32.5,650,103.5,650,60,5.5],["grate",8,520,128,520,29,5.5],["grate",296.5,650,367.5,650,60,5.5],["grate",272,520,392,520,29,5.5]],
+    pile: B32([['orange', 172.6, 636.2, -0.8, 0.963], ['orange', 227.4, 636.2, 0.9, 0.963], ['orange', 172.7, 585, -17.5, 0.963], ['orange', 227.3, 585, -17.9, 0.963], ['orange', 171.7, 535.1, -17.5, 0.963], ['orange', 228.3, 535.1, -17.9, 0.963], ['orange', 170.6, 485.2, -17.5, 0.963], ['orange', 229.4, 485.2, -17.9, 0.963], ['nana', 211.9, 343.9, 134.1, 1.29], ['pumpkin', 187.8, 277.3, -18.6, 1], ['melon', 68, 613.9, 0, 0.804], ['lime', 28, 505.6, 0, 1.05], ['lime', 68, 505.6, 0, 1.05], ['lime', 108, 505.6, 0, 1.05], ['melon', 332, 613.9, 0, 0.804], ['lime', 292, 505.6, 0, 1.05], ['lime', 332, 505.6, 0, 1.05], ['lime', 372, 505.6, 0, 1.05]]) },
+  // 2 · Seed Shot — Стенд v40: гранат-заряд. Рез сверху вниз — зёрна летят вдоль полок и лопают вишни; нижний гранат будит соседа
+  { num: 2, name: 'Seed Shot', role: 'i', pass: 40, hint: ["Slice the pomegranate!"], loadout: {knife:12}, solution: [{"w":"knife","pts":[[200,368],[200,440]]},{"w":"knife","pts":[[110.1,538.1],[110.1,610.1]]},{"w":"knife","pts":[[104,399.2],[104,443.2]]},{"w":"knife","pts":[[296,399.2],[296,443.2]]}],
+    parts: [["grate",179.5,430,220.5,430,30,5.5],["grate",30,430,150,430,22,3],["grate",250,430,370,430,22,3],["grate",89.5,600,130.5,600,30,5.5],["grate",269.5,600,310.5,600,30,5.5],["grate",4,600,64,600,26,3],["grate",336,600,396,600,26,3]],
+    pile: B32([['pomegranate', 200, 404, 0, 1], ['cherry', 48.1, 421.2, -2.5, 1], ['cherry', 75.9, 421.1, 1.2, 1], ['cherry', 104.1, 421.2, -1.1, 1], ['cherry', 131.9, 421.2, 2.3, 1], ['cherry', 268.1, 421.2, -2.5, 1], ['cherry', 295.9, 421.1, 1.2, 1], ['cherry', 324.1, 421.2, -1.2, 1], ['cherry', 351.9, 421.2, 2.3, 1], ['pomegranate', 110, 574, 0, 1], ['pomegranate', 290, 574, 0, 1], ['plum', 17.4, 580.7, -16.3, 0.85], ['plum', 68.4, 594.2, -16.7, 0.85], ['plum', 331.6, 594.1, 15.7, 0.85], ['plum', 382.6, 580.6, 15.2, 0.85]]) },
+];
 
 // Цель одна — пропихнуть всю кучу в жернова. Куча лежит на клиньях и полках со щелями (детали v1–v3: funnel, twin, bin, shelf,
 // plate, peg); пролезает то, что уже щели. Помехи: крупное (шире щели), твёрдое (кокос: нож отскакивает, пила глохнет), длинное
@@ -4266,7 +4391,8 @@ function maceTargets(s, W, cx, cy, skip){
 }
 function macePreview(s, W, path, skip, out){
   const a = path[0], c = path[path.length - 1], I = maceImpact(s, W, a, c, skip); if (!I) return { hits: out, end: c };
-  for (const t of maceTargets(s, W, I.cx, I.cy, skip)) out.push({ id: t.b.id, how: 'smash', p: [I.cx, I.cy], q: [I.cx, I.cy], d: I.d, m: +(W.R - t.d).toFixed(1) });
+  for (const t of maceTargets(s, W, I.cx, I.cy, skip)){ out.push({ id: t.b.id, how: 'smash', p: [I.cx, I.cy], q: [I.cx, I.cy], d: I.d, m: +(W.R - t.d).toFixed(1) });
+    if (isBurst40(t.b)) out[out.length - 1].burst = fan40(t.b, dirs40('ring', t.b.x - I.cx, t.b.y - I.cy)); }   // v40: зёрна по кругу
   return { hits: out, end: [I.px, I.py], ring: { x: +I.cx.toFixed(1), y: +I.cy.toFixed(1), R: W.R } };
 }
 function smashCircle(s, F, W, px, py, ux, uy){
@@ -4808,7 +4934,7 @@ const SFX = {
 };
 const CUT_SOUND = { melon: 'cut.melon', apple: 'cut.apple', orange: 'cut.citrus', lemon: 'cut.citrus', berry: 'cut.berry', cuke: 'cut.cuke',
   cabbage: 'cut.cabbage', lime: 'cut.citrus', kiwi: 'cut.berry', pomelo: 'cut.citrus', mango: 'cut.soft', dragon: 'cut.soft', banana: 'cut.soft',
-  passion: 'cut.berry', pepper: 'cut.apple', coco: 'cut.coco', plum: 'cut.soft', citron: 'cut.citrus', cherry: 'cut.berry', grape: 'cut.berry', nana: 'cut.soft', pineapple: 'cut.apple', pine: 'cut.apple', pumpkin: 'cut.apple', pomegranate: 'cut.apple' };
+  passion: 'cut.berry', pepper: 'cut.apple', coco: 'cut.coco', plum: 'cut.soft', citron: 'cut.citrus', cherry: 'cut.berry', grape: 'cut.berry', nana: 'cut.soft', pineapple: 'cut.apple', pine: 'cut.apple', pumpkin: 'cut.apple', pomegranate: 'cut.apple', seed: 'cut.berry' };
 
 // Музыка-петля: 100 BPM, F–Dm–B♭–C, бас, маримба аккордами на офбит, мелодия по пентатонике, хай-хэт.
 // Планировщик с упреждением 0,25 с; приглушение (duck) на крупных событиях.
@@ -4931,6 +5057,8 @@ const ART = {
             col: { skin: '#c8102e', bloom: '#ff6a7a', dark: '#7a0618', crease: '#8a0a1e', flesh: '#b5122e', flesh2: '#ff5a72', rind: '#8a0a1e', edge: '#7a0618', pit: '#e8c9a0', stem: '#4c8a2a' } },
   grape:  { ell: [12, 12], band: [0.36, 4, 7], rind: 0.1,
             col: { skin: '#7a2a7a', bloom: '#c48ad0', dark: '#4a1050', crease: '#5a1a60', flesh: '#cfe8a0', flesh2: '#f0ffd0', rind: '#5a1a60', edge: '#4a1050', pit: '#c9a46a', stem: '#6b4a24' } },
+  seed:   { ell: [5.5, 5.5], band: [0.36, 2, 3], rind: 0.1,     // v40: зерно граната
+            col: { skin: '#c2183a', bloom: '#ff6a82', dark: '#7a0c20', crease: '#8a0a1e', flesh: '#e8274f', flesh2: '#ff8aa0', rind: '#8a0a1e', edge: '#7a0c20', pit: '#f6dfc8', stem: '#7a0c20' } },
   // особые предметы (этап 3)
   pepper: { ell: [24, 10], band: [0.5, 4, 6], rind: 0,
             col: { skin: '#e8322a', dark: '#b51d18', shine: '#ff8a7a', flesh: '#ff8a5c', flesh2: '#ffd2b8', edge: '#b51d18', stem: '#3f9a3a', stemDk: '#256b22' } },
@@ -5718,6 +5846,16 @@ function crackFX(e){
 // v38: корка ананаса снята ножом — на месте тела в корке четыре дуги кожуры (толстые полосы по контуру прежнего плода, с ромбами)
 // разлетаются от центра, кувыркаются и гаснут за V38.peel.t с; под ними уже чистый жёлтый плод (меньше на четверть). Без частиц-«звёздочек».
 const V38 = { peel: { t: 0.55, n: 4, v: [150, 230], up: 140, g: 900, spin: 7, w: 0.32, col: '#b5782a', dk: '#6e4414', lt: '#e2a94a' } };
+// v40: тыква-гиря — удар с провалом (тряска вниз, глухой звук, сок брызгами вверх); раздавленный кусок — шлепок сока
+function crushFX(e){
+  log('event', 'crush', e.kind + ' v=' + e.v + (e.squash ? ' squash' : ''));
+  if (e.squash){ burst(e.kind, e.x, e.y, 6, true); Sound.playRL('bump', 0.05, 1); return; }
+  shake(0, 1, W6.smashShake * 0.8); Sound.play('w.smash', Math.max(1500, e.area)); buzz(30); burst(e.kind, e.x, e.y, 14, true);
+  FX.rings.push({ x: e.x, y: e.y, r: 34, t0: G.rt, col: juiceHex(e.kind) });
+}
+// v40: гранат — залп: брызги сока и хлопок; зёрна — тела (видны сами)
+function burstFX(e){ log('event', 'burst', 'n=' + e.n); burst('pomegranate', e.x, e.y, 10, false); Sound.playRL('cut.berry', 0.04, 1); buzz(14); }
+function popFX(e){ log('event', 'pop', e.kind + (e.wake ? ' wake' : '')); burst(e.kind, e.x, e.y, e.wake ? 10 : 5, false); Sound.playRL('cut.berry', 0.05, 1); }
 function peelFX(e){
   log('event', 'peel', 'id=' + e.id + ' → ' + e.into);
   const P = V38.peel, b = G.s && G.s.bodies.find(q => q.id === e.into), a = b ? b.a : 0, sh = KINDS[e.kind].shape, sc = b ? b.sc : 1, rx = sh[1] * sc, ry = sh[2] * sc, a0 = R() * 6.28;
@@ -5883,6 +6021,9 @@ function onEvent(e){
     case 'ground': groundFX(e); F13.split.delete(e.id); break;
     case 'explode': explodeFX(e); break;
     case 'crack': crackFX(e); break;
+    case 'crush': crushFX(e); break;               // v40: тыква раздавила плод
+    case 'burst': burstFX(e); break;               // v40: гранат — залп зёрен
+    case 'pop': popFX(e); break;                   // v40: зерно лопнуло плод / разбудило гранат
     case 'peel': peelFX(e); break;                 // v38: нож снял корку ананаса — кольца кожуры отлетают
     case 'rope': ropeFX(e); break;
     case 'feed': feedFX24(e); break;                 // v24: плод порции выпал из кормушки
@@ -6509,6 +6650,15 @@ function chord27(c, b, p, q){                                    // линия �
 // v7: предпросмотр показывает результат удара, а не только линию. Нож — тонкая прямая и жёлтые хорды (каждое тело — надвое);
 // упрётся в твёрдое — там красная искра и стрелка отскока, дальше путь серый. Топор — трещина по телу и две стрелки разлёта.
 // Пила — полоса во всю ширину пропила вдоль пальца (что в ней — исчезнет). Булава — круг удара и осколки на каждом теле в нём.
+// v40: веер зёрен граната в прицеле — пунктирные дуги полёта (с тяжестью) на 0,2 с, рубиновые точки бегут по ним
+function fan40Draw(c, B){
+  const g = CFG.gravity * CFG.ppm, T = 0.2, n = 7, ph = (G.rt * 2.2) % 1;
+  c.lineCap = 'round';
+  for (const d of B.dirs){ const x0 = B.x + d[0] * B.r, y0 = B.y + d[1] * B.r, vx = d[0] * B.v, vy = d[1] * B.v;
+    c.beginPath(); for (let k = 0; k <= n; k++){ const t = T * k / n, x = x0 + vx * t, y = y0 + vy * t + g * t * t / 2; if (k) c.lineTo(x, y); else c.moveTo(x, y); }
+    c.setLineDash([3, 6]); c.lineWidth = 4; c.strokeStyle = 'rgba(43,33,64,0.45)'; c.stroke(); c.lineWidth = 2; c.strokeStyle = 'rgba(255,120,150,0.9)'; c.stroke(); c.setLineDash([]);
+    const t = T * ph, x = x0 + vx * t, y = y0 + vy * t + g * t * t / 2; c.beginPath(); c.arc(x, y, 3.2, 0, 6.29); c.fillStyle = '#e8274f'; c.fill(); c.lineWidth = 1.2; c.strokeStyle = VIEW.ink; c.stroke(); }
+}
 function drawAim7(c, s, a, w, W, path, pv, ok){
   const col = ok ? W6.col[w] : '#a9a2bf', ink = 'rgba(43,33,64,0.55)', ids = new Map(pv.hits.map(h => [h.id, h.how]));
   const outline = (b, st, lw, dash) => { const cs = Math.cos(b.a), sn = Math.sin(b.a), V = b.verts; c.beginPath();
@@ -6553,6 +6703,7 @@ function drawAim7(c, s, a, w, W, path, pv, ok){
       for (let k = 0; k < 10; k++){ const an = k * Math.PI / 5 + b.id, rr = k % 2 ? r * 0.42 : r; c.lineTo(b.x + Math.cos(an) * rr, b.y + Math.sin(an) * rr); } c.closePath();
       c.fillStyle = '#ffd447'; c.fill(); c.lineWidth = 2; c.strokeStyle = VIEW.ink; c.stroke(); }
   }
+  for (const h of pv.hits) if (h.burst) fan40Draw(c, h.burst);   // v40: куда полетят зёрна граната
   if (pv.ring){ const R0 = pv.ring.R * (1 + 0.04 * Math.sin(G.rt * 9)); c.beginPath(); c.arc(pv.ring.x, pv.ring.y, R0, 0, 6.29); c.fillStyle = 'rgba(199,125,255,0.16)'; c.fill();
     c.setLineDash([9, 6]); c.lineWidth = 5.5; c.strokeStyle = ink; c.stroke(); c.lineWidth = 3; c.strokeStyle = '#d9a3ff'; c.stroke(); c.setLineDash([]); }
   if (pv.stop){ const b = s.bodies.find(q => q.id === pv.stop.id); if (b && !V27.aim.style) outline(b, '#ff4d4d', 3.4, null);   // v27: твёрдое — красный ореол в aim27Draw
@@ -6769,6 +6920,8 @@ const K3 = {
     c: { rim: '#b3122e', rimIn: '#f6dfc8', flesh0: '#d81b45', flesh1: '#e8466a', pit: '#f6dfc8', pitDk: '#d9b99a', juiceDk: '#a8102c' } },
   pumpkin:     { def: 'K_STONE', dark: '#a8480a', pit: 0,
     c: { rim: '#f07a13', rimIn: '#f9a23a', flesh0: '#ffb648', flesh1: '#ffcb72', pit: '#ffe0a0', pitDk: '#e8a050', juiceDk: '#d98a20' } },
+  seed:        { def: 'K_STONE', dark: '#7a0c20', pit: 0,       // v40: зерно граната — сетка винограда в рубиновом тоне (рисуется целым)
+    c: { rim: '#a8102c', rimIn: '#e8274f', flesh0: '#e8274f', flesh1: '#ff6a82', pit: '#f6dfc8', pitDk: '#d9b99a', juiceDk: '#a8102c' } },
   coco:   { def: 'K_COCO', dark: '#3a1a08',                     // кокос — скорлупа, белое кольцо, полость
     c: { shell: '#7a3410', shellDk: '#4e1e06', flesh1: '#f7f5f0', cav: '#cfe4f0', cavDk: '#8fb2c8', juiceDk: '#9a8a70' } },
 };
@@ -6821,7 +6974,7 @@ function r3Cuts(b){
   const tools = R3.etool.get(b.id), tg = Math.tan(V12.tilt * Math.PI / 180), tb = Math.tan(V12.bevel * Math.PI / 180);
   let F = S.pts.map(p => ({ x: p[0], y: p[1], e: -1 }));
   const cuts = [];
-  for (let i = 0; i < n; i++){ if (!b.cutEdges[i]) continue;
+  for (let i = 0; i < n; i++){ if (!b.cutEdges[i] || KINDS[b.kind].seed) continue;   // v40: зерно (всегда «кусок» для правил) рисуется целым
     const a = [V[i][0] + af[0], V[i][1] + af[1]], e = [V[(i + 1) % n][0] + af[0], V[(i + 1) % n][1] + af[1]], ex = e[0] - a[0], ey = e[1] - a[1], L = Math.hypot(ex, ey); if (L < 1e-6) continue;
     let nx = ey / L, ny = -ex / L; if (nx * (af[0] - a[0]) + ny * (af[1] - a[1]) > 0){ nx = -nx; ny = -ny; }   // наружу от куска
     const m = edgeMatch(tools, a, e, 1.2), w = m ? m.w : 'knife';
@@ -7353,8 +7506,8 @@ function r3Level(){                                             // новый у
 // лучами из центра; замкнутость сетки Tripo не нужна) и остальными стенками. Нутро красит прежний шейдер стенки (R3FS, TCAP).
 // =====================================================================================================
 const V12T = {
-  models: ['melon', 'plum', 'lime', 'orange', 'berry', 'grape', 'cherry', 'apple', 'lemon', 'coco', 'pepper', 'banana', 'cuke', 'pineapple', 'pumpkin', 'pomegranate', 'nana', 'pine'],   // v38: + nana (банан-дуга: сетка banana гнётся по дуге), pine (заглушка: сетка orange в жёлтый) · v37: +3 вида; этап 2: 13 видов линейки v11; инструменты — спрайты 2D (модели ножа, топора, пилы и булавы лежат в assets/models, не грузятся)
-  src: { nana: 'banana', pine: 'pineapple_peeled' },   // v38: вид → файл модели (своих файлов у nana и pine нет)
+  models: ['melon', 'plum', 'lime', 'orange', 'berry', 'grape', 'cherry', 'apple', 'lemon', 'coco', 'pepper', 'banana', 'cuke', 'pineapple', 'pumpkin', 'pomegranate', 'nana', 'pine', 'seed'],   // v38: + nana (банан-дуга: сетка banana гнётся по дуге), pine (заглушка: сетка orange в жёлтый) · v37: +3 вида; этап 2: 13 видов линейки v11; инструменты — спрайты 2D (модели ножа, топора, пилы и булавы лежат в assets/models, не грузятся)
+  src: { nana: 'banana', pine: 'pineapple_peeled', seed: 'grape' },   // v40: зерно граната — сетка винограда   // v38: вид → файл модели (своих файлов у nana и pine нет)
   ver: 38,                  // версия файлов моделей в адресе (кэш браузера и Pages): круг 4 — перекраска tools/repaint-model.mjs; круг 5 — фактура tools/texture-model.mjs; круг 7 — клубника tools/berry-model.mjs
   rmap: [128, 64],          // карта радиуса тела: долгота × широта
   slope: 1.5,               // наклон передней стенки к прежней фаске (1 — тот же угол, полоса мякоти в покое — половина прежней; 1,5 — купол и мякоть поровну)
@@ -7771,6 +7924,7 @@ const V19 = {
   fruit: { wrap: [-0.5, 0.96], shade: [1.35, 0.57], bounce: [1.06, 0.96, 0.86, 0.26], hi: [0.2, 2.6, 0.06, 9], green: 0.85, sat: 1.04,
     kind: { plum: { shade: [1.2, 0.56], bounce: [1.12, 0.85, 1.0, 0.28], look: [0.96, 0.88], tint: [1.0, 1.02, 0.86] }, grape: { shade: [1.2, 0.56], bounce: [1.1, 0.88, 1.0, 0.26], look: [0.96, 0.96], tint: [1.0, 1.0, 0.88] },
       lime: { green: 0.8, look: [1.02, 0.92] },   // v23: лайм не кислотный (было green 0,62, sat 1,22)
+      seed: { look: [1.15, 1.0], tint: [1.95, 0.3, 0.45] },   // v40: зерно граната — виноград в рубиновом тоне
       pine: { look: [1.0, 1.0] },   // v38: своя модель (была заглушка — апельсин в жёлтый тоном; v37 проба: заглушка «ананас без корки» — апельсин в жёлтый (ананас в корке, тыква, гранат — модели треда моделей)
       coco: { look: [1.0, 0.96] }, melon: { green: 0.95, look: [1.0, 0.84] }, cuke: { green: 0.9, look: [1.0, 0.92] }, berry: { look: [0.94, 1.0] }, cherry: { look: [0.94, 1.0] }, pepper: { look: [0.92, 1.0] } } },
 };
@@ -10279,6 +10433,8 @@ window.PULP_DROP = {
   play(n){ G.sample = false; CFG.clearSet = 'v11'; startLevel(n || 1); return this.state(); },
   // v38: стенд правил банана и ананаса — STAND38 вне линейки (1 — «Hammocks», 2 — «Pineapple Corks»); stand38(0) — назад к линейке.
   // Автоигра стенда — stand38(1), затем liveAuto(1, 2); прогресс линейки стенд не трогает.
+  // v40: стенд правил тыквы и граната — STAND40 (1 — «Pumpkin Drop», 2 — «Seed Shot»); stand40(0) — назад к линейке
+  stand40(k){ G.sample = false; k = k | 0; CFG.clearSet = k ? 'v40' : 'v11'; setUnlockAll(true); startLevel(k || curLevel()); return this.state(); },
   stand38(k){ G.sample = false; k = k | 0; CFG.clearSet = k ? 'v38' : 'v11'; setUnlockAll(true); startLevel(k || curLevel()); return this.state(); },
   // v16.1: образец дерева — пустой уровень n (без фруктов, подсказки, руки, названия), игра стоит; sample(0) — выйти. Хеш: #sample=N
   sample(n){ return sample16(n); },
@@ -10480,6 +10636,7 @@ if (CFG.userTest){ setUserTest(); startHash = 'game'; }
 if (startHash === '' || startHash === 'menu' || startHash === 'help'){ startLevel(curLevel()); goto(startHash || 'menu'); }   // v14: меню — поверх уровня в лесу
 else if (startHash === 'win' || startHash === 'lose'){ startLevel(curLevel()); goto(startHash); }
 else if (sampleHash(startHash)) sample16(sampleHash(startHash));
+else if (/^stand40=\d+/.test(startHash)){ CFG.clearSet = 'v40'; setUnlockAll(true); startLevel(+startHash.split('=')[1] || 1); }   // v40: #stand40=k — стенд правил тыквы и граната
 else if (/^stand38=\d+/.test(startHash)){ CFG.clearSet = 'v38'; setUnlockAll(true); startLevel(+startHash.split('=')[1] || 1); }   // v38: #stand38=k — стенд правил банана и ананаса   // v16.1: #sample=N — образец дерева
 else if (startHash !== 'slice') startLevel(curLevel());   // #game и прежние хеши режимов (#v3…#v7old, #order, #tank, #direct, #aim, #2d, #3d, #style=…, #pieces=…, #cutlab) — обычная игра
 loadAssets();   // спрайты инструментов, рука, верёвка и крюк
