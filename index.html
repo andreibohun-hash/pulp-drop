@@ -7314,8 +7314,8 @@ function r3Level(){                                             // новый у
 // =====================================================================================================
 const V12T = {
   models: ['melon', 'plum', 'lime', 'orange', 'berry', 'grape', 'cherry', 'apple', 'lemon', 'coco', 'pepper', 'banana', 'cuke', 'pineapple', 'pumpkin', 'pomegranate', 'nana', 'pine'],   // v38: + nana (банан-дуга: сетка banana гнётся по дуге), pine (заглушка: сетка orange в жёлтый) · v37: +3 вида; этап 2: 13 видов линейки v11; инструменты — спрайты 2D (модели ножа, топора, пилы и булавы лежат в assets/models, не грузятся)
-  src: { nana: 'banana', pine: 'orange' },   // v38: вид → файл модели (своих файлов у nana и pine нет)
-  ver: 37,                  // версия файлов моделей в адресе (кэш браузера и Pages): круг 4 — перекраска tools/repaint-model.mjs; круг 5 — фактура tools/texture-model.mjs; круг 7 — клубника tools/berry-model.mjs
+  src: { nana: 'banana', pine: 'pineapple_peeled' },   // v38: вид → файл модели (своих файлов у nana и pine нет)
+  ver: 38,                  // версия файлов моделей в адресе (кэш браузера и Pages): круг 4 — перекраска tools/repaint-model.mjs; круг 5 — фактура tools/texture-model.mjs; круг 7 — клубника tools/berry-model.mjs
   rmap: [128, 64],          // карта радиуса тела: долгота × широта
   slope: 1.5,               // наклон передней стенки к прежней фаске (1 — тот же угол, полоса мякоти в покое — половина прежней; 1,5 — купол и мякоть поровну)
   look: { melon: [1, 1], orange: [1, 1], berry: [1, 1], tool: [1, 1], plum: [0.9, 0.86], grape: [0.92, 0.9] },   // v16: слива и виноград — глубже и спокойнее (как на рефе)   // насыщенность и яркость текстуры по виду (круг 4: палитра спрайтов уже в текстуре — tools/repaint-model.mjs)
@@ -7328,7 +7328,7 @@ const V12T = {
          plum: { bump: 0.8, rim: 0.3, spec: [0.02, 8] }, grape: { bump: 0.6, rim: 0.3, spec: [0.02, 8] }, cherry: { spec: [0.3, 26] }, coco: { bump: 1.2, spec: [0.02, 8] },
          banana: { bump: 3.5 }, cuke: { bump: 1.2, spec: [0.06, 10] }, pepper: { spec: [0.22, 20] },
          pineapple: { bump: 1.4, spec: [0.02, 8] }, pumpkin: { bump: 0.9, spec: [0.03, 8] }, pomegranate: { bump: 0.7, spec: [0.12, 14] },
-         nana: { bump: 3.5 }, pine: { bump: 0.6, spec: [0.3, 22] } },
+         nana: { bump: 3.5 }, pine: { bump: 1.2, spec: [0.3, 22] } },
 };
 const R3T = { fr: {}, tool: {}, marks: {} };
 async function r3GLB(buf){
@@ -7731,7 +7731,7 @@ const V19 = {
   fruit: { wrap: [-0.5, 0.96], shade: [1.35, 0.57], bounce: [1.06, 0.96, 0.86, 0.26], hi: [0.2, 2.6, 0.06, 9], green: 0.85, sat: 1.04,
     kind: { plum: { shade: [1.2, 0.56], bounce: [1.12, 0.85, 1.0, 0.28], look: [0.96, 0.88], tint: [1.0, 1.02, 0.86] }, grape: { shade: [1.2, 0.56], bounce: [1.1, 0.88, 1.0, 0.26], look: [0.96, 0.96], tint: [1.0, 1.0, 0.88] },
       lime: { green: 0.8, look: [1.02, 0.92] },   // v23: лайм не кислотный (было green 0,62, sat 1,22)
-      pine: { look: [1.0, 1.08], tint: [1.0, 1.42, 1.5] },   // v37 проба: заглушка «ананас без корки» — апельсин в жёлтый (ананас в корке, тыква, гранат — модели треда моделей)
+      pine: { look: [1.0, 1.0] },   // v38: своя модель (была заглушка — апельсин в жёлтый тоном; v37 проба: заглушка «ананас без корки» — апельсин в жёлтый (ананас в корке, тыква, гранат — модели треда моделей)
       coco: { look: [1.0, 0.96] }, melon: { green: 0.95, look: [1.0, 0.84] }, cuke: { green: 0.9, look: [1.0, 0.92] }, berry: { look: [0.94, 1.0] }, cherry: { look: [0.94, 1.0] }, pepper: { look: [0.92, 1.0] } } },
 };
 const V13 = {
