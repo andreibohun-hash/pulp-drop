@@ -392,7 +392,7 @@ const CFG = {
   // v40: тыква-гиря — порог скорости сближения по нормали (ед./с; свободное падение ≈ 25 ед.), раскол как у булавы (кусок на pieceArea, 3–6),
   // разлёт от точки касания вниз (push), скорость тыквы × keep после каждого раздавленного плода. Куски под падающей гирей тоже давятся (иначе дольки
   // гамака, упавшие первыми, гасят удар): мелкий — в сок, крупный — раскол
-  crush40: { v: 260, pieceArea: 350, pieces: [3, 6], iters: 8, kerfW: 1.5, kick: 120, push: 90, spin: 7, carry: false, keep: 0.9, squash: 1500, keepS: 1 },   // squash — кусок не больше этой площади давится сразу в сок (скорость × keepS)
+  crush40: { v: 260, pieceArea: 350, pieces: [3, 6], iters: 8, kerfW: 1.5, kick: 120, push: 90, spin: 7, carry: false, keep: 0.95, squash: 1500, keepS: 1 },   // squash — кусок не больше этой площади давится сразу в сок (скорость × keepS)
   // v40: гранат-заряд — по 5 зёрен в обе стороны поперёк реза (углы fan, град.), скорость v ед./с; булава и тыква — 10 по кругу; разбуженный
   // зерном — 10 веером ± fwd град. по ходу зерна; зерно медленнее cold ед./с больше ничего не лопает; лопает целый мягкий плод площадью ≤ popMax
   // (вишня, виноград, клубника, слива, лимон, лайм); живёт life с; зёрен на поле не больше max; половинкам граната остаётся ≥ 1 − share площади
@@ -2044,8 +2044,10 @@ function touch40(s, ct, fa, fb){
   for (const e of s.q40) if (e.t === 'c' && e.to === Q.id){ ct.setEnabled(false); return; }
   const vp = P.pb.getLinearVelocity(), dx = Q.x - P.x, dy = Q.y - P.y, d = Math.hypot(dx, dy) || 1;
   if (Q.flags.by40 === P.id){ if (Math.hypot(vp.x, vp.y) * CFG.ppm >= CFG.crush40.v) ct.setEnabled(false); return; }   // свои осколки летящая гиря проходит насквозь (они падают в пилы)
-  if (P.y >= Q.y) return;                                                    // давит только сверху
-  if ((vp.x * dx + vp.y * dy) / d * CFG.ppm < CFG.crush40.v) return;   // лежит или катится — не давит (скорость гири к цели; куски под ней сами падают)
+  if (!isWholeBody(Q) && Q.area + (Q.juiceX || 0) <= CFG.crush40.squash){   // мелкий кусок летящая гиря давит при любом касании (зажатая долька не тормозит её о стенку)
+    if (Math.hypot(vp.x, vp.y) * CFG.ppm < CFG.crush40.v) return; }
+  else { if (P.y >= Q.y) return;                                             // плод и крупный кусок — только сверху
+    if ((vp.x * dx + vp.y * dy) / d * CFG.ppm < CFG.crush40.v) return; }   // лежит или катится — не давит (скорость гири к цели; куски под ней сами падают)
   s.q40.push({ t: 'c', id: P.id, to: Q.id }); ct.setEnabled(false);
 }
 function apply40(s){
