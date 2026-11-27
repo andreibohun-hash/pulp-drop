@@ -2955,7 +2955,7 @@ function throwPreview(s, w, path, noStop){
         if (!ch || ch[1] <= 0 || ch[0] >= 1){ ent = null; if (W.shave) near = Math.min(near, segBodyDist(b, a[0], a[1], c[0], c[1]).d); d0 += sl; continue; }
         const at = (t) => [a[0] + (c[0] - a[0]) * t, a[1] + (c[1] - a[1]) * t];
         if (ch[0] > 0 || !ent) ent = at(Math.max(0, ch[0]));
-        if (ch[1] < 1){ const q = at(ch[1]); if (Math.hypot(q[0] - ent[0], q[1] - ent[1]) >= CFG.minChord) hit = { id: b.id, how: 'cut', p: ent, q, d: d0 + sl * ch[1] }; if (w === 'knife' && KINDS[b.kind].special === 'peel') hit.peel = true; ent = null; }   // v38: нож по корке — снимет её (не промах, но и не рез)
+        if (ch[1] < 1){ const q = at(ch[1]); if (Math.hypot(q[0] - ent[0], q[1] - ent[1]) >= CFG.minChord) hit = { id: b.id, how: 'cut', p: ent, q, d: d0 + sl * ch[1] }; if (hit && w === 'knife' && KINDS[b.kind].special === 'peel') hit.peel = true; ent = null; }   // v38: нож по корке — снимет её (не промах, но и не рез)
         d0 += sl;
       }
       if (hit) out.push(hit); else if (W.shave && near < W.shave) out.push({ id: b.id, how: 'shave', p: [b.x, b.y], q: [b.x, b.y], d: 0 });
